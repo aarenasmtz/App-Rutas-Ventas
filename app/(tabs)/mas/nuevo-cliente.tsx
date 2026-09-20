@@ -69,7 +69,7 @@ export default function NuevoClienteScreen() {
           <Text style={styles.label}>Dirección</Text>
           <View style={styles.inputWithIcon}>
             <MapPin size={18} color={colors.neutral[400]} />
-            <TextInput style={styles.inputInline} placeholder="Calle y número, colonia" placeholderTextColor={colors.neutral[400]} value={direccion} onChangeText={setDireccion} />
+            <TextInput style={styles.inputInline} placeholder="Calle y número, colonia" placeholderTextColor={colors.neutral[400]} value={direccion} onChangeText={setDireccion} autoComplete="street-address" textContentType="fullStreetAddress" autoCorrect autoCapitalize="sentences" />
           </View>
         </View>
 
