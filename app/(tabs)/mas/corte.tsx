@@ -3,37 +3,58 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Check, Scissors } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
 import { Card, ScreenHeader } from '@/components/shared';
-import { formatCurrency } from '@/utils/helpers';
+import { formatCurrency, todayStr } from '@/utils/helpers';
 
 export default function CorteScreen() {
   const router = useRouter();
+  const { ventas, gastos, devoluciones, realizarCorte, corteRealizado } = useApp();
   const [efectivoContado, setEfectivoContado] = useState('');
-  const [corteRealizado, setCorteRealizado] = useState(false);
+
+  const hoy = todayStr();
+  const ventasHoyArr = ventas.filter((v) => v.fecha === hoy);
+  const ventasTotales = ventasHoyArr.reduce((s, v) => s + v.total, 0);
+  const ventasEfectivo = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Efectivo').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const ventasTransferencia = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Transferencia').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const ventasCredito = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Crédito').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const cobranza = 0;
+  const devolucionesHoy = devoluciones.filter((d) => d.fecha === hoy);
+  const devolucionesTotal = devolucionesHoy.reduce((s, d) => s + (d.cantidad * 0), 0);
+  const gastosHoy = gastos.filter((g) => g.fecha === hoy);
+  const gastosTotal = gastosHoy.reduce((s, g) => s + g.importe, 0);
+  const mermas = 0;
 
   const datos = [
-    { label: 'Ventas totales', value: 8450, sign: '+' },
-    { label: 'Efectivo', value: 4250, sign: '+' },
-    { label: 'Transferencias', value: 1200, sign: '+' },
-    { label: 'Crédito', value: 3000, sign: '+' },
-    { label: 'Cobranza', value: 3200, sign: '+' },
-    { label: 'Devoluciones', value: 480, sign: '-' },
-    { label: 'Gastos', value: 515, sign: '-' },
-    { label: 'Mermas', value: 210, sign: '-' },
+    { label: 'Ventas totales', value: ventasTotales, sign: '+' },
+    { label: 'Efectivo', value: ventasEfectivo, sign: '+' },
+    { label: 'Transferencias', value: ventasTransferencia, sign: '+' },
+    { label: 'Crédito', value: ventasCredito, sign: '+' },
+    { label: 'Cobranza', value: cobranza, sign: '+' },
+    { label: 'Devoluciones', value: devolucionesTotal, sign: '-' },
+    { label: 'Gastos', value: gastosTotal, sign: '-' },
+    { label: 'Mermas', value: mermas, sign: '-' },
   ];
 
   const efectivoInicial = 500;
-  const ventasEfectivo = 4250;
-  const cobranza = 3200;
-  const gastos = 515;
-  const devoluciones = 480;
-  const efectivoEsperado = efectivoInicial + ventasEfectivo + cobranza - gastos - devoluciones;
+  const efectivoEsperado = efectivoInicial + ventasEfectivo + cobranza - gastosTotal - devolucionesTotal;
   const contado = parseFloat(efectivoContado) || 0;
   const diferencia = contado - efectivoEsperado;
+  const fechaStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fechaCorta = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const handleCorte = () => {
     if (contado <= 0) { Alert.alert('Ingresa el efectivo contado'); return; }
-    setCorteRealizado(true);
+    realizarCorte(contado);
   };
 
   if (corteRealizado) {
@@ -43,7 +64,7 @@ export default function CorteScreen() {
         <View style={styles.confirmContent}>
           <View style={styles.successIcon}><Check size={56} color={colors.success[600]} /></View>
           <Text style={styles.confirmTitle}>¡Corte realizado!</Text>
-          <Text style={styles.confirmSubtitle}>Lunes 15 de septiembre, 2026</Text>
+          <Text style={styles.confirmSubtitle}>{fechaStr}</Text>
           <View style={styles.confirmCard}>
             <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Efectivo esperado</Text><Text style={styles.confirmValue}>{formatCurrency(efectivoEsperado)}</Text></View>
             <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Efectivo contado</Text><Text style={styles.confirmValue}>{formatCurrency(contado)}</Text></View>
@@ -64,7 +85,7 @@ export default function CorteScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Corte diario" subtitle="15 de septiembre, 2026" onBack={() => router.back()} />
+      <ScreenHeader title="Corte diario" subtitle={fechaCorta} onBack={() => router.back()} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         <View style={styles.headerCard}>
           <View style={styles.headerIcon}><Scissors size={24} color={colors.neutral[0]} /></View>

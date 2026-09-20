@@ -2,12 +2,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { productos } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { getStockEstado, getEstadoColor } from '@/utils/helpers';
 
 export default function InventarioScreen() {
   const router = useRouter();
+  const { productos } = useApp();
   const [search, setSearch] = useState('');
 
   const filtered = productos.filter((p) => p.nombre.toLowerCase().includes(search.toLowerCase()));

@@ -3,21 +3,22 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Check, RotateCcw } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { clientes, productos, devoluciones as devolucionesMock } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
-import { formatCurrency, getEstadoColor } from '@/utils/helpers';
-import type { Unidad } from '@/types';
+import { formatCurrency } from '@/utils/helpers';
+import type { Devolucion } from '@/types';
 
-const motivos = ['Producto dañado', 'Caducidad', 'Cambio', 'Pedido incorrecto', 'Otro'];
+const motivos = ['Producto dañado', 'Caducidad', 'Cambio', 'Pedido incorrecto', 'Otro'] as const;
 const destinos = ['Inventario', 'Merma', 'Cambio'] as const;
 
 export default function DevolucionesScreen() {
   const router = useRouter();
+  const { clientes, productos, devoluciones, addDevolucion } = useApp();
   const [step, setStep] = useState<'lista' | 'nueva'>('lista');
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [productoId, setProductoId] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState('');
-  const [motivo, setMotivo] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState<Devolucion['motivo'] | null>(null);
   const [destino, setDestino] = useState<typeof destinos[number] | null>(null);
   const [registrada, setRegistrada] = useState(false);
 
@@ -40,6 +41,15 @@ export default function DevolucionesScreen() {
       Alert.alert('Ingresa una cantidad válida');
       return;
     }
+    const cliente = clientes.find((c) => c.id === clienteId)!;
+    const producto = productos.find((p) => p.id === productoId)!;
+    addDevolucion({
+      clienteId,
+      productoId,
+      cantidad: parseFloat(cantidad),
+      motivo,
+      destino,
+    });
     setRegistrada(true);
   };
 
@@ -156,7 +166,7 @@ export default function DevolucionesScreen() {
         </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>Historial</Text>
-        {devolucionesMock.map((d) => (
+        {devoluciones.map((d) => (
           <Card key={d.id} style={styles.devCard}>
             <View style={styles.devTop}>
               <Text style={styles.devCliente}>{d.cliente}</Text>

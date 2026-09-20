@@ -44,6 +44,11 @@ export function getStockEstado(existencia: number, esPeso: boolean): 'Normal' | 
   return 'Normal';
 }
 
+export function todayStr(): string {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
 export function todayDia(): 'Lun' | 'Mar' | 'Mié' | 'Jue' | 'Vie' | 'Sáb' | 'Dom' {
   const days: Array<'Lun' | 'Mar' | 'Mié' | 'Jue' | 'Vie' | 'Sáb' | 'Dom'> = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const today = new Date();

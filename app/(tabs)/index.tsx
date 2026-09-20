@@ -3,15 +3,34 @@ import { useRouter } from 'expo-router';
 import { DollarSign, CreditCard, Wallet, TrendingUp, MapPin, Navigation, ChevronRight, Bell, LogOut } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { dashboardData, clientes } from '@/constants/mockData';
 import { Card, Badge, ConnectivityIndicator } from '@/components/shared';
-import { formatCurrency } from '@/utils/helpers';
+import { formatCurrency, todayStr } from '@/utils/helpers';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user, logout } = useApp();
-  const siguienteCliente = clientes.find((c) => c.id === dashboardData.siguienteCliente)!;
-  const progreso = (dashboardData.clientesVisitados / dashboardData.clientesTotal) * 100;
+  const { user, logout, clientes, ventas, gastos, iniciarVisita } = useApp();
+
+  const hoy = todayStr();
+  const ventasHoyArr = ventas.filter((v) => v.fecha === hoy);
+  const ventasHoy = ventasHoyArr.reduce((s, v) => s + v.total, 0);
+  const cobranza = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Efectivo' || p.metodo === 'Transferencia').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const creditoVendido = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Crédito').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const gastosEfectivoHoy = gastos.filter((g) => g.fecha === hoy && g.metodo === 'Efectivo').reduce((s, g) => s + g.importe, 0);
+  const cajaActual = 500 + cobranza - gastosEfectivoHoy;
+
+  const clientesVisitados = clientes.filter((c) =>
+    ['Visitado', 'Venta realizada', 'Sin compra', 'Cerrado'].includes(c.estado),
+  ).length;
+  const clientesTotal = clientes.length;
+  const siguienteCliente = clientes.find((c) => c.estado === 'Pendiente');
+  const progreso = clientesTotal > 0 ? (clientesVisitados / clientesTotal) * 100 : 0;
+  const fechaStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -19,7 +38,7 @@ export default function DashboardScreen() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.greeting}>Buenos días, {user?.nombre}</Text>
-            <Text style={styles.date}>Lunes 15 de septiembre, 2026</Text>
+            <Text style={styles.date}>{fechaStr}</Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.iconBtn}>
@@ -40,7 +59,7 @@ export default function DashboardScreen() {
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${progreso}%` }]} />
             </View>
-            <Text style={styles.progressText}>{dashboardData.clientesVisitados} de {dashboardData.clientesTotal} clientes</Text>
+            <Text style={styles.progressText}>{clientesVisitados} de {clientesTotal} clientes</Text>
           </View>
         </View>
       </View>
@@ -55,14 +74,14 @@ export default function DashboardScreen() {
             <View style={styles.statIconWrap}>
               <TrendingUp size={20} color={colors.primary[600]} />
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.ventasHoy)}</Text>
+            <Text style={styles.statValue}>{formatCurrency(ventasHoy)}</Text>
             <Text style={styles.statLabel}>Ventas hoy</Text>
           </Card>
           <Card style={styles.statCard}>
             <View style={styles.statIconWrap}>
               <Wallet size={20} color={colors.success[600]} />
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.cobranza)}</Text>
+            <Text style={styles.statValue}>{formatCurrency(cobranza)}</Text>
             <Text style={styles.statLabel}>Cobranza</Text>
           </Card>
         </View>
@@ -72,19 +91,20 @@ export default function DashboardScreen() {
             <View style={styles.statIconWrapAmber}>
               <CreditCard size={20} color={colors.warning[600]} />
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.creditoVendido)}</Text>
+            <Text style={styles.statValue}>{formatCurrency(creditoVendido)}</Text>
             <Text style={styles.statLabel}>Crédito vendido</Text>
           </Card>
           <Card style={styles.statCard}>
             <View style={styles.statIconWrap}>
               <DollarSign size={20} color={colors.primary[600]} />
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.cajaActual)}</Text>
+            <Text style={styles.statValue}>{formatCurrency(cajaActual)}</Text>
             <Text style={styles.statLabel}>Caja actual</Text>
           </Card>
         </View>
 
         <Text style={styles.sectionTitle}>Siguiente cliente</Text>
+        {siguienteCliente && (
         <Card style={styles.nextClientCard}>
           <View style={styles.nextClientHeader}>
             <View style={styles.clientAvatar}>
@@ -122,7 +142,10 @@ export default function DashboardScreen() {
             <TouchableOpacity
               style={styles.visitBtn}
               onPress={() => {
-                router.push('/(tabs)/ruta/cliente/' + siguienteCliente.id);
+                if (siguienteCliente) {
+                  iniciarVisita(siguienteCliente.id);
+                  router.push('/(tabs)/ruta/cliente/' + siguienteCliente.id);
+                }
               }}
             >
               <Text style={styles.visitBtnText}>Iniciar visita</Text>
@@ -132,6 +155,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
         </Card>
+        )}
 
         <TouchableOpacity style={styles.shortcutRow} onPress={() => router.push('/(tabs)/venta')}>
           <Card style={styles.shortcutCard}>

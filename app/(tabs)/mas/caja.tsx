@@ -2,21 +2,36 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Wallet, TrendingUp, TrendingDown, DollarSign, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
 import { Card, ScreenHeader } from '@/components/shared';
-import { formatCurrency } from '@/utils/helpers';
+import { formatCurrency, todayStr } from '@/utils/helpers';
 
 export default function CajaScreen() {
   const router = useRouter();
+  const { ventas, gastos, registrarAbono } = useApp();
+
+  const hoy = todayStr();
+  const ventasHoyArr = ventas.filter((v) => v.fecha === hoy);
+  const ventasEfectivo = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Efectivo').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const cobranza = ventasHoyArr.reduce(
+    (s, v) => s + v.pagos.filter((p) => p.metodo === 'Transferencia').reduce((ss, p) => ss + p.monto, 0),
+    0,
+  );
+  const gastosEfectivo = gastos.filter((g) => g.fecha === hoy && g.metodo === 'Efectivo').reduce((s, g) => s + g.importe, 0);
+  const efectivoInicial = 500;
 
   const items = [
-    { label: 'Efectivo inicial', value: 500, icon: Wallet, color: colors.primary[600], bg: colors.primary[50], sign: '+' },
-    { label: 'Ventas en efectivo', value: 4250, icon: TrendingUp, color: colors.success[600], bg: colors.success[50], sign: '+' },
-    { label: 'Cobranza', value: 3200, icon: DollarSign, color: colors.success[600], bg: colors.success[50], sign: '+' },
-    { label: 'Gastos', value: 515, icon: TrendingDown, color: colors.error[500], bg: colors.error[50], sign: '-' },
+    { label: 'Efectivo inicial', value: efectivoInicial, icon: Wallet, color: colors.primary[600], bg: colors.primary[50], sign: '+' },
+    { label: 'Ventas en efectivo', value: ventasEfectivo, icon: TrendingUp, color: colors.success[600], bg: colors.success[50], sign: '+' },
+    { label: 'Cobranza', value: cobranza, icon: DollarSign, color: colors.success[600], bg: colors.success[50], sign: '+' },
+    { label: 'Gastos', value: gastosEfectivo, icon: TrendingDown, color: colors.error[500], bg: colors.error[50], sign: '-' },
     { label: 'Retiros', value: 0, icon: ArrowUpRight, color: colors.warning[600], bg: colors.warning[50], sign: '-' },
   ];
 
-  const efectivoEsperado = 500 + 4250 + 3200 - 515 - 0;
+  const efectivoEsperado = efectivoInicial + ventasEfectivo + cobranza - gastosEfectivo - 0;
 
   return (
     <View style={styles.container}>

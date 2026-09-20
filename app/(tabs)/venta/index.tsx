@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, FlatLi
 import { useRouter } from 'expo-router';
 import { Search, ShoppingCart, ChevronRight, Clock, Flame } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { productos, categorias, clientes } from '@/constants/mockData';
+import { categoriasConTodas } from '@/constants/mockData';
 import { useApp } from '@/context/AppContext';
 import { Card, ConnectivityIndicator } from '@/components/shared';
 import { formatCurrency, getStockEstado } from '@/utils/helpers';
@@ -11,7 +11,7 @@ import type { Producto, ItemCarrito } from '@/types';
 
 export default function VentaScreen() {
   const router = useRouter();
-  const { carrito, addToCarrito, clienteActivoId } = useApp();
+  const { productos, clientes, carrito, addToCarrito, clienteActivoId } = useApp();
   const [search, setSearch] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('Todas');
   const [showQtyModal, setShowQtyModal] = useState<Producto | null>(null);
@@ -80,7 +80,7 @@ export default function VentaScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catsRow}>
-          {categorias.map((cat) => (
+          {categoriasConTodas.map((cat) => (
             <TouchableOpacity
               key={cat}
               style={[styles.catChip, categoriaActiva === cat && styles.catChipActive]}

@@ -4,14 +4,13 @@ import { useRouter } from 'expo-router';
 import { Banknote, Smartphone, CreditCard, Check, AlertCircle } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { clientes } from '@/constants/mockData';
 import { ScreenHeader } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
 import type { MetodoPago, Pago } from '@/types';
 
 export default function PagoScreen() {
   const router = useRouter();
-  const { ventaTotal, pagos, setPagos, clienteActivoId, clearCarrito } = useApp();
+  const { ventaTotal, pagos, setPagos, clienteActivoId, clearCarrito, clientes } = useApp();
   const [efectivo, setEfectivo] = useState('');
   const [transferencia, setTransferencia] = useState('');
   const [credito, setCredito] = useState('');

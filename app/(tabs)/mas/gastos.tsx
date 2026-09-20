@@ -3,36 +3,34 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Plus, Banknote, Smartphone } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { gastos as gastosMock } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, ScreenHeader, BottomSheet } from '@/components/shared';
-import { formatCurrency } from '@/utils/helpers';
-import type { Gasto, MetodoPago } from '@/types';
+import { formatCurrency, todayStr } from '@/utils/helpers';
+import type { MetodoPago } from '@/types';
 
 const conceptos = ['Gasolina', 'Comida', 'Estacionamiento', 'Mantenimiento', 'Otro'] as const;
 
 export default function GastosScreen() {
   const router = useRouter();
+  const { gastos, addGasto, deleteGasto } = useApp();
   const [showForm, setShowForm] = useState(false);
-  const [gastos, setGastos] = useState<Gasto[]>(gastosMock);
   const [concepto, setConcepto] = useState<typeof conceptos[number]>('Gasolina');
   const [importe, setImporte] = useState('');
   const [metodo, setMetodo] = useState<MetodoPago>('Efectivo');
   const [observaciones, setObservaciones] = useState('');
 
-  const totalHoy = gastos.filter((g) => g.fecha === '2026-09-15').reduce((s, g) => s + g.importe, 0);
+  const hoy = todayStr();
+  const totalHoy = gastos.filter((g) => g.fecha === hoy).reduce((s, g) => s + g.importe, 0);
 
   const handleGuardar = () => {
     const imp = parseFloat(importe) || 0;
     if (imp <= 0) { Alert.alert('Ingresa un importe válido'); return; }
-    const nuevo: Gasto = {
-      id: 'g' + (gastos.length + 1),
+    addGasto({
       concepto,
       importe: imp,
       metodo,
       observaciones,
-      fecha: '2026-09-15',
-    };
-    setGastos([nuevo, ...gastos]);
+    });
     setShowForm(false);
     setImporte('');
     setObservaciones('');

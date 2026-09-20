@@ -2,11 +2,12 @@ import { View, Text, StyleSheet, ScrollView, type ViewStyle } from 'react-native
 import { useRouter } from 'expo-router';
 import { MapPin, Navigation, Layers } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
 import { ScreenHeader, Card, Badge } from '@/components/shared';
-import { clientes } from '@/constants/mockData';
 
 export default function MapaScreen() {
   const router = useRouter();
+  const { clientes } = useApp();
 
   return (
     <View style={styles.container}>

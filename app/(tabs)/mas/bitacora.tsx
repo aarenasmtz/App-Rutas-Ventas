@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { bitacora, bitacoraErrores } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { getEstadoColor } from '@/utils/helpers';
 
 export default function BitacoraScreen() {
   const router = useRouter();
+  const { bitacora, bitacoraErrores } = useApp();
   const [tab, setTab] = useState<'actividad' | 'errores'>('actividad');
 
   return (

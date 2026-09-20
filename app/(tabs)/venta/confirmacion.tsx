@@ -3,20 +3,37 @@ import { useRouter } from 'expo-router';
 import { CheckCircle2, ShoppingCart, MapPin, ChevronRight } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { clientes } from '@/constants/mockData';
-import { formatCurrency } from '@/utils/helpers';
+import { formatCurrency, todayStr } from '@/utils/helpers';
 
 export default function ConfirmacionScreen() {
   const router = useRouter();
-  const { ventaTotal, pagos, carrito, clearCarrito, clienteActivoId } = useApp();
+  const { ventaTotal, pagos, carrito, clearCarrito, clienteActivoId, clientes, registrarVenta } = useApp();
   const cliente = clientes.find((c) => c.id === clienteActivoId);
 
   const handleFinish = () => {
+    if (clienteActivoId && carrito.length > 0) {
+      registrarVenta({
+        clienteId: clienteActivoId,
+        items: carrito,
+        total: ventaTotal,
+        pagos,
+        fecha: todayStr(),
+      });
+    }
     clearCarrito();
     router.replace('/(tabs)');
   };
 
   const handleNextClient = () => {
+    if (clienteActivoId && carrito.length > 0) {
+      registrarVenta({
+        clienteId: clienteActivoId,
+        items: carrito,
+        total: ventaTotal,
+        pagos,
+        fecha: todayStr(),
+      });
+    }
     clearCarrito();
     router.replace('/(tabs)/ruta');
   };

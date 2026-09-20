@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   CreditCard, Wallet, RotateCcw, Package, Truck, Receipt,
   DollarSign, Scissors, Box, BarChart3, Users, ScrollText,
-  RefreshCw, ChevronRight, LogOut, Wifi, WifiOff, User,
+  RefreshCw, ChevronRight, LogOut, Wifi, WifiOff, User, Map, RotateCcw as ResetIcon,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -28,6 +28,7 @@ const menuItems: MenuItem[] = [
   { title: 'Caja', subtitle: 'Flujo de efectivo', icon: DollarSign, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/caja' },
   { title: 'Corte diario', subtitle: 'Resumen del día', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
   { title: 'Productos', subtitle: 'Catálogo y precios', icon: Box, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/productos' },
+  { title: 'Rutas', subtitle: 'Crear y gestionar rutas', icon: Map, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/rutas' },
   { title: 'Reportes', subtitle: 'Análisis y exportación', icon: BarChart3, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/reportes' },
   { title: 'Empleados', subtitle: 'Vendedores y rutas', icon: Users, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/empleados' },
   { title: 'Bitácora', subtitle: 'Registro de actividad', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },
@@ -36,7 +37,7 @@ const menuItems: MenuItem[] = [
 
 export default function MasScreen() {
   const router = useRouter();
-  const { user, logout, online, toggleOnline } = useApp();
+  const { user, logout, online, toggleOnline, resetDemo } = useApp();
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -82,6 +83,19 @@ export default function MasScreen() {
             <View style={styles.menuInfo}>
               <Text style={styles.menuTitle}>Modo {online ? 'Online' : 'Offline'}</Text>
               <Text style={styles.menuSubtitle}>Cambiar estado de conexión (DEMO)</Text>
+            </View>
+            <ChevronRight size={22} color={colors.neutral[300]} />
+          </Card>
+        </TouchableOpacity>
+
+        <TouchableOpacity activeOpacity={0.85} onPress={() => { resetDemo(); Alert.alert('Demo reiniciada', 'Todos los datos volvieron a su estado inicial'); }}>
+          <Card style={styles.menuCard}>
+            <View style={[styles.menuIcon, { backgroundColor: colors.warning[50] }]}>
+              <ResetIcon size={22} color={colors.warning[600]} />
+            </View>
+            <View style={styles.menuInfo}>
+              <Text style={styles.menuTitle}>Reiniciar demo</Text>
+              <Text style={styles.menuSubtitle}>Restaurar datos iniciales</Text>
             </View>
             <ChevronRight size={22} color={colors.neutral[300]} />
           </Card>

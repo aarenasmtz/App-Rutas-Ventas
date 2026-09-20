@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { useRouter } from 'expo-router';
 import { Search, MapPin, Map as MapIcon, ChevronRight } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
-import { clientes } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ConnectivityIndicator } from '@/components/shared';
 import { formatCurrency, getEstadoColor, todayDia } from '@/utils/helpers';
 import type { Cliente } from '@/types';
 
 export default function RutaScreen() {
   const router = useRouter();
+  const { clientes } = useApp();
   const [search, setSearch] = useState('');
   const diaActual = todayDia();
   const clientesHoy = clientes.filter((c) => c.diasVisita.includes(diaActual));

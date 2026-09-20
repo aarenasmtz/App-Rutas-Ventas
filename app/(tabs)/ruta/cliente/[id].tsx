@@ -3,15 +3,17 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MapPin, ShoppingCart, Wallet, RotateCcw, Navigation, Phone, Calendar } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { clientes, productos } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getEstadoColor } from '@/utils/helpers';
+import type { Cliente, Producto } from '@/types';
 
 type Tab = 'resumen' | 'sugerido' | 'historial' | 'cuenta';
 
 export default function ClienteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { clientes, productos, iniciarVisita, setClienteActivoId } = useApp();
   const cliente = clientes.find((c) => c.id === id);
   const [tab, setTab] = useState<Tab>('resumen');
 
@@ -70,7 +72,11 @@ export default function ClienteDetailScreen() {
         </View>
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/venta')}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => {
+            setClienteActivoId(cliente.id);
+            iniciarVisita(cliente.id);
+            router.push('/(tabs)/venta');
+          }}>
             <View style={styles.actionIcon}><ShoppingCart size={22} color={colors.primary[600]} /></View>
             <Text style={styles.actionText}>Nueva venta</Text>
           </TouchableOpacity>
@@ -104,7 +110,7 @@ export default function ClienteDetailScreen() {
 
         <View style={styles.tabContent}>
           {tab === 'resumen' && <ResumenTab cliente={cliente} />}
-          {tab === 'sugerido' && <SugeridoTab cliente={cliente} />}
+          {tab === 'sugerido' && <SugeridoTab cliente={cliente} productos={productos} />}
           {tab === 'historial' && <HistorialTab cliente={cliente} />}
           {tab === 'cuenta' && <CuentaTab cliente={cliente} />}
         </View>
@@ -113,7 +119,7 @@ export default function ClienteDetailScreen() {
   );
 }
 
-function ResumenTab({ cliente }: { cliente: typeof clientes[0] }) {
+function ResumenTab({ cliente }: { cliente: Cliente }) {
   return (
     <View style={styles.tabInner}>
       <Card style={styles.summaryCard}>
@@ -155,7 +161,7 @@ function ResumenTab({ cliente }: { cliente: typeof clientes[0] }) {
   );
 }
 
-function SugeridoTab({ cliente }: { cliente: typeof clientes[0] }) {
+function SugeridoTab({ cliente, productos }: { cliente: Cliente; productos: Producto[] }) {
   if (cliente.sugerido.length === 0) {
     return (
       <Card style={styles.emptyTab}>
@@ -192,7 +198,7 @@ function SugeridoTab({ cliente }: { cliente: typeof clientes[0] }) {
   );
 }
 
-function HistorialTab({ cliente }: { cliente: typeof clientes[0] }) {
+function HistorialTab({ cliente }: { cliente: Cliente }) {
   if (cliente.historial.length === 0) {
     return (
       <Card style={styles.emptyTab}>
@@ -220,7 +226,7 @@ function HistorialTab({ cliente }: { cliente: typeof clientes[0] }) {
   );
 }
 
-function CuentaTab({ cliente }: { cliente: typeof clientes[0] }) {
+function CuentaTab({ cliente }: { cliente: Cliente }) {
   const movimientos = [
     { fecha: '2026-09-15', concepto: 'Abono en efectivo', monto: -500, tipo: 'abono' },
     { fecha: '2026-09-11', concepto: 'Venta a crédito', monto: 2350, tipo: 'cargo' },

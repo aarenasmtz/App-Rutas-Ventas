@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Search } from 'lucide-react-native';
+import { Search, Plus } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { productos, categorias } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
+import { categoriasConTodas } from '@/constants/mockData';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getStockEstado, getEstadoColor } from '@/utils/helpers';
 
 export default function ProductosScreen() {
   const router = useRouter();
+  const { productos, addProducto, deleteProducto } = useApp();
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Todas');
 
@@ -28,14 +30,14 @@ export default function ProductosScreen() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-        {categorias.map((c) => (
+        {categoriasConTodas.map((c) => (
           <TouchableOpacity key={c} style={[styles.chip, cat === c && styles.chipActive]} onPress={() => setCat(c)}>
             <Text style={[styles.chipText, cat === c && styles.chipTextActive]}>{c}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {filtered.map((p) => {
           const estado = getStockEstado(p.existencia, p.precioPorPeso);
           return (
@@ -64,6 +66,10 @@ export default function ProductosScreen() {
           );
         })}
       </ScrollView>
+
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(tabs)/mas/nuevo-producto')}>
+        <Plus size={26} color={colors.neutral[0]} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -90,4 +96,5 @@ const styles = StyleSheet.create({
   priceCol: { flex: 1, alignItems: 'center' },
   priceLabel: { fontSize: fontSize.xs, color: colors.neutral[400] },
   priceValue: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.neutral[900], marginTop: 2 },
+  fab: { position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: 999, backgroundColor: colors.primary[600], alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: colors.neutral[900], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
 });

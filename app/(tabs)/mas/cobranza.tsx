@@ -3,12 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Banknote, Smartphone, Check } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { clientes } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { ScreenHeader } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
 
 export default function CobranzaScreen() {
   const router = useRouter();
+  const { clientes, registrarAbono } = useApp();
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
@@ -21,6 +22,7 @@ export default function CobranzaScreen() {
   const handleRegistrar = () => {
     if (!cliente) { Alert.alert('Selecciona un cliente'); return; }
     if (montoNum <= 0) { Alert.alert('Ingresa un monto válido'); return; }
+    registrarAbono(cliente.id, montoNum, metodo);
     setAbonoRegistrado(true);
   };
 

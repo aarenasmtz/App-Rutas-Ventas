@@ -2,12 +2,13 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Truck } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { cargaInicial, totalCargaInicial } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, ScreenHeader } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
 
 export default function CargaScreen() {
   const router = useRouter();
+  const { cargaInicial, costoTotalCarga } = useApp();
 
   return (
     <View style={styles.container}>
@@ -17,7 +18,7 @@ export default function CargaScreen() {
           <View style={styles.headerIcon}><Truck size={28} color={colors.neutral[0]} /></View>
           <View>
             <Text style={styles.headerLabel}>Costo total de carga</Text>
-            <Text style={styles.headerValue}>{formatCurrency(totalCargaInicial)}</Text>
+            <Text style={styles.headerValue}>{formatCurrency(costoTotalCarga)}</Text>
           </View>
         </View>
 
@@ -39,7 +40,7 @@ export default function CargaScreen() {
 
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>{formatCurrency(totalCargaInicial)}</Text>
+          <Text style={styles.totalValue}>{formatCurrency(costoTotalCarga)}</Text>
         </View>
       </ScrollView>
     </View>

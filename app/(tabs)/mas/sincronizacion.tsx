@@ -2,14 +2,13 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { RefreshCw, CheckCircle2, Clock, AlertCircle, CloudCheck, CloudOff } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { movimientosSync } from '@/constants/mockData';
-import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { useApp } from '@/context/AppContext';
+import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { getEstadoColor } from '@/utils/helpers';
 
 export default function SincronizacionScreen() {
   const router = useRouter();
-  const { online } = useApp();
+  const { online, movimientosSync } = useApp();
 
   const sincronizados = movimientosSync.filter((m) => m.estado === 'Sincronizado').length;
   const pendientes = movimientosSync.filter((m) => m.estado === 'Pendiente').length;

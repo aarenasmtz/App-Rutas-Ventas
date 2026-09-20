@@ -3,26 +3,33 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useRouter } from 'expo-router';
 import { FileText, FileSpreadsheet, TrendingUp, Wallet, CreditCard, Package, RotateCcw, Receipt, Scissors, DollarSign, Box, Users, Map } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
 import { Card, ScreenHeader } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
 
-const reportes = [
-  { titulo: 'Ventas', icon: TrendingUp, color: colors.primary[600], bg: colors.primary[50], valor: '$84,250', periodo: 'Esta semana' },
-  { titulo: 'Cobranza', icon: Wallet, color: colors.success[600], bg: colors.success[50], valor: '$32,000', periodo: 'Esta semana' },
-  { titulo: 'Créditos', icon: CreditCard, color: colors.warning[600], bg: colors.warning[50], valor: '$14,300', periodo: 'Saldo total' },
-  { titulo: 'Inventario', icon: Package, color: colors.primary[600], bg: colors.primary[50], valor: '18 prod.', periodo: 'En camioneta' },
-  { titulo: 'Devoluciones', icon: RotateCcw, color: colors.error[500], bg: colors.error[50], valor: '$690', periodo: 'Esta semana' },
-  { titulo: 'Gastos', icon: Receipt, color: colors.warning[600], bg: colors.warning[50], valor: '$1,545', periodo: 'Esta semana' },
-  { titulo: 'Cortes', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], valor: '5 cortes', periodo: 'Esta semana' },
-  { titulo: 'Utilidad', icon: DollarSign, color: colors.success[600], bg: colors.success[50], valor: '$28,400', periodo: 'Esta semana' },
-  { titulo: 'Productos', icon: Box, color: colors.neutral[700], bg: colors.neutral[100], valor: '18 prod.', periodo: 'Catálogo' },
-  { titulo: 'Clientes', icon: Users, color: colors.neutral[700], bg: colors.neutral[100], valor: '10 clients', periodo: 'Activos' },
-  { titulo: 'Rutas', icon: Map, color: colors.primary[600], bg: colors.primary[50], valor: '3 rutas', periodo: 'Activas' },
-];
-
 export default function ReportesScreen() {
   const router = useRouter();
+  const { ventas, clientes, productos, gastos, devoluciones } = useApp();
   const [periodo, setPeriodo] = useState('Semana');
+
+  const totalVentas = ventas.reduce((s, v) => s + v.total, 0);
+  const totalCreditos = clientes.reduce((s, c) => s + c.saldo, 0);
+  const totalGastos = gastos.reduce((s, g) => s + g.importe, 0);
+  const totalDevoluciones = devoluciones.length;
+
+  const reportes = [
+    { titulo: 'Ventas', icon: TrendingUp, color: colors.primary[600], bg: colors.primary[50], valor: formatCurrency(totalVentas), periodo: 'Total' },
+    { titulo: 'Cobranza', icon: Wallet, color: colors.success[600], bg: colors.success[50], valor: formatCurrency(0), periodo: 'Total' },
+    { titulo: 'Créditos', icon: CreditCard, color: colors.warning[600], bg: colors.warning[50], valor: formatCurrency(totalCreditos), periodo: 'Saldo total' },
+    { titulo: 'Inventario', icon: Package, color: colors.primary[600], bg: colors.primary[50], valor: `${productos.length} prod.`, periodo: 'En camioneta' },
+    { titulo: 'Devoluciones', icon: RotateCcw, color: colors.error[500], bg: colors.error[50], valor: `${totalDevoluciones}`, periodo: 'Total' },
+    { titulo: 'Gastos', icon: Receipt, color: colors.warning[600], bg: colors.warning[50], valor: formatCurrency(totalGastos), periodo: 'Total' },
+    { titulo: 'Cortes', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], valor: '0 cortes', periodo: 'Hoy' },
+    { titulo: 'Utilidad', icon: DollarSign, color: colors.success[600], bg: colors.success[50], valor: formatCurrency(totalVentas - totalGastos), periodo: 'Estimada' },
+    { titulo: 'Productos', icon: Box, color: colors.neutral[700], bg: colors.neutral[100], valor: `${productos.length} prod.`, periodo: 'Catálogo' },
+    { titulo: 'Clientes', icon: Users, color: colors.neutral[700], bg: colors.neutral[100], valor: `${clientes.length} clients`, periodo: 'Activos' },
+    { titulo: 'Rutas', icon: Map, color: colors.primary[600], bg: colors.primary[50], valor: '3 rutas', periodo: 'Activas' },
+  ];
 
   return (
     <View style={styles.container}>

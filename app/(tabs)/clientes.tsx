@@ -1,21 +1,22 @@
 import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Search, MapPin } from 'lucide-react-native';
+import { Search, MapPin, Plus } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
-import { clientes } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ConnectivityIndicator } from '@/components/shared';
 import { formatCurrency, getEstadoColor } from '@/utils/helpers';
 import type { Cliente } from '@/types';
 
-type FiltroRuta = 'Todas' | 'Ruta Centro' | 'Ruta Norte' | 'Ruta Sur';
 type FiltroSaldo = 'Todos' | 'Al corriente' | 'Con saldo';
 
 export default function ClientesScreen() {
   const router = useRouter();
+  const { clientes, rutas } = useApp();
   const [search, setSearch] = useState('');
-  const [filtroRuta, setFiltroRuta] = useState<FiltroRuta>('Todas');
+  const [filtroRuta, setFiltroRuta] = useState<string>('Todas');
   const [filtroSaldo, setFiltroSaldo] = useState<FiltroSaldo>('Todos');
+  const rutasConTodas = ['Todas', ...rutas];
 
   const filtered = useMemo(() => {
     return clientes.filter((c) => {
@@ -49,7 +50,7 @@ export default function ClientesScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {(['Todas', 'Ruta Centro', 'Ruta Norte', 'Ruta Sur'] as FiltroRuta[]).map((f) => (
+          {rutasConTodas.map((f) => (
             <TouchableOpacity
               key={f}
               style={[styles.chip, filtroRuta === f && styles.chipActive]}
@@ -78,6 +79,10 @@ export default function ClientesScreen() {
           <ClienteCompacto key={c.id} cliente={c} onPress={() => router.push('/(tabs)/ruta/cliente/' + c.id)} />
         ))}
       </ScrollView>
+
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/(tabs)/mas/nuevo-cliente')}>
+        <Plus size={26} color={colors.neutral[0]} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -246,4 +251,5 @@ const styles = StyleSheet.create({
     marginTop: 1,
     marginBottom: 4,
   },
+  fab: { position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: 999, backgroundColor: colors.primary[600], alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: colors.neutral[900], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
 });

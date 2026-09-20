@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
-import { clientes } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getEstadoColor } from '@/utils/helpers';
 
@@ -10,6 +10,7 @@ type Filtro = 'Todos' | 'Al corriente' | 'Con saldo' | 'Vencidos';
 
 export default function CreditosScreen() {
   const router = useRouter();
+  const { clientes } = useApp();
   const [filtro, setFiltro] = useState<Filtro>('Todos');
 
   const filtered = useMemo(() => {

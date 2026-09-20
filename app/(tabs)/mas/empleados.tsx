@@ -2,12 +2,13 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Shield, User } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { empleados } from '@/constants/mockData';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
 
 export default function EmpleadosScreen() {
   const router = useRouter();
+  const { empleados } = useApp();
 
   return (
     <View style={styles.container}>
