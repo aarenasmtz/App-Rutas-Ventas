@@ -41,17 +41,25 @@ public class InventarioController : ControllerBase
                 Nombre = p.Nombre,
                 Marca = p.Marca,
                 Sku = p.Sku ?? p.Codigo,
+                Unidad = p.Unidad,
+                ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
                 ExistenciaPiezas = p.Existencia,
                 PrecioBase = p.PrecioBase,
                 EstadoStock = estado,
-                Presentaciones = p.Presentaciones.Select(pr => new PresentacionConfigDto
-                {
-                    Tipo = pr.Tipo,
-                    Nombre = pr.Nombre,
-                    PiezasEquivalentes = pr.PiezasEquivalentes,
-                    Precio = pr.Precio,
-                    DescripcionEquivalencia = pr.DescripcionEquivalencia
-                }).ToList()
+                Presentaciones = p.Presentaciones
+                    .Where(pr => pr.Activa)
+                    .OrderBy(pr => pr.Orden)
+                    .Select(pr => new PresentacionConfigDto
+                    {
+                        Tipo = pr.Tipo,
+                        Nombre = pr.Nombre,
+                        PiezasEquivalentes = pr.PiezasEquivalentes,
+                        Precio = pr.Precio,
+                        DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                        CodigoBarras = pr.CodigoBarras ?? "",
+                        Activa = pr.Activa,
+                        Orden = pr.Orden
+                    }).ToList()
             };
         }).ToList();
 

@@ -18,6 +18,9 @@ import {
   User,
   Check,
   X,
+  Layers,
+  Package,
+  Boxes,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import {
@@ -29,20 +32,24 @@ import {
 import { useApp } from '@/context/AppContext';
 import { Card, ConnectivityIndicator } from '@/components/shared';
 import { formatCurrency, getStockEstado } from '@/utils/helpers';
-import type { Producto, Cliente, ItemCarrito } from '@/types';
+import { getPrecioPresentacion, desglosarInventario } from '@/utils/multipresentacion';
+import type { Producto, Cliente, ItemCarrito, PresentacionConfig } from '@/types';
 
 // Helper para detectar productos que se venden por kilo (Carnes frías, quesos, embutidos)
 export function isProductoPorKilo(p: Producto): boolean {
+  // Los productos multipresentación o por paquete NUNCA se venden por kilo
+  if (p.manejaMultiplesPresentaciones === true) return false;
+  if (p.unidad?.toLowerCase() === 'paquete') return false;
+  if (p.precioPorPeso === false) return false;
   if (p.precioPorPeso === true) return true;
   if (p.unidad?.toLowerCase() === 'kg' || p.unidad?.toLowerCase() === 'kilo') return true;
+
   const cat = (p.categoria || '').toLowerCase();
   const kiloCategorias = [
     'jamón',
     'jamon',
     'salchicha',
     'chorizo',
-    'quesos',
-    'queso',
     'carnes frías',
     'carnes frias',
   ];
@@ -51,7 +58,6 @@ export function isProductoPorKilo(p: Producto): boolean {
   if (
     nom.includes('jamón') ||
     nom.includes('jamon') ||
-    nom.includes('queso') ||
     nom.includes('salchicha') ||
     nom.includes('chorizo') ||
     nom.includes('tocino') ||
@@ -177,12 +183,15 @@ export default function VentaScreen() {
     return producto.precioBase;
   };
 
-  // Agregar al carrito según el flujo de venta rápida de Miguel
-  const handleAddProduct = (producto: Producto, cantidad: number) => {
-    const isWeight = isProductoPorKilo(producto);
-    const precioLista = getPrecio(producto);
-    const precioFinal = precioLista;
-    const subtotal = Math.round(cantidad * precioFinal * 100) / 100;
+  // Agregar al carrito según el flujo de venta rápida de Miguel y soporte multipresentación
+  const handleAddProduct = (producto: Producto, cantidad: number, presentacion?: PresentacionConfig) => {
+    const isMultipres = Boolean(producto.manejaMultiplesPresentaciones || (producto.presentaciones && producto.presentaciones.length > 1));
+    const isWeight = !isMultipres && isProductoPorKilo(producto);
+    const pres = presentacion || (producto.presentaciones && producto.presentaciones.length > 0 ? producto.presentaciones[0] : undefined);
+    const precioUnitario = pres ? getPrecioPresentacion(producto, pres, cliente) : getPrecio(producto);
+    const factor = pres?.piezasEquivalentes || 1;
+    const unidadesBase = isWeight ? cantidad : Math.round(cantidad * factor);
+    const subtotal = Math.round(cantidad * precioUnitario * 100) / 100;
 
     const item: ItemCarrito = {
       producto: {
@@ -191,12 +200,15 @@ export default function VentaScreen() {
         precioPorPeso: isWeight,
       },
       cantidad,
-      unidad: isWeight ? 'kg' : (producto.unidad || 'pieza'),
-      precioLista,
+      unidad: pres ? pres.tipo : (isWeight ? 'kg' : producto.unidad || 'pieza'),
+      presentacion: pres,
+      presentacionNombre: pres?.nombre,
+      factorConversion: factor,
+      piezasTotales: unidadesBase,
+      precioLista: precioUnitario,
       descuento: 0,
-      precioFinal,
+      precioFinal: precioUnitario,
       subtotal,
-      piezasTotales: isWeight ? cantidad : Math.round(cantidad),
     };
 
     addToCarrito(item);
@@ -292,6 +304,7 @@ export default function VentaScreen() {
                 key={'freq-' + p.id}
                 producto={p}
                 precio={getPrecio(p)}
+                cliente={cliente}
                 onPress={() => setShowQtyModal(p)}
               />
             ))}
@@ -308,6 +321,7 @@ export default function VentaScreen() {
             key={p.id}
             producto={p}
             precio={getPrecio(p)}
+            cliente={cliente}
             onPress={() => setShowQtyModal(p)}
           />
         ))}
@@ -353,6 +367,7 @@ export default function VentaScreen() {
         <QtyModal
           producto={showQtyModal}
           precio={getPrecio(showQtyModal)}
+          cliente={cliente}
           onClose={() => setShowQtyModal(null)}
           onConfirm={handleAddProduct}
         />
@@ -410,13 +425,19 @@ export default function VentaScreen() {
 function ProductRow({
   producto,
   precio,
+  cliente,
   onPress,
 }: {
   producto: Producto;
   precio: number;
+  cliente: Cliente | null;
   onPress: () => void;
 }) {
-  const isWeight = isProductoPorKilo(producto);
+  const isMultipres = Boolean(
+    producto.manejaMultiplesPresentaciones ||
+    (producto.presentaciones && producto.presentaciones.length > 1)
+  );
+  const isWeight = !isMultipres && isProductoPorKilo(producto);
   const stockEstado = getStockEstado(producto.existencia, isWeight);
   const stockColor =
     stockEstado === 'Normal'
@@ -427,21 +448,40 @@ function ProductRow({
 
   const displayUnit = isWeight ? 'kg' : producto.unidad || 'pieza';
 
+  const presBase = producto.presentaciones && producto.presentaciones.length > 0
+    ? producto.presentaciones[0]
+    : null;
+  const precioMostrar = presBase ? getPrecioPresentacion(producto, presBase, cliente) : precio;
+
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
       <Card style={styles.productCard}>
         <View style={styles.productIcon}>
-          <Text style={styles.productIconText}>
-            {producto.categoria ? producto.categoria.charAt(0).toUpperCase() : 'P'}
-          </Text>
+          {isMultipres ? (
+            <Boxes size={22} color={colors.primary[600]} />
+          ) : (
+            <Text style={styles.productIconText}>
+              {producto.categoria ? producto.categoria.charAt(0).toUpperCase() : 'P'}
+            </Text>
+          )}
         </View>
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{producto.nombre}</Text>
-          <Text style={styles.productCat}>{producto.categoria}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+            <Text style={styles.productCat}>{producto.categoria}</Text>
+            {isMultipres && (
+              <View style={styles.multipresBadge}>
+                <Layers size={10} color={colors.primary[700]} />
+                <Text style={styles.multipresBadgeText}>
+                  {producto.presentaciones?.length || 3} presentaciones
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={styles.productMeta}>
             <Text style={styles.productStock}>
               <Text style={{ color: stockColor, fontWeight: fontWeight.semibold }}>
-                {isWeight ? producto.existencia.toFixed(1) : producto.existencia} {displayUnit}
+                {isWeight ? producto.existencia.toFixed(1) : producto.existencia} {displayUnit}s
               </Text>
               {' · '}
               <Text style={{ color: stockColor }}>{stockEstado}</Text>
@@ -449,8 +489,8 @@ function ProductRow({
           </View>
         </View>
         <View style={styles.productRight}>
-          <Text style={styles.productPrice}>{formatCurrency(precio)}</Text>
-          <Text style={styles.productUnit}>/{displayUnit}</Text>
+          <Text style={styles.productPrice}>{formatCurrency(precioMostrar)}</Text>
+          <Text style={styles.productUnit}>/{presBase?.nombre || displayUnit}</Text>
         </View>
       </Card>
     </TouchableOpacity>
@@ -458,30 +498,62 @@ function ProductRow({
 }
 
 // =========================================================
-// MODAL DE VENTA DE MIGUEL (POR KILOS Y POR PIEZAS)
+// MODAL DE VENTA DE MIGUEL (SOPORTE MULTIPRESENTACIÓN REAL)
 // =========================================================
 function QtyModal({
   producto,
   precio,
+  cliente,
   onClose,
   onConfirm,
 }: {
   producto: Producto;
   precio: number;
+  cliente: Cliente | null;
   onClose: () => void;
-  onConfirm: (p: Producto, c: number) => void;
+  onConfirm: (p: Producto, c: number, pres?: PresentacionConfig) => void;
 }) {
-  const isWeight = isProductoPorKilo(producto);
+  const isMultipres = Boolean(
+    producto.manejaMultiplesPresentaciones ||
+    (producto.presentaciones && producto.presentaciones.length > 1)
+  );
+  const isWeight = !isMultipres && isProductoPorKilo(producto);
 
-  // Valor inicial: 0.500 kg para productos de peso, 1 para productos de pieza
+  // Presentaciones activas
+  const presentaciones = useMemo(() => {
+    if (producto.presentaciones && producto.presentaciones.length > 0) {
+      return [...producto.presentaciones]
+        .filter((pr) => pr.activa !== false)
+        .sort((a, b) => (a.orden || 1) - (b.orden || 1));
+    }
+    return [];
+  }, [producto.presentaciones]);
+
+  // Presentación seleccionada
+  const [selectedPres, setSelectedPres] = useState<PresentacionConfig | undefined>(
+    presentaciones.length > 0 ? presentaciones[0] : undefined
+  );
+
   const [qty, setQty] = useState(isWeight ? 0.5 : 1);
 
-  // Chips de selección rápida
   const pesos = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
-  const piezas = [1, 2, 3, 6, 12, 24];
+  const piezas = [1, 2, 3, 5, 10, 12];
   const opciones = isWeight ? pesos : piezas;
 
-  const displayUnit = isWeight ? 'kg' : producto.unidad || 'pieza';
+  const displayUnit = isMultipres
+    ? (selectedPres?.nombre || selectedPres?.tipo || producto.unidad || 'paquete')
+    : (isWeight ? 'kg' : producto.unidad || 'pieza');
+
+  const precioUnitario = useMemo(() => {
+    if (isMultipres && selectedPres) {
+      return getPrecioPresentacion(producto, selectedPres, cliente);
+    }
+    return precio;
+  }, [isMultipres, selectedPres, producto, cliente, precio]);
+
+  const factor = isMultipres && selectedPres ? selectedPres.piezasEquivalentes : 1;
+  const unidadesBaseADescontar = isWeight ? qty : Math.round(qty * factor);
+  const excedeExistencia = !isWeight && unidadesBaseADescontar > producto.existencia;
 
   const handleMinus = () => {
     if (isWeight) {
@@ -499,7 +571,7 @@ function QtyModal({
     }
   };
 
-  const subtotal = Math.round(qty * precio * 100) / 100;
+  const subtotal = Math.round(qty * precioUnitario * 100) / 100;
 
   return (
     <View style={modalStyles.overlay}>
@@ -507,14 +579,81 @@ function QtyModal({
       <View style={modalStyles.sheet}>
         <View style={modalStyles.handle} />
 
-        <Text style={modalStyles.title}>{producto.nombre}</Text>
-        <Text style={modalStyles.subtitle}>
-          {formatCurrency(precio)} / {displayUnit}
-        </Text>
+        <View style={{ marginBottom: spacing.xs }}>
+          <Text style={modalStyles.title}>{producto.nombre}</Text>
+          <Text style={modalStyles.subtitle}>
+            {formatCurrency(precioUnitario)} por {displayUnit}
+          </Text>
+        </View>
+
+        {/* Mosaico de Selección de Presentaciones */}
+        {isMultipres && presentaciones.length > 0 && (
+          <View style={{ marginBottom: spacing.sm }}>
+            <Text style={modalStyles.label}>Selecciona la presentación:</Text>
+            <View style={modalStyles.mosaicContainer}>
+              {presentaciones.map((pr) => {
+                const isSelected = selectedPres?.tipo === pr.tipo;
+                const prPrecio = getPrecioPresentacion(producto, pr, cliente);
+                return (
+                  <TouchableOpacity
+                    key={pr.tipo}
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedPres(pr)}
+                    style={[
+                      modalStyles.mosaicCard,
+                      isSelected && modalStyles.mosaicCardActive,
+                    ]}
+                  >
+                    {isSelected && (
+                      <View style={modalStyles.mosaicCheckBadge}>
+                        <Check size={10} color={colors.neutral[0]} />
+                      </View>
+                    )}
+                    <Text
+                      style={[
+                        modalStyles.mosaicTitle,
+                        isSelected && modalStyles.mosaicTitleActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {pr.nombre.toUpperCase()}
+                    </Text>
+                    <Text style={modalStyles.mosaicPrice}>
+                      {formatCurrency(prPrecio)}
+                    </Text>
+                    <Text style={modalStyles.mosaicDeduction}>
+                      {pr.piezasEquivalentes === 1
+                        ? `1 ${producto.unidad || 'paquete'}`
+                        : `${pr.piezasEquivalentes} ${producto.unidad || 'paquete'}s`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Indicador de impacto en inventario unificado */}
+        <View style={modalStyles.stockDeductionBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={modalStyles.stockBannerText}>
+              Descuento de inventario:{' '}
+              <Text style={{ fontWeight: 'bold', color: colors.primary[800] }}>
+                {unidadesBaseADescontar} {producto.unidad || 'paquete'}{unidadesBaseADescontar === 1 ? '' : 's'}
+              </Text>
+            </Text>
+            <Text style={modalStyles.stockAvailText}>
+              Existencia disponible: {producto.existencia} {producto.unidad || 'paquete'}s
+            </Text>
+          </View>
+          {excedeExistencia && (
+            <Text style={modalStyles.stockWarningText}>⚠️ Stock insuficiente</Text>
+          )}
+        </View>
 
         <Text style={modalStyles.label}>Cantidad</Text>
 
-        {/* Stepper principal [-]  0.500 kg  [+] */}
+        {/* Stepper principal */}
         <View style={modalStyles.qtyRow}>
           <TouchableOpacity
             style={modalStyles.qtyBtn}
@@ -537,7 +676,7 @@ function QtyModal({
           </TouchableOpacity>
         </View>
 
-        {/* Opciones rápidas de un toque */}
+        {/* Opciones rápidas */}
         <View style={modalStyles.opcionesRow}>
           {opciones.map((o) => (
             <TouchableOpacity
@@ -566,12 +705,15 @@ function QtyModal({
 
         {/* Botón de confirmar */}
         <TouchableOpacity
-          style={modalStyles.addBtn}
+          style={[modalStyles.addBtn, excedeExistencia && { backgroundColor: colors.neutral[400] }]}
           activeOpacity={0.88}
-          onPress={() => onConfirm(producto, qty)}
+          disabled={excedeExistencia}
+          onPress={() => onConfirm(producto, qty, selectedPres)}
         >
           <ShoppingCart size={20} color={colors.neutral[0]} />
-          <Text style={modalStyles.addBtnText}>Agregar al carrito</Text>
+          <Text style={modalStyles.addBtnText}>
+            {excedeExistencia ? 'Inventario insuficiente' : 'Agregar al carrito'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -839,6 +981,22 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     marginTop: 2,
   },
+  multipresBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  multipresBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+  },
 });
 
 const modalStyles = StyleSheet.create({
@@ -865,6 +1023,7 @@ const modalStyles = StyleSheet.create({
     borderTopRightRadius: radius.xxl,
     padding: spacing.lg,
     paddingBottom: spacing.xl,
+    maxHeight: '90%',
   },
   handle: {
     width: 40,
@@ -883,13 +1042,91 @@ const modalStyles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.neutral[500],
     marginTop: 2,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
   label: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
-    color: colors.neutral[600],
-    marginBottom: spacing.sm,
+    color: colors.neutral[700],
+    marginBottom: spacing.xs + 2,
+  },
+  mosaicContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 2,
+    marginBottom: spacing.xs,
+  },
+  mosaicCard: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[50],
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+    alignItems: 'center',
+    position: 'relative',
+  },
+  mosaicCardActive: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[600],
+  },
+  mosaicCheckBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mosaicTitle: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[700],
+    letterSpacing: 0.5,
+  },
+  mosaicTitleActive: {
+    color: colors.primary[700],
+  },
+  mosaicPrice: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[800],
+    marginVertical: 2,
+  },
+  mosaicDeduction: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    textAlign: 'center',
+  },
+  stockDeductionBanner: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  stockBannerText: {
+    fontSize: fontSize.xs,
+    color: colors.primary[900],
+  },
+  stockAvailText: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 1,
+  },
+  stockWarningText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.error[600],
   },
   qtyRow: {
     flexDirection: 'row',
@@ -912,7 +1149,7 @@ const modalStyles = StyleSheet.create({
     color: colors.neutral[700],
   },
   qtyDisplay: {
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
     minWidth: 140,
@@ -922,7 +1159,7 @@ const modalStyles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   opcionChip: {
     paddingHorizontal: spacing.md,
@@ -949,7 +1186,7 @@ const modalStyles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md - 2,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   totalLabel: {
     fontSize: fontSize.md,

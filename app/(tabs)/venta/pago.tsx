@@ -105,8 +105,10 @@ export default function PagoScreen() {
         items: carrito.map((i) => ({
           productoId: i.producto.id,
           presentacionTipo: i.presentacion?.tipo || 'pieza',
+          presentacionNombre: i.presentacion?.nombre || i.presentacionNombre,
+          factorConversion: i.presentacion?.piezasEquivalentes || i.factorConversion || 1,
           cantidadPresentaciones: i.cantidad,
-          piezasTotalesCalculadas: i.piezasTotales || i.cantidad,
+          piezasTotalesCalculadas: i.piezasTotales || (i.cantidad * (i.presentacion?.piezasEquivalentes || 1)),
           precioUnitario: i.precioFinal,
           subtotal: i.subtotal,
         })),

@@ -40,6 +40,30 @@ public class VentasController : ControllerBase
             return BadRequest(new { message = "La venta debe incluir al menos un producto" });
         }
 
+        // 1. Idempotencia: Verificar si esta operación ya fue procesada previamente
+        var idempotencyKey = Request.Headers["X-Idempotency-Key"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var existingSale = await _db.Ventas
+                .Include(v => v.Cliente)
+                .Include(v => v.Pagos)
+                .FirstOrDefaultAsync(v => v.Folio == idempotencyKey);
+
+            if (existingSale != null)
+            {
+                return Ok(new VentaRegistradaResponseDto
+                {
+                    Folio = existingSale.Folio,
+                    FechaHora = existingSale.FechaHora,
+                    TotalVenta = existingSale.Total,
+                    TotalPagado = existingSale.Pagos.Sum(p => p.Monto),
+                    CreditoOtorgado = existingSale.Pagos.Where(p => p.Metodo == "Crédito").Sum(p => p.Monto),
+                    NuevoSaldoCliente = existingSale.Cliente?.Saldo ?? 0m,
+                    Estado = existingSale.Estado
+                });
+            }
+        }
+
         // Buscar cliente por Id o Código
         var cliente = await _db.Clientes
             .FirstOrDefaultAsync(c => c.Codigo == req.ClienteId || c.Id.ToString() == req.ClienteId);
@@ -76,12 +100,61 @@ public class VentasController : ControllerBase
             }
         }
 
+        // Cargar productos y validar existencias de forma transaccional antes de proceder
+        var productosDict = new Dictionary<int, Producto>();
+        var itemsResueltos = new List<(LineaVentaRequestDto item, Producto prod, int factor, int unidadesBase, string presNombre)>();
+        var requerimientosPorProducto = new Dictionary<int, int>();
+
+        foreach (var item in req.Items)
+        {
+            var producto = await _db.Productos
+                .Include(p => p.Presentaciones)
+                .FirstOrDefaultAsync(p => p.Codigo == item.ProductoId || p.Id.ToString() == item.ProductoId);
+
+            if (producto == null)
+            {
+                return NotFound(new { message = $"Producto '{item.ProductoId}' no encontrado en catálogo" });
+            }
+
+            productosDict[producto.Id] = producto;
+
+            // Resolver presentación y factor de conversión del servidor
+            var pres = producto.Presentaciones?.FirstOrDefault(pr =>
+                pr.Tipo.Equals(item.PresentacionTipo, StringComparison.OrdinalIgnoreCase) ||
+                pr.Nombre.Equals(item.PresentacionTipo, StringComparison.OrdinalIgnoreCase));
+
+            int factor = pres?.PiezasEquivalentes ?? (item.FactorConversion > 0 ? item.FactorConversion : 1);
+            string presNombre = pres?.Nombre ?? item.PresentacionNombre ?? item.PresentacionTipo;
+            int unidadesBase = item.CantidadPresentaciones * factor;
+
+            itemsResueltos.Add((item, producto, factor, unidadesBase, presNombre));
+
+            if (!requerimientosPorProducto.ContainsKey(producto.Id))
+                requerimientosPorProducto[producto.Id] = 0;
+            requerimientosPorProducto[producto.Id] += unidadesBase;
+        }
+
+        // Validación estricta de inventario: No permitir vender más de lo disponible
+        foreach (var (prodId, totalReq) in requerimientosPorProducto)
+        {
+            var prod = productosDict[prodId];
+            if (totalReq > prod.Existencia)
+            {
+                return StatusCode(422, new
+                {
+                    message = $"Inventario insuficiente para '{prod.Nombre}'. Solicitado: {totalReq} {prod.Unidad}(s), Disponible: {prod.Existencia} {prod.Unidad}(s)."
+                });
+            }
+        }
+
         // Iniciar transacción de base de datos
         using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
             var countToday = await _db.Ventas.CountAsync(v => v.FechaHora.Date == DateTime.Today);
-            var folio = $"FOL-{DateTime.Now:yyyyMMdd}-{(countToday + 1):D3}";
+            var folio = (!string.IsNullOrWhiteSpace(idempotencyKey) && idempotencyKey.Length <= 50)
+                ? idempotencyKey
+                : $"FOL-{DateTime.Now:yyyyMMdd}-{(countToday + 1):D3}";
 
             var venta = new Venta
             {
@@ -98,43 +171,35 @@ public class VentasController : ControllerBase
             _db.Ventas.Add(venta);
             await _db.SaveChangesAsync();
 
-            // Procesar líneas de venta y descontar stock por piezas
-            foreach (var item in req.Items)
+            // Procesar líneas de venta y descontar stock por unidades base
+            foreach (var (item, producto, factor, unidadesBase, presNombre) in itemsResueltos)
             {
-                var producto = await _db.Productos
-                    .FirstOrDefaultAsync(p => p.Codigo == item.ProductoId || p.Id.ToString() == item.ProductoId);
+                // Descontar inventario unificado en unidad base
+                producto.Existencia -= unidadesBase;
 
-                if (producto != null)
+                // Registrar movimiento de auditoría/kardex
+                _db.InventarioMovimientos.Add(new InventarioMovimiento
                 {
-                    var piezasADescontar = item.PiezasTotalesCalculadas > 0 
-                        ? item.PiezasTotalesCalculadas 
-                        : item.CantidadPresentaciones;
+                    ProductoId = producto.Id,
+                    TipoMovimiento = "Venta",
+                    Ubicacion = usuario.RutaAsignada ?? "Camioneta 1",
+                    Piezas = -unidadesBase,
+                    Motivo = $"Venta Folio {folio} ({item.CantidadPresentaciones} {presNombre} = {unidadesBase} {producto.Unidad})",
+                    FechaHora = DateTime.Now
+                });
 
-                    // Descontar inventario en piezas globales
-                    producto.Existencia -= piezasADescontar;
-
-                    // Registrar movimiento de auditoría/kardex
-                    _db.InventarioMovimientos.Add(new InventarioMovimiento
-                    {
-                        ProductoId = producto.Id,
-                        TipoMovimiento = "Venta",
-                        Ubicacion = usuario.RutaAsignada ?? "Camioneta 1",
-                        Piezas = -piezasADescontar,
-                        Motivo = $"Venta Folio {folio} ({item.CantidadPresentaciones} {item.PresentacionTipo})",
-                        FechaHora = DateTime.Now
-                    });
-
-                    _db.VentaDetalles.Add(new VentaDetalle
-                    {
-                        VentaId = venta.Id,
-                        ProductoId = producto.Id,
-                        PresentacionTipo = item.PresentacionTipo,
-                        CantidadPresentaciones = item.CantidadPresentaciones,
-                        PiezasTotales = piezasADescontar,
-                        PrecioUnitario = item.PrecioUnitario,
-                        Subtotal = item.Subtotal
-                    });
-                }
+                _db.VentaDetalles.Add(new VentaDetalle
+                {
+                    VentaId = venta.Id,
+                    ProductoId = producto.Id,
+                    PresentacionTipo = item.PresentacionTipo,
+                    PresentacionNombre = presNombre,
+                    CantidadPresentaciones = item.CantidadPresentaciones,
+                    FactorConversion = factor,
+                    PiezasTotales = unidadesBase,
+                    PrecioUnitario = item.PrecioUnitario,
+                    Subtotal = item.Subtotal
+                });
             }
 
             // Registrar pagos

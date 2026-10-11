@@ -71,6 +71,7 @@ public class DevolucionesController : ControllerBase
         }
 
         var producto = await _db.Productos
+            .Include(p => p.Presentaciones)
             .FirstOrDefaultAsync(p => p.Codigo == req.ProductoId || p.Id.ToString() == req.ProductoId);
 
         if (producto == null)
@@ -108,18 +109,23 @@ public class DevolucionesController : ControllerBase
 
             _db.Devoluciones.Add(devolucion);
 
-            // Si el destino es Inventario, regresarlo a piezas en existencia
-            if (req.Destino.Equals("Inventario", StringComparison.OrdinalIgnoreCase))
+            // Si el destino no es Merma (es Inventario, Camioneta, Bodega, etc.), regresarlo a unidades base en existencia considerando el factor de conversión
+            if (!req.Destino.Equals("Merma", StringComparison.OrdinalIgnoreCase))
             {
-                producto.Existencia += req.Cantidad;
+                var factor = producto.Presentaciones?.FirstOrDefault(pr =>
+                    pr.Tipo.Equals(req.PresentacionTipo, StringComparison.OrdinalIgnoreCase) ||
+                    pr.Nombre.Equals(req.PresentacionTipo, StringComparison.OrdinalIgnoreCase))?.PiezasEquivalentes ?? 1;
+
+                int unidadesRestaurar = req.Cantidad * factor;
+                producto.Existencia += unidadesRestaurar;
 
                 _db.InventarioMovimientos.Add(new InventarioMovimiento
                 {
                     ProductoId = producto.Id,
                     TipoMovimiento = "Devolucion",
                     Ubicacion = usuario.RutaAsignada ?? "Camioneta 1",
-                    Piezas = req.Cantidad,
-                    Motivo = $"Devolución {folio} reintegrada a stock ({req.Motivo})",
+                    Piezas = unidadesRestaurar,
+                    Motivo = $"Devolución {folio} reintegrada a stock ({req.Cantidad} {req.PresentacionTipo} = {unidadesRestaurar} {producto.Unidad})",
                     FechaHora = DateTime.Now
                 });
             }

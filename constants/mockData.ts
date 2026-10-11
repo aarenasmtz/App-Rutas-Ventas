@@ -218,3 +218,8 @@ export const initialCargaInicial = [
 ];
 
 export const totalCargaInicial = initialCargaInicial.reduce((s, c) => s + c.importe, 0);
+
+// Export aliases for backwards compatibility
+export const empleados = initialEmpleados;
+export const bitacora = initialBitacora;
+export const cargaInicial = initialCargaInicial;

@@ -3,18 +3,18 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Check, MapPin } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { useApp } from '@/context/AppContext';
+import { DataService } from '@/services/mockDataService';
 import { diasSemana } from '@/constants/mockData';
 import { ScreenHeader } from '@/components/shared';
 import type { DiaVisita } from '@/types';
 
 export default function NuevoClienteScreen() {
   const router = useRouter();
-  const { addCliente, rutas, addRuta } = useApp();
+  const [rutas, setRutas] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
   const [nombre, setNombre] = useState('');
   const [propietario, setPropietario] = useState('');
   const [direccion, setDireccion] = useState('');
-  const [ruta, setRuta] = useState(rutas[0] || '');
+  const [ruta, setRuta] = useState('Ruta Centro');
   const [limiteCredito, setLimiteCredito] = useState('3000');
   const [diasSeleccionados, setDiasSeleccionados] = useState<DiaVisita[]>([]);
   const [nuevaRuta, setNuevaRuta] = useState('');
@@ -26,7 +26,7 @@ export default function NuevoClienteScreen() {
     );
   };
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     if (!nombre.trim()) { Alert.alert('Ingresa el nombre del negocio'); return; }
     if (!propietario.trim()) { Alert.alert('Ingresa el nombre del propietario'); return; }
     if (!direccion.trim()) { Alert.alert('Ingresa la dirección'); return; }
@@ -35,10 +35,10 @@ export default function NuevoClienteScreen() {
     let rutaFinal = ruta;
     if (showNuevaRuta && nuevaRuta.trim()) {
       rutaFinal = nuevaRuta.trim();
-      addRuta(rutaFinal);
+      setRutas((prev) => [...prev, rutaFinal]);
     }
 
-    addCliente({
+    await DataService.createCliente({
       nombre: nombre.trim(),
       propietario: propietario.trim(),
       direccion: direccion.trim(),

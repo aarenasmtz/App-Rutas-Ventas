@@ -68,6 +68,7 @@ public class ProductoDto
     public string CodigoBarras { get; set; } = string.Empty;
     public bool Favorito { get; set; }
     public bool Activo { get; set; }
+    public bool ManejaMultiplesPresentaciones { get; set; }
     public List<PresentacionConfigDto> Presentaciones { get; set; } = new();
 }
 
@@ -78,6 +79,9 @@ public class PresentacionConfigDto
     public int PiezasEquivalentes { get; set; }
     public decimal Precio { get; set; }
     public string? DescripcionEquivalencia { get; set; }
+    public string? CodigoBarras { get; set; }
+    public bool Activa { get; set; } = true;
+    public int Orden { get; set; } = 1;
 }
 
 // ==========================================
@@ -98,6 +102,8 @@ public class LineaVentaRequestDto
     public string PresentacionTipo { get; set; } = string.Empty;
     public int CantidadPresentaciones { get; set; }
     public int PiezasTotalesCalculadas { get; set; }
+    public int FactorConversion { get; set; } = 1;
+    public string? PresentacionNombre { get; set; }
     public decimal PrecioUnitario { get; set; }
     public decimal Subtotal { get; set; }
 }
@@ -178,6 +184,8 @@ public class ItemInventarioDto
     public string Nombre { get; set; } = string.Empty;
     public string? Marca { get; set; }
     public string Sku { get; set; } = string.Empty;
+    public string Unidad { get; set; } = "pieza";
+    public bool ManejaMultiplesPresentaciones { get; set; }
     public int ExistenciaPiezas { get; set; }
     public decimal PrecioBase { get; set; }
     public string EstadoStock { get; set; } = string.Empty; // "Normal" | "Bajo" | "Agotado"
@@ -488,6 +496,7 @@ public class GuardarProductoRequestDto
     public string? Sku { get; set; }
     public string? CodigoBarras { get; set; }
     public bool Favorito { get; set; } = false;
+    public bool ManejaMultiplesPresentaciones { get; set; } = false;
     public List<PresentacionConfigDto>? Presentaciones { get; set; }
 }
 

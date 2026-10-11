@@ -13,11 +13,13 @@ import {
   UserCheck,
   AlertCircle,
   FileSpreadsheet,
+  Boxes,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { mockProductos, mockCategorias, DataService } from '@/services/mockDataService';
 import { formatCurrency } from '@/utils/helpers';
+import { desglosarInventario, desglosarInventarioParts } from '@/utils/multipresentacion';
 import {
   AppShell,
   PageHeader,
@@ -221,21 +223,55 @@ export default function InventarioScreen() {
             </View>
           ) : (
             filtered.map((p) => {
+              const isMultipres = Boolean(
+                p.manejaMultiplesPresentaciones ||
+                (p.presentaciones && p.presentaciones.length > 1)
+              );
+              const desgloseTexto = isMultipres
+                ? desglosarInventario(p.existencia, p.presentaciones, p.unidad)
+                : null;
+
               return (
                 <View key={p.id} style={[styles.inventoryCard, shadows.card]}>
-                  <View style={styles.invLeft}>
-                    <View style={styles.invDetails}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                        {p.marca ? <Text style={styles.invBrand}>{p.marca}</Text> : null}
-                        <Text style={styles.invCatBadge}>{p.categoria}</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.invLeft}>
+                        <View style={styles.invDetails}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                            {p.marca ? <Text style={styles.invBrand}>{p.marca}</Text> : null}
+                            <Text style={styles.invCatBadge}>{p.categoria}</Text>
+                            {isMultipres && (
+                              <View style={styles.multipresTag}>
+                                <Boxes size={11} color={colors.primary[700]} />
+                                <Text style={styles.multipresTagText}>Multipresentación</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.invName}>{p.nombre}</Text>
+                        </View>
                       </View>
-                      <Text style={styles.invName}>{p.nombre}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.invRight}>
-                    <StockBadge stockPiezas={p.existencia} />
-                    <Text style={styles.invPriceText}>{formatCurrency(p.precioBase)} / pza</Text>
+                      <View style={styles.invRight}>
+                        <StockBadge stockPiezas={p.existencia} />
+                        <Text style={styles.invPriceText}>
+                          {formatCurrency(p.precioBase)} / {p.unidad || 'pza'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Desglose jerárquico de inventario unificado (Req 6) */}
+                    {isMultipres && desgloseTexto && (
+                      <View style={styles.breakdownBox}>
+                        <View style={styles.breakdownHeader}>
+                          <Package size={13} color={colors.primary[700]} />
+                          <Text style={styles.breakdownTitle}>Desglose en presentaciones:</Text>
+                        </View>
+                        <Text style={styles.breakdownContent}>{desgloseTexto}</Text>
+                        <Text style={styles.breakdownSub}>
+                          Total unificado: {p.existencia} {p.unidad || 'paquete'}{p.existencia === 1 ? '' : 's'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               );
@@ -500,6 +536,60 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
     gap: 2,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  multipresTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  multipresTagText: {
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+  },
+  breakdownBox: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 2,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  breakdownTitle: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[800],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  breakdownContent: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  breakdownSub: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    marginTop: 2,
   },
   priceRow: {
     alignItems: 'flex-end',

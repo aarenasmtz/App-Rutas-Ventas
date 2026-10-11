@@ -1,20 +1,22 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { useApp } from '@/context/AppContext';
+import { mockProductos } from '@/services/mockDataService';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { getStockEstado, getEstadoColor } from '@/utils/helpers';
+import type { Producto } from '@/types';
 
 export default function InventarioScreen() {
   const router = useRouter();
-  const { productos } = useApp();
+  const productos = mockProductos;
   const [search, setSearch] = useState('');
 
-  const filtered = productos.filter((p) => p.nombre.toLowerCase().includes(search.toLowerCase()));
+  const filtered = productos.filter((p: Producto) => p.nombre.toLowerCase().includes(search.toLowerCase()));
   const totalProductos = productos.length;
-  const agotados = productos.filter((p) => p.existencia <= 0).length;
-  const bajos = productos.filter((p) => getStockEstado(p.existencia, p.precioPorPeso) === 'Bajo').length;
+  const agotados = productos.filter((p: Producto) => p.existencia <= 0).length;
+  const bajos = productos.filter((p: Producto) => getStockEstado(p.existencia, p.precioPorPeso) === 'Bajo').length;
 
   return (
     <View style={styles.container}>
@@ -41,7 +43,7 @@ export default function InventarioScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
-        {filtered.map((p) => {
+        {filtered.map((p: Producto) => {
           const estado = getStockEstado(p.existencia, p.precioPorPeso);
           const estadoColor = getEstadoColor(estado);
           return (
@@ -66,8 +68,6 @@ export default function InventarioScreen() {
     </View>
   );
 }
-
-import { useState } from 'react';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.neutral[50] },

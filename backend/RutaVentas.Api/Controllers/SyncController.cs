@@ -59,18 +59,30 @@ public class SyncController : ControllerBase
             Nombre = p.Nombre,
             Marca = p.Marca ?? "",
             Categoria = p.Categoria,
+            Unidad = p.Unidad,
+            PrecioPorPeso = p.Unidad == "kg" && !p.ManejaMultiplesPresentaciones,
             PrecioBase = p.PrecioBase,
             PrecioCompra = p.PrecioCompra,
             ExistenciaPiezas = p.Existencia,
+            Sku = p.Sku ?? p.Codigo,
+            CodigoBarras = p.CodigoBarras ?? "",
             Favorito = p.Favorito,
             Activo = p.Activo,
-            Presentaciones = p.Presentaciones.Select(pr => new PresentacionConfigDto
-            {
-                Tipo = pr.Tipo,
-                Nombre = pr.Nombre,
-                PiezasEquivalentes = pr.PiezasEquivalentes,
-                Precio = pr.Precio
-            }).ToList()
+            ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
+            Presentaciones = p.Presentaciones
+                .Where(pr => pr.Activa)
+                .OrderBy(pr => pr.Orden)
+                .Select(pr => new PresentacionConfigDto
+                {
+                    Tipo = pr.Tipo,
+                    Nombre = pr.Nombre,
+                    PiezasEquivalentes = pr.PiezasEquivalentes,
+                    Precio = pr.Precio,
+                    DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                    CodigoBarras = pr.CodigoBarras ?? "",
+                    Activa = pr.Activa,
+                    Orden = pr.Orden
+                }).ToList()
         }).ToList();
 
         var clientesDto = clientes.Select(c =>
@@ -222,16 +234,39 @@ public class SyncController : ControllerBase
                         {
                             foreach (var item in ventaDto.Items)
                             {
-                                var prod = await _db.Productos.FirstOrDefaultAsync(p => p.Codigo == item.ProductoId || p.Id.ToString() == item.ProductoId);
+                                var prod = await _db.Productos
+                                    .Include(p => p.Presentaciones)
+                                    .FirstOrDefaultAsync(p => p.Codigo == item.ProductoId || p.Id.ToString() == item.ProductoId);
                                 if (prod != null)
                                 {
-                                    prod.Existencia = Math.Max(0, prod.Existencia - item.PiezasTotalesCalculadas);
+                                    var pres = prod.Presentaciones?.FirstOrDefault(pr =>
+                                        pr.Tipo.Equals(item.PresentacionTipo, StringComparison.OrdinalIgnoreCase) ||
+                                        pr.Nombre.Equals(item.PresentacionTipo, StringComparison.OrdinalIgnoreCase));
+
+                                    int factor = pres?.PiezasEquivalentes ?? (item.FactorConversion > 0 ? item.FactorConversion : 1);
+                                    string presNombre = pres?.Nombre ?? item.PresentacionNombre ?? item.PresentacionTipo;
+                                    int unidadesADescontar = item.CantidadPresentaciones * factor;
+
+                                    prod.Existencia = Math.Max(0, prod.Existencia - unidadesADescontar);
+
+                                    _db.InventarioMovimientos.Add(new InventarioMovimiento
+                                    {
+                                        ProductoId = prod.Id,
+                                        TipoMovimiento = "Venta",
+                                        Ubicacion = defaultUsuario.RutaAsignada ?? "Camioneta 1",
+                                        Piezas = -unidadesADescontar,
+                                        Motivo = $"Venta Offline Folio {folio} ({item.CantidadPresentaciones} {presNombre} = {unidadesADescontar} {prod.Unidad})",
+                                        FechaHora = nuevaVenta.FechaHora
+                                    });
+
                                     nuevaVenta.Detalles.Add(new VentaDetalle
                                     {
                                         ProductoId = prod.Id,
                                         PresentacionTipo = item.PresentacionTipo,
+                                        PresentacionNombre = presNombre,
                                         CantidadPresentaciones = item.CantidadPresentaciones,
-                                        PiezasTotales = item.PiezasTotalesCalculadas,
+                                        FactorConversion = factor,
+                                        PiezasTotales = unidadesADescontar,
                                         PrecioUnitario = item.PrecioUnitario,
                                         Subtotal = item.Subtotal
                                     });

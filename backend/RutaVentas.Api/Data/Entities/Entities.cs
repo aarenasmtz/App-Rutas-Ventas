@@ -146,6 +146,8 @@ public class Producto
 
     public bool Activo { get; set; } = true;
 
+    public bool ManejaMultiplesPresentaciones { get; set; } = false;
+
     public DateTime FechaCreacion { get; set; } = DateTime.Now;
 
     public List<PresentacionProducto> Presentaciones { get; set; } = new();
@@ -176,6 +178,13 @@ public class PresentacionProducto
 
     [MaxLength(150)]
     public string? DescripcionEquivalencia { get; set; }
+
+    [MaxLength(50)]
+    public string? CodigoBarras { get; set; }
+
+    public bool Activa { get; set; } = true;
+
+    public int Orden { get; set; } = 1;
 }
 
 public class Venta
@@ -239,6 +248,11 @@ public class VentaDetalle
     public int CantidadPresentaciones { get; set; }
 
     public int PiezasTotales { get; set; }
+
+    public int FactorConversion { get; set; } = 1;
+
+    [MaxLength(100)]
+    public string? PresentacionNombre { get; set; }
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal PrecioUnitario { get; set; }

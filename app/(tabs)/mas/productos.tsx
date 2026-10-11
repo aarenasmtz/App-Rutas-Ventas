@@ -13,12 +13,15 @@ import {
   Trash2,
   X,
   Scale,
+  Layers,
+  Sparkles,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockProductos, mockCategorias, DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader, SearchBar, MoneyDisplay, StockBadge } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
-import type { Producto, Categoria } from '@/types';
+import { desglosarInventario } from '@/utils/multipresentacion';
+import type { Producto, Categoria, PresentacionConfig, PresentacionTipo, Unidad } from '@/types';
 
 export default function ProductosAdminScreen() {
   const router = useRouter();
@@ -33,13 +36,28 @@ export default function ProductosAdminScreen() {
   const [formNombre, setFormNombre] = useState('');
   const [formMarca, setFormMarca] = useState('');
   const [formCategoria, setFormCategoria] = useState<Categoria>('Jamón');
-  const [formUnidad, setFormUnidad] = useState<'kg' | 'pieza'>('kg');
+  const [formUnidad, setFormUnidad] = useState<Unidad>('kg');
   const [formPorPeso, setFormPorPeso] = useState(true);
   const [formPrecioBase, setFormPrecioBase] = useState('185');
   const [formPrecioCompra, setFormPrecioCompra] = useState('130');
   const [formExistencia, setFormExistencia] = useState('20');
   const [formCodigo, setFormCodigo] = useState('');
   const [formSku, setFormSku] = useState('');
+
+  // Multipresentación Estado
+  const [formManejaMultipres, setFormManejaMultipres] = useState(false);
+  const [formPresentaciones, setFormPresentaciones] = useState<PresentacionConfig[]>([]);
+
+  // Submodal para configurar presentación
+  const [presModalVisible, setPresModalVisible] = useState(false);
+  const [editingPresIdx, setEditingPresIdx] = useState<number | null>(null);
+  const [presFormNombre, setPresFormNombre] = useState('');
+  const [presFormTipo, setPresFormTipo] = useState<PresentacionTipo>('paquete');
+  const [presFormFactor, setPresFormFactor] = useState('1');
+  const [presFormPrecio, setPresFormPrecio] = useState('8');
+  const [presFormCodigo, setPresFormCodigo] = useState('');
+  const [presFormActiva, setPresFormActiva] = useState(true);
+  const [presFormOrden, setPresFormOrden] = useState('1');
 
   const loadProductos = async () => {
     try {
@@ -64,6 +82,8 @@ export default function ProductosAdminScreen() {
     setFormExistencia('20');
     setFormCodigo('');
     setFormSku('');
+    setFormManejaMultipres(false);
+    setFormPresentaciones([]);
     setModalVisible(true);
   };
 
@@ -72,14 +92,120 @@ export default function ProductosAdminScreen() {
     setFormNombre(p.nombre);
     setFormMarca(p.marca || '');
     setFormCategoria(p.categoria);
-    setFormUnidad(p.unidad === 'kg' ? 'kg' : 'pieza');
-    setFormPorPeso(p.precioPorPeso ?? (p.unidad === 'kg'));
+    setFormUnidad(p.unidad);
+    const isMultipres = Boolean(
+      p.manejaMultiplesPresentaciones ||
+      (p.presentaciones && p.presentaciones.length > 1) ||
+      p.unidad === 'paquete'
+    );
+    setFormManejaMultipres(isMultipres);
+    setFormPorPeso(isMultipres ? false : (p.precioPorPeso ?? (p.unidad === 'kg')));
     setFormPrecioBase(p.precioBase.toString());
     setFormPrecioCompra((p.precioCompra || 0).toString());
     setFormExistencia(p.existencia.toString());
     setFormCodigo(p.codigoBarras || '');
     setFormSku(p.sku || '');
+    setFormPresentaciones(p.presentaciones ? [...p.presentaciones] : []);
     setModalVisible(true);
+  };
+
+  const handleOpenAddPres = () => {
+    setEditingPresIdx(null);
+    setPresFormNombre('');
+    setPresFormTipo('paquete');
+    setPresFormFactor('1');
+    setPresFormPrecio('0');
+    setPresFormCodigo('');
+    setPresFormActiva(true);
+    setPresFormOrden((formPresentaciones.length + 1).toString());
+    setPresModalVisible(true);
+  };
+
+  const handleOpenEditPres = (idx: number) => {
+    const pr = formPresentaciones[idx];
+    if (!pr) return;
+    setEditingPresIdx(idx);
+    setPresFormNombre(pr.nombre);
+    setPresFormTipo(pr.tipo || 'paquete');
+    setPresFormFactor(pr.piezasEquivalentes.toString());
+    setPresFormPrecio(pr.precio.toString());
+    setPresFormCodigo(pr.codigoBarras || '');
+    setPresFormActiva(pr.activa !== false);
+    setPresFormOrden((pr.orden ?? (idx + 1)).toString());
+    setPresModalVisible(true);
+  };
+
+  const handleSavePres = () => {
+    if (!presFormNombre.trim()) {
+      Alert.alert('Campo requerido', 'Ingresa el nombre de la presentación.');
+      return;
+    }
+    const factor = parseFloat(presFormFactor) || 1;
+    const precio = parseFloat(presFormPrecio) || 0;
+    const orden = parseInt(presFormOrden) || (formPresentaciones.length + 1);
+
+    const nuevaPres: PresentacionConfig = {
+      tipo: presFormTipo,
+      nombre: presFormNombre.trim(),
+      piezasEquivalentes: factor,
+      precio: precio,
+      descripcionEquivalencia: `1 ${presFormNombre.trim().toLowerCase()} = ${factor} ${formUnidad}s`,
+      codigoBarras: presFormCodigo.trim() || undefined,
+      activa: presFormActiva,
+      orden: orden,
+    };
+
+    if (editingPresIdx !== null && editingPresIdx >= 0) {
+      const updated = [...formPresentaciones];
+      updated[editingPresIdx] = nuevaPres;
+      setFormPresentaciones(updated);
+    } else {
+      setFormPresentaciones([...formPresentaciones, nuevaPres]);
+    }
+    setPresModalVisible(false);
+  };
+
+  const handleDeletePres = (idx: number) => {
+    if (formPresentaciones.length <= 1) {
+      Alert.alert('Aviso', 'Un producto multipresentación debe conservar al menos una presentación.');
+      return;
+    }
+    const updated = formPresentaciones.filter((_, i) => i !== idx);
+    setFormPresentaciones(updated);
+  };
+
+  const handleTogglePresActiva = (idx: number) => {
+    const updated = [...formPresentaciones];
+    updated[idx] = {
+      ...updated[idx],
+      activa: updated[idx].activa === false ? true : false,
+    };
+    setFormPresentaciones(updated);
+  };
+
+  const handleToggleManejaMultipres = (enabled: boolean) => {
+    setFormManejaMultipres(enabled);
+    if (enabled) {
+      setFormPorPeso(false);
+      if (formUnidad === 'kg') {
+        setFormUnidad('paquete');
+      }
+      // Si no tiene presentaciones configuradas, sugerir plantillas base o inicializar
+      if (formPresentaciones.length === 0) {
+        if (formNombre.toLowerCase().includes('castel')) {
+          setFormPresentaciones([
+            { tipo: 'paquete', nombre: 'Paquete', piezasEquivalentes: 1, precio: 8, activa: true, orden: 1, descripcionEquivalencia: '1 paquete = 1 unidad base' },
+            { tipo: 'exhibidor', nombre: 'Exhibidor', piezasEquivalentes: 10, precio: 80, activa: true, orden: 2, descripcionEquivalencia: '1 exhibidor = 10 paquetes' },
+            { tipo: 'caja', nombre: 'Caja', piezasEquivalentes: 60, precio: 480, activa: true, orden: 3, descripcionEquivalencia: '1 caja = 60 paquetes' },
+          ]);
+          setFormPrecioBase('8');
+        } else {
+          setFormPresentaciones([
+            { tipo: 'paquete', nombre: 'Unidad Base', piezasEquivalentes: 1, precio: parseFloat(formPrecioBase) || 10, activa: true, orden: 1 },
+          ]);
+        }
+      }
+    }
   };
 
   const handleSaveProduct = async () => {
@@ -88,36 +214,37 @@ export default function ProductosAdminScreen() {
       return;
     }
 
-    const pBase = parseFloat(formPrecioBase) || 0;
+    if (formManejaMultipres && formPresentaciones.length === 0) {
+      Alert.alert(
+        'Presentaciones requeridas',
+        'Si el producto maneja múltiples presentaciones, debes agregar al menos una presentación.'
+      );
+      return;
+    }
+
+    const pBase = parseFloat(formPrecioBase) || (formPresentaciones.length > 0 ? formPresentaciones[0].precio : 0);
     const pCompra = parseFloat(formPrecioCompra) || 0;
     const stock = parseFloat(formExistencia) || 0;
 
+    const payload: Partial<Producto> = {
+      nombre: formNombre.trim(),
+      marca: formMarca.trim(),
+      categoria: formCategoria,
+      unidad: formManejaMultipres ? formUnidad : (formPorPeso ? 'kg' : 'pieza'),
+      precioPorPeso: formManejaMultipres ? false : formPorPeso,
+      precioBase: pBase,
+      precioCompra: pCompra,
+      existencia: stock,
+      codigoBarras: formCodigo.trim(),
+      sku: formSku.trim(),
+      manejaMultiplesPresentaciones: formManejaMultipres,
+      presentaciones: formManejaMultipres ? formPresentaciones : [],
+    };
+
     if (editingProd) {
-      await DataService.updateProducto(editingProd.id, {
-        nombre: formNombre.trim(),
-        marca: formMarca.trim(),
-        categoria: formCategoria,
-        unidad: formUnidad,
-        precioPorPeso: formPorPeso,
-        precioBase: pBase,
-        precioCompra: pCompra,
-        existencia: stock,
-        codigoBarras: formCodigo.trim(),
-        sku: formSku.trim(),
-      });
+      await DataService.updateProducto(editingProd.id, payload);
     } else {
-      await DataService.createProducto({
-        nombre: formNombre.trim(),
-        marca: formMarca.trim(),
-        categoria: formCategoria,
-        unidad: formUnidad,
-        precioPorPeso: formPorPeso,
-        precioBase: pBase,
-        precioCompra: pCompra,
-        existencia: stock,
-        codigoBarras: formCodigo.trim(),
-        sku: formSku.trim(),
-      });
+      await DataService.createProducto(payload);
     }
 
     await loadProductos();
@@ -258,18 +385,28 @@ export default function ProductosAdminScreen() {
           ) : (
             filtered.map((p) => {
               const margen = p.precioCompra ? p.precioBase - p.precioCompra : 0;
-              const margenPct = p.precioCompra ? Math.round((margen / p.precioCompra) * 100) : 0;
+              const isMulti = Boolean(
+                p.manejaMultiplesPresentaciones ||
+                (p.presentaciones && p.presentaciones.length > 1) ||
+                p.unidad === 'paquete'
+              );
 
               return (
                 <View key={p.id} style={[styles.card, shadows.card, !p.activo && styles.cardInactive]}>
                   {/* Top: Nombre, Marca y Switch */}
                   <View style={styles.cardHeader}>
                     <View style={{ flex: 1, paddingRight: spacing.sm }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 3 }}>
                         <View style={styles.brandBadge}>
                           <Text style={styles.brandBadgeText}>{p.marca || p.categoria}</Text>
                         </View>
                         <Text style={styles.catLabelText}>{p.categoria}</Text>
+                        {isMulti ? (
+                          <View style={styles.multiBadge}>
+                            <Layers size={11} color={colors.primary[700]} />
+                            <Text style={styles.multiBadgeText}>Multipresentación</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text style={styles.nameText} numberOfLines={2}>{p.nombre}</Text>
                     </View>
@@ -287,7 +424,9 @@ export default function ProductosAdminScreen() {
                   {/* Fila limpia de Precio y Existencia */}
                   <View style={styles.cleanPriceStockRow}>
                     <View>
-                      <Text style={styles.cleanPriceLabel}>Precio Venta</Text>
+                      <Text style={styles.cleanPriceLabel}>
+                        {isMulti ? 'Precio Base / Ref.' : 'Precio Venta'}
+                      </Text>
                       <Text style={styles.cleanPriceVal}>{formatCurrency(p.precioBase)}</Text>
                       {p.precioCompra ? (
                         <Text style={styles.cleanCostVal}>Costo: {formatCurrency(p.precioCompra)}</Text>
@@ -296,9 +435,32 @@ export default function ProductosAdminScreen() {
 
                     <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                       <StockBadge stockPiezas={p.existencia} />
-                      <Text style={styles.cleanStockSub}>{p.existencia} {p.unidad === 'kg' ? 'kg' : 'piezas'} disponibles</Text>
+                      <Text style={styles.cleanStockSub}>
+                        {p.existencia} {p.unidad === 'kg' ? 'kg' : (p.unidad === 'paquete' ? 'paquetes' : 'piezas')} disponibles
+                      </Text>
                     </View>
                   </View>
+
+                  {/* Resumen de presentaciones si es multipresentación */}
+                  {isMulti && p.presentaciones && p.presentaciones.length > 0 ? (
+                    <View style={styles.multiCardPreview}>
+                      <View style={styles.multiChipsRow}>
+                        {p.presentaciones.map((pr, idx) => (
+                          <View key={idx} style={[styles.presPill, pr.activa === false && styles.presPillInactive]}>
+                            <Text style={styles.presPillNombre}>{pr.nombre}</Text>
+                            <Text style={styles.presPillPrecio}>{formatCurrency(pr.precio)}</Text>
+                            <Text style={styles.presPillFactor}>({pr.piezasEquivalentes} {p.unidad}s)</Text>
+                          </View>
+                        ))}
+                      </View>
+                      <View style={styles.desgloseRow}>
+                        <Package size={13} color={colors.primary[700]} />
+                        <Text style={styles.desgloseText} numberOfLines={2}>
+                          Inventario: {desglosarInventario(p.existencia, p.presentaciones, p.unidad)}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
 
                   {/* Acciones directas */}
                   <View style={styles.cardActionsRow}>
@@ -339,12 +501,12 @@ export default function ProductosAdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
               {/* Nombre */}
               <Text style={styles.inputLabel}>Nombre del Producto *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Ej. Jamón Virginia, Queso Oaxaca..."
+                placeholder="Ej. Queso Castel, Jamón Virginia..."
                 value={formNombre}
                 onChangeText={setFormNombre}
                 placeholderTextColor={colors.neutral[400]}
@@ -354,7 +516,7 @@ export default function ProductosAdminScreen() {
               <Text style={styles.inputLabel}>Marca</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Ej. Zwan, FUD, Castel, Corona..."
+                placeholder="Ej. Castel, Zwan, FUD, Corona..."
                 value={formMarca}
                 onChangeText={setFormMarca}
                 placeholderTextColor={colors.neutral[400]}
@@ -380,27 +542,158 @@ export default function ProductosAdminScreen() {
                 ))}
               </ScrollView>
 
-              {/* Tipo de Venta: Por Peso o Por Pieza */}
-              <View style={styles.switchBox}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.switchTitle}>¿Se vende por Peso (Kg / Gramos)?</Text>
-                  <Text style={styles.switchSub}>Habilita el cálculo fraccionable (0.250kg, 0.500kg...)</Text>
+              {/* SWITCH MANEJA MÚLTIPLES PRESENTACIONES (REQUERIMIENTO 4) */}
+              <View style={[styles.switchBox, formManejaMultipres && styles.switchBoxActive]}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Layers size={16} color={formManejaMultipres ? colors.primary[700] : colors.neutral[700]} />
+                    <Text style={[styles.switchTitle, formManejaMultipres && { color: colors.primary[900] }]}>
+                      Maneja múltiples presentaciones: {formManejaMultipres ? 'Sí' : 'No'}
+                    </Text>
+                  </View>
+                  <Text style={styles.switchSub}>
+                    {formManejaMultipres
+                      ? 'Permite vender en paquete, exhibidor, caja, etc., manteniendo inventario unificado.'
+                      : 'Venta con una única unidad de medida y precio general.'}
+                  </Text>
                 </View>
                 <Switch
-                  value={formPorPeso}
-                  onValueChange={(v) => {
-                    setFormPorPeso(v);
-                    setFormUnidad(v ? 'kg' : 'pieza');
-                  }}
+                  value={formManejaMultipres}
+                  onValueChange={handleToggleManejaMultipres}
                   trackColor={{ false: colors.neutral[300], true: colors.primary[600] }}
                   thumbColor="#FFFFFF"
                 />
               </View>
 
+              {/* APARTADO DE CONFIGURACIÓN DE MULTIPRESENTACIONES */}
+              {formManejaMultipres ? (
+                <View style={styles.multiConfigSection}>
+                  <View style={styles.multiConfigHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.multiConfigTitle}>Configuración de Presentaciones</Text>
+                      <Text style={styles.multiConfigSub}>
+                        Equivalencias y precios para venta en ruta
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={handleOpenAddPres}
+                      style={styles.addPresBtn}
+                    >
+                      <Plus size={15} color="#FFFFFF" />
+                      <Text style={styles.addPresBtnText}>Agregar</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Unidad Base */}
+                  <View style={styles.unidadBaseBox}>
+                    <Text style={styles.unidadBaseLabel}>Unidad base de inventario unificado:</Text>
+                    <View style={styles.unidadChipsRow}>
+                      {(['paquete', 'pieza', 'kg'] as Unidad[]).map((u) => (
+                        <TouchableOpacity
+                          key={u}
+                          activeOpacity={0.7}
+                          onPress={() => setFormUnidad(u)}
+                          style={[styles.unidadChip, formUnidad === u && styles.unidadChipActive]}
+                        >
+                          <Text style={[styles.unidadChipText, formUnidad === u && styles.unidadChipTextActive]}>
+                            {u.toUpperCase()}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <Text style={styles.unidadBaseHint}>
+                      * Todas las existencias se registrarán y descontarán en {formUnidad}s.
+                    </Text>
+                  </View>
+
+                  {/* Lista de Presentaciones del Producto */}
+                  {formPresentaciones.length === 0 ? (
+                    <View style={styles.emptyPresBox}>
+                      <AlertCircle size={20} color={colors.warning[600]} />
+                      <Text style={styles.emptyPresText}>
+                        No hay presentaciones agregadas. Haz clic en "Agregar" para definir una (Ej. Paquete, Exhibidor, Caja).
+                      </Text>
+                    </View>
+                  ) : (
+                    formPresentaciones.map((pr, idx) => (
+                      <View key={idx} style={[styles.presItemCard, pr.activa === false && styles.presItemCardInactive]}>
+                        <View style={styles.presItemLeft}>
+                          <View style={styles.presItemBadgeRow}>
+                            <View style={styles.presOrderBadge}>
+                              <Text style={styles.presOrderBadgeText}>#{pr.orden ?? (idx + 1)}</Text>
+                            </View>
+                            <Text style={styles.presItemTitle}>{pr.nombre}</Text>
+                            {pr.activa === false ? (
+                              <View style={styles.inactBadge}>
+                                <Text style={styles.inactBadgeText}>Inactiva</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={styles.presItemDetail}>
+                            1 {pr.nombre.toLowerCase()} = <Text style={{ fontWeight: '700' }}>{pr.piezasEquivalentes}</Text> {formUnidad}s
+                          </Text>
+                          <Text style={styles.presItemPrice}>
+                            Precio: <Text style={{ color: colors.primary[700], fontWeight: '800' }}>{formatCurrency(pr.precio)}</Text>
+                          </Text>
+                          {pr.codigoBarras ? (
+                            <Text style={styles.presItemBarcode}>🏷️ {pr.codigoBarras}</Text>
+                          ) : null}
+                        </View>
+
+                        <View style={styles.presItemRight}>
+                          <Switch
+                            value={pr.activa !== false}
+                            onValueChange={() => handleTogglePresActiva(idx)}
+                            trackColor={{ false: colors.neutral[300], true: colors.primary[600] }}
+                            thumbColor="#FFFFFF"
+                          />
+                          <View style={styles.presItemActions}>
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              onPress={() => handleOpenEditPres(idx)}
+                              style={styles.presItemBtnEdit}
+                            >
+                              <Edit2 size={13} color={colors.primary[600]} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              onPress={() => handleDeletePres(idx)}
+                              style={styles.presItemBtnDel}
+                            >
+                              <Trash2 size={13} color={colors.error[500]} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </View>
+              ) : (
+                /* Tipo de Venta normal: Por Peso o Por Pieza */
+                <View style={styles.switchBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.switchTitle}>¿Se vende por Peso (Kg / Gramos)?</Text>
+                    <Text style={styles.switchSub}>Habilita el cálculo fraccionable (0.250kg, 0.500kg...)</Text>
+                  </View>
+                  <Switch
+                    value={formPorPeso}
+                    onValueChange={(v) => {
+                      setFormPorPeso(v);
+                      setFormUnidad(v ? 'kg' : 'pieza');
+                    }}
+                    trackColor={{ false: colors.neutral[300], true: colors.primary[600] }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+              )}
+
               {/* Precios Row */}
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Precio Venta ($) *</Text>
+                  <Text style={styles.inputLabel}>
+                    {formManejaMultipres ? 'Precio Referencia ($)' : 'Precio Venta ($) *'}
+                  </Text>
                   <TextInput
                     style={styles.input}
                     placeholder="185"
@@ -424,7 +717,9 @@ export default function ProductosAdminScreen() {
               </View>
 
               {/* Stock inicial */}
-              <Text style={styles.inputLabel}>Existencia en Inventario ({formPorPeso ? 'Kg' : 'Piezas'})</Text>
+              <Text style={styles.inputLabel}>
+                Existencia en Inventario ({formManejaMultipres ? `${formUnidad}s unificados` : (formPorPeso ? 'Kg' : 'Piezas')})
+              </Text>
               <TextInput
                 style={styles.input}
                 placeholder="20"
@@ -464,6 +759,117 @@ export default function ProductosAdminScreen() {
               <Text style={styles.saveBtnText}>
                 {editingProd ? 'Guardar Cambios' : 'Crear Producto'}
               </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* SUBMODAL CONFIGURAR PRESENTACIÓN INDIVIDUAL */}
+      <Modal visible={presModalVisible} transparent animationType="fade" onRequestClose={() => setPresModalVisible(false)}>
+        <Pressable style={styles.presModalOverlay} onPress={() => setPresModalVisible(false)}>
+          <Pressable style={styles.presModalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.presModalHeader}>
+              <Text style={styles.presModalTitle}>
+                {editingPresIdx !== null ? 'Editar Presentación' : 'Nueva Presentación'}
+              </Text>
+              <TouchableOpacity onPress={() => setPresModalVisible(false)} style={styles.modalCloseBtn}>
+                <X size={18} color={colors.neutral[600]} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              <Text style={styles.inputLabel}>Nombre de la Presentación *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej. Paquete, Exhibidor, Caja..."
+                value={presFormNombre}
+                onChangeText={setPresFormNombre}
+                placeholderTextColor={colors.neutral[400]}
+              />
+
+              <Text style={styles.inputLabel}>Tipo de empaque</Text>
+              <View style={styles.unidadChipsRow}>
+                {(['paquete', 'exhibidor', 'caja', 'pieza'] as PresentacionTipo[]).map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => setPresFormTipo(t)}
+                    style={[styles.presTipoChip, presFormTipo === t && styles.presTipoChipActive]}
+                  >
+                    <Text style={[styles.presTipoChipText, presFormTipo === t && styles.presTipoChipTextActive]}>
+                      {t.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.row2}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Factor de Conversión *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="1, 10, 60..."
+                    keyboardType="numeric"
+                    value={presFormFactor}
+                    onChangeText={setPresFormFactor}
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                  <Text style={styles.fieldHelpText}>
+                    1 {presFormNombre.trim() || 'unidad'} = {presFormFactor || '1'} {formUnidad}s
+                  </Text>
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Precio de Venta ($) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="8, 80, 480..."
+                    keyboardType="numeric"
+                    value={presFormPrecio}
+                    onChangeText={setPresFormPrecio}
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row2}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Código de barras (Opcional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="750..."
+                    value={presFormCodigo}
+                    onChangeText={setPresFormCodigo}
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
+
+                <View style={{ width: 90 }}>
+                  <Text style={styles.inputLabel}>Orden</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="1"
+                    keyboardType="numeric"
+                    value={presFormOrden}
+                    onChangeText={setPresFormOrden}
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.presActiveRow}>
+                <Text style={styles.presActiveLabel}>¿Presentación Activa para Venta?</Text>
+                <Switch
+                  value={presFormActiva}
+                  onValueChange={setPresFormActiva}
+                  trackColor={{ false: colors.neutral[300], true: colors.primary[600] }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity activeOpacity={0.85} onPress={handleSavePres} style={styles.savePresBtn}>
+              <CheckCircle2 size={16} color="#FFFFFF" />
+              <Text style={styles.savePresBtnText}>Guardar Presentación</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -823,5 +1229,351 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
+  },
+  // Multipresentación estilos
+  multiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  multiBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  multiCardPreview: {
+    backgroundColor: colors.primary[50] + '40',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+    gap: 6,
+  },
+  multiChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  presPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  presPillInactive: {
+    opacity: 0.5,
+    backgroundColor: colors.neutral[100],
+    borderColor: colors.neutral[300],
+  },
+  presPillNombre: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral[800],
+  },
+  presPillPrecio: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primary[700],
+  },
+  presPillFactor: {
+    fontSize: 10,
+    color: colors.neutral[500],
+  },
+  desgloseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.primary[100],
+  },
+  desgloseText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primary[900],
+    flex: 1,
+  },
+  switchBoxActive: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[300],
+    borderWidth: 1.5,
+  },
+  multiConfigSection: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  multiConfigHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  multiConfigTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  multiConfigSub: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 1,
+  },
+  addPresBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+  },
+  addPresBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  unidadBaseBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  unidadBaseLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral[700],
+    marginBottom: 6,
+  },
+  unidadChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  unidadChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  unidadChipActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
+  },
+  unidadChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  unidadChipTextActive: {
+    color: '#FFFFFF',
+  },
+  unidadBaseHint: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  emptyPresBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.warning[100],
+  },
+  emptyPresText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.warning[700],
+  },
+  presItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    padding: spacing.sm + 2,
+    borderRadius: radius.md,
+    marginBottom: spacing.xs + 2,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  presItemCardInactive: {
+    opacity: 0.6,
+    backgroundColor: colors.neutral[100],
+  },
+  presItemLeft: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  presItemBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  presOrderBadge: {
+    backgroundColor: colors.neutral[200],
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+  },
+  presOrderBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  presItemTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  inactBadge: {
+    backgroundColor: colors.error[50],
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+  },
+  inactBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.error[600],
+  },
+  presItemDetail: {
+    fontSize: 11,
+    color: colors.neutral[600],
+    marginTop: 1,
+  },
+  presItemPrice: {
+    fontSize: 11,
+    color: colors.neutral[700],
+    marginTop: 1,
+  },
+  presItemBarcode: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  presItemRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  presItemActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  presItemBtnEdit: {
+    padding: 5,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary[50],
+  },
+  presItemBtnDel: {
+    padding: 5,
+    borderRadius: radius.sm,
+    backgroundColor: colors.error[50],
+  },
+  presModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  presModalCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.floating,
+  },
+  presModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  presModalTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  presTipoChip: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: colors.neutral[100],
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  presTipoChipActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
+  },
+  presTipoChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  presTipoChipTextActive: {
+    color: '#FFFFFF',
+  },
+  fieldHelpText: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  presActiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.neutral[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  presActiveLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  savePresBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+  },
+  savePresBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.sm,
+    fontWeight: '700',
   },
 });

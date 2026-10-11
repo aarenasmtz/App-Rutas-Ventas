@@ -18,21 +18,23 @@ export const mockBitacora = bitacora;
 export const mockProductos: Producto[] = [
   {
     id: 'p1',
-    nombre: 'Queso Castel Barra',
+    nombre: 'Queso Castel',
     marca: 'Castel',
     categoria: 'Quesos',
-    unidad: 'kg',
-    precioBase: 195,
-    precioCompra: 145,
-    existencia: 15.5,
-    precioPorPeso: true,
-    sku: 'CAS-QPB-01',
+    unidad: 'paquete',
+    precioBase: 8,
+    precioCompra: 5.5,
+    existencia: 300,
+    precioPorPeso: false,
+    manejaMultiplesPresentaciones: true,
+    sku: 'CAS-QP-01',
     codigoBarras: '7501002345012',
     favorito: true,
     activo: true,
     presentaciones: [
-      { tipo: 'pieza', nombre: 'Por Kilo / Porción', piezasEquivalentes: 1, precio: 195, descripcionEquivalencia: 'Venta por peso ($195/kg)' },
-      { tipo: 'paquete', nombre: 'Barra x 2.5 kg', piezasEquivalentes: 2.5, precio: 475, descripcionEquivalencia: '1 barra = 2.5 kg' },
+      { tipo: 'paquete', nombre: 'Paquete', piezasEquivalentes: 1, precio: 8, descripcionEquivalencia: '1 paquete = 1 unidad base', codigoBarras: '7501002345012', activa: true, orden: 1 },
+      { tipo: 'exhibidor', nombre: 'Exhibidor', piezasEquivalentes: 10, precio: 80, descripcionEquivalencia: '1 exhibidor = 10 paquetes', codigoBarras: '7501002345029', activa: true, orden: 2 },
+      { tipo: 'caja', nombre: 'Caja', piezasEquivalentes: 60, precio: 480, descripcionEquivalencia: '1 caja = 6 exhibidores = 60 paquetes', codigoBarras: '7501002345036', activa: true, orden: 3 },
     ],
   },
   {
@@ -828,7 +830,7 @@ export const DataService = {
   registrarAbono: async (abono: RegistrarAbonoRequestDto) => {
     try {
       const res = await apiService.registrarAbono(abono);
-      const cliente = mockClientes.find((c) => c.id === abono.clienteId || c.codigo === abono.clienteId);
+      const cliente = mockClientes.find((c) => c.id === abono.clienteId || (c as any).codigo === abono.clienteId);
       if (cliente) {
         cliente.saldo = (res as any)?.nuevoSaldo !== undefined ? (res as any).nuevoSaldo : Math.max(0, cliente.saldo - abono.monto);
         cliente.ultimoPago = `Hoy · $${abono.monto}`;
@@ -1105,7 +1107,7 @@ export const DataService = {
     } catch {
       // Fallback a bitacora local
     }
-    return bitacora.map((b) => ({
+    return (bitacora as any[]).map((b: any) => ({
       id: parseInt(b.id) || Math.floor(Math.random() * 1000),
       fecha: b.fecha,
       hora: '12:00:00',

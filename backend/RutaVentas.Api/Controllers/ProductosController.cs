@@ -46,7 +46,7 @@ public class ProductosController : ControllerBase
                 Marca = p.Marca,
                 Categoria = p.Categoria,
                 Unidad = p.Unidad,
-                PrecioPorPeso = p.Unidad == "kg",
+                PrecioPorPeso = p.Unidad == "kg" && !p.ManejaMultiplesPresentaciones,
                 PrecioBase = p.PrecioBase,
                 PrecioCompra = p.PrecioCompra,
                 ExistenciaPiezas = p.Existencia,
@@ -54,14 +54,21 @@ public class ProductosController : ControllerBase
                 CodigoBarras = p.CodigoBarras ?? "",
                 Favorito = p.Favorito,
                 Activo = p.Activo,
-                Presentaciones = p.Presentaciones.Select(pr => new PresentacionConfigDto
-                {
-                    Tipo = pr.Tipo,
-                    Nombre = pr.Nombre,
-                    PiezasEquivalentes = pr.PiezasEquivalentes,
-                    Precio = pr.Precio,
-                    DescripcionEquivalencia = pr.DescripcionEquivalencia
-                }).ToList()
+                ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
+                Presentaciones = p.Presentaciones
+                    .Where(pr => pr.Activa)
+                    .OrderBy(pr => pr.Orden)
+                    .Select(pr => new PresentacionConfigDto
+                    {
+                        Tipo = pr.Tipo,
+                        Nombre = pr.Nombre,
+                        PiezasEquivalentes = pr.PiezasEquivalentes,
+                        Precio = pr.Precio,
+                        DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                        CodigoBarras = pr.CodigoBarras ?? "",
+                        Activa = pr.Activa,
+                        Orden = pr.Orden
+                    }).ToList()
             })
             .ToListAsync();
 
@@ -84,7 +91,7 @@ public class ProductosController : ControllerBase
             Marca = p.Marca,
             Categoria = p.Categoria,
             Unidad = p.Unidad,
-            PrecioPorPeso = p.Unidad == "kg",
+            PrecioPorPeso = p.Unidad == "kg" && !p.ManejaMultiplesPresentaciones,
             PrecioBase = p.PrecioBase,
             PrecioCompra = p.PrecioCompra,
             ExistenciaPiezas = p.Existencia,
@@ -92,14 +99,20 @@ public class ProductosController : ControllerBase
             CodigoBarras = p.CodigoBarras ?? "",
             Favorito = p.Favorito,
             Activo = p.Activo,
-            Presentaciones = p.Presentaciones.Select(pr => new PresentacionConfigDto
-            {
-                Tipo = pr.Tipo,
-                Nombre = pr.Nombre,
-                PiezasEquivalentes = pr.PiezasEquivalentes,
-                Precio = pr.Precio,
-                DescripcionEquivalencia = pr.DescripcionEquivalencia
-            }).ToList()
+            ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
+            Presentaciones = p.Presentaciones
+                .OrderBy(pr => pr.Orden)
+                .Select(pr => new PresentacionConfigDto
+                {
+                    Tipo = pr.Tipo,
+                    Nombre = pr.Nombre,
+                    PiezasEquivalentes = pr.PiezasEquivalentes,
+                    Precio = pr.Precio,
+                    DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                    CodigoBarras = pr.CodigoBarras ?? "",
+                    Activa = pr.Activa,
+                    Orden = pr.Orden
+                }).ToList()
         };
 
         return Ok(dto);
@@ -139,11 +152,13 @@ public class ProductosController : ControllerBase
             CodigoBarras = req.CodigoBarras?.Trim() ?? $"750{DateTime.Now.Ticks.ToString()[^9..]}",
             Favorito = req.Favorito,
             Activo = true,
+            ManejaMultiplesPresentaciones = req.ManejaMultiplesPresentaciones,
             FechaCreacion = DateTime.Now
         };
 
         if (req.Presentaciones != null && req.Presentaciones.Any())
         {
+            int ord = 1;
             foreach (var pr in req.Presentaciones)
             {
                 producto.Presentaciones.Add(new Data.Entities.PresentacionProducto
@@ -152,7 +167,10 @@ public class ProductosController : ControllerBase
                     Nombre = pr.Nombre,
                     PiezasEquivalentes = pr.PiezasEquivalentes > 0 ? pr.PiezasEquivalentes : 1,
                     Precio = pr.Precio > 0 ? pr.Precio : req.PrecioBase,
-                    DescripcionEquivalencia = pr.DescripcionEquivalencia
+                    DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                    CodigoBarras = pr.CodigoBarras,
+                    Activa = pr.Activa,
+                    Orden = pr.Orden > 0 ? pr.Orden : ord++
                 });
             }
         }
@@ -164,7 +182,9 @@ public class ProductosController : ControllerBase
                 Nombre = producto.Unidad == "kg" ? "Por Kilo / Porción" : "Pieza Individual",
                 PiezasEquivalentes = 1,
                 Precio = req.PrecioBase,
-                DescripcionEquivalencia = producto.Unidad == "kg" ? $"Venta por peso (${req.PrecioBase}/kg)" : "1 pieza"
+                DescripcionEquivalencia = producto.Unidad == "kg" ? $"Venta por peso (${req.PrecioBase}/kg)" : "1 pieza",
+                Activa = true,
+                Orden = 1
             });
         }
 
@@ -178,7 +198,7 @@ public class ProductosController : ControllerBase
             Marca = producto.Marca,
             Categoria = producto.Categoria,
             Unidad = producto.Unidad,
-            PrecioPorPeso = producto.Unidad == "kg",
+            PrecioPorPeso = producto.Unidad == "kg" && !producto.ManejaMultiplesPresentaciones,
             PrecioBase = producto.PrecioBase,
             PrecioCompra = producto.PrecioCompra,
             ExistenciaPiezas = producto.Existencia,
@@ -186,13 +206,17 @@ public class ProductosController : ControllerBase
             CodigoBarras = producto.CodigoBarras ?? "",
             Favorito = producto.Favorito,
             Activo = producto.Activo,
+            ManejaMultiplesPresentaciones = producto.ManejaMultiplesPresentaciones,
             Presentaciones = producto.Presentaciones.Select(pr => new PresentacionConfigDto
             {
                 Tipo = pr.Tipo,
                 Nombre = pr.Nombre,
                 PiezasEquivalentes = pr.PiezasEquivalentes,
                 Precio = pr.Precio,
-                DescripcionEquivalencia = pr.DescripcionEquivalencia
+                DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                CodigoBarras = pr.CodigoBarras ?? "",
+                Activa = pr.Activa,
+                Orden = pr.Orden
             }).ToList()
         });
     }
@@ -216,12 +240,14 @@ public class ProductosController : ControllerBase
         if (!string.IsNullOrWhiteSpace(req.Sku)) producto.Sku = req.Sku.Trim();
         if (req.CodigoBarras != null) producto.CodigoBarras = req.CodigoBarras.Trim();
         producto.Favorito = req.Favorito;
+        producto.ManejaMultiplesPresentaciones = req.ManejaMultiplesPresentaciones;
 
         if (req.Presentaciones != null && req.Presentaciones.Any())
         {
             _db.PresentacionesProducto.RemoveRange(producto.Presentaciones);
             producto.Presentaciones.Clear();
 
+            int ord = 1;
             foreach (var pr in req.Presentaciones)
             {
                 producto.Presentaciones.Add(new Data.Entities.PresentacionProducto
@@ -230,7 +256,10 @@ public class ProductosController : ControllerBase
                     Nombre = pr.Nombre,
                     PiezasEquivalentes = pr.PiezasEquivalentes > 0 ? pr.PiezasEquivalentes : 1,
                     Precio = pr.Precio > 0 ? pr.Precio : producto.PrecioBase,
-                    DescripcionEquivalencia = pr.DescripcionEquivalencia
+                    DescripcionEquivalencia = pr.DescripcionEquivalencia,
+                    CodigoBarras = pr.CodigoBarras,
+                    Activa = pr.Activa,
+                    Orden = pr.Orden > 0 ? pr.Orden : ord++
                 });
             }
         }

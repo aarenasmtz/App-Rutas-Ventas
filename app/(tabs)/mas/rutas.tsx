@@ -3,26 +3,29 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Plus, Trash2, Map, Users, Check, X } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { useApp } from '@/context/AppContext';
+import { mockClientes } from '@/services/mockDataService';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
+import { formatCurrency } from '@/utils/helpers';
+import type { Cliente } from '@/types';
 
 export default function RutasScreen() {
   const router = useRouter();
-  const { rutas, addRuta, deleteRuta, clientes } = useApp();
+  const [rutas, setRutas] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
+  const clientes = mockClientes;
   const [showForm, setShowForm] = useState(false);
   const [nuevaRuta, setNuevaRuta] = useState('');
 
   const handleAdd = () => {
     if (!nuevaRuta.trim()) { Alert.alert('Ingresa un nombre para la ruta'); return; }
     if (rutas.includes(nuevaRuta.trim())) { Alert.alert('Esa ruta ya existe'); return; }
-    addRuta(nuevaRuta.trim());
+    setRutas((prev) => [...prev, nuevaRuta.trim()]);
     setNuevaRuta('');
     setShowForm(false);
     Alert.alert('Ruta creada', `${nuevaRuta} se agregó correctamente`);
   };
 
   const handleDelete = (ruta: string) => {
-    const clientesEnRuta = clientes.filter((c) => c.ruta === ruta).length;
+    const clientesEnRuta = clientes.filter((c: Cliente) => c.ruta === ruta).length;
     if (clientesEnRuta > 0) {
       Alert.alert('No se puede eliminar', `Esta ruta tiene ${clientesEnRuta} clientes asignados`);
       return;
@@ -32,7 +35,7 @@ export default function RutasScreen() {
       `¿Seguro que quieres eliminar "${ruta}"?`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: () => deleteRuta(ruta) },
+        { text: 'Eliminar', style: 'destructive', onPress: () => setRutas((prev) => prev.filter((r) => r !== ruta)) },
       ]
     );
   };
@@ -71,9 +74,9 @@ export default function RutasScreen() {
       )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
-        {rutas.map((ruta) => {
-          const clientesEnRuta = clientes.filter((c) => c.ruta === ruta);
-          const totalSaldo = clientesEnRuta.reduce((s, c) => s + c.saldo, 0);
+        {rutas.map((ruta: string) => {
+          const clientesEnRuta = clientes.filter((c: Cliente) => c.ruta === ruta);
+          const totalSaldo = clientesEnRuta.reduce((s: number, c: Cliente) => s + c.saldo, 0);
           return (
             <Card key={ruta} style={styles.rutaCard}>
               <View style={styles.rutaLeft}>
@@ -104,8 +107,6 @@ export default function RutasScreen() {
     </View>
   );
 }
-
-import { formatCurrency } from '@/utils/helpers';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.neutral[50] },

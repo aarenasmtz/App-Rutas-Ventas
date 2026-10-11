@@ -3,27 +3,26 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert 
 import { useRouter } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { useApp } from '@/context/AppContext';
+import { DataService } from '@/services/mockDataService';
 import { categorias } from '@/constants/mockData';
 import { ScreenHeader } from '@/components/shared';
 import type { Categoria, Unidad } from '@/types';
 
 export default function NuevoProductoScreen() {
   const router = useRouter();
-  const { addProducto } = useApp();
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState<Categoria>('Jamón');
   const [unidad, setUnidad] = useState<Unidad>('kg');
   const [precioBase, setPrecioBase] = useState('');
   const [existencia, setExistencia] = useState('');
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     if (!nombre.trim()) { Alert.alert('Ingresa el nombre del producto'); return; }
     const precio = parseFloat(precioBase) || 0;
     if (precio <= 0) { Alert.alert('Ingresa un precio válido'); return; }
     const exist = parseFloat(existencia) || 0;
 
-    addProducto({
+    await DataService.createProducto({
       nombre: nombre.trim(),
       categoria,
       unidad,

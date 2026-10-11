@@ -20,6 +20,9 @@ export interface PresentacionConfig {
   piezasEquivalentes: number;
   precio: number;
   descripcionEquivalencia?: string;
+  codigoBarras?: string;
+  activa?: boolean;
+  orden?: number;
 }
 
 export interface Producto {
@@ -37,6 +40,7 @@ export interface Producto {
   codigoBarras?: string;
   favorito?: boolean;
   activo?: boolean;
+  manejaMultiplesPresentaciones?: boolean;
   imagen?: string;
   presentaciones?: PresentacionConfig[];
 }
@@ -96,6 +100,8 @@ export interface ItemCarrito {
   cantidad: number;
   unidad?: string;
   presentacion?: PresentacionConfig;
+  presentacionNombre?: string;
+  factorConversion?: number;
   piezasTotales?: number;
   precioLista: number;
   descuento: number;

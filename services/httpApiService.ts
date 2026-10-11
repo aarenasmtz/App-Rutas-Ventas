@@ -64,6 +64,8 @@ export interface RegistrarVentaRequestDto {
   items: {
     productoId: string;
     presentacionTipo: string;
+    presentacionNombre?: string;
+    factorConversion?: number;
     cantidadPresentaciones: number;
     piezasTotalesCalculadas: number;
     precioUnitario: number;
@@ -215,30 +217,36 @@ class HttpApiService {
     const list = await this.request<any[]>(`/productos${queryStr}`);
     // Mapear al modelo Producto de frontend según concepto de venta de Miguel
     return list.map((p) => {
+      const isMultipres = Boolean(
+        p.manejaMultiplesPresentaciones ||
+        (p.presentaciones && p.presentaciones.length > 1) ||
+        p.unidad === 'paquete'
+      );
       const catLower = (p.categoria || '').toLowerCase();
       const nomLower = (p.nombre || '').toLowerCase();
-      const isWeight =
+      const isWeight = !isMultipres && (
         p.precioPorPeso === true ||
         p.unidad === 'kg' ||
-        ['jamón', 'jamon', 'salchicha', 'chorizo', 'quesos', 'queso', 'carnes frías', 'carnes frias'].includes(catLower) ||
+        ['jamón', 'jamon', 'salchicha', 'chorizo', 'carnes frías', 'carnes frias'].includes(catLower) ||
         nomLower.includes('jamón') ||
         nomLower.includes('jamon') ||
-        nomLower.includes('queso') ||
         nomLower.includes('salchicha') ||
         nomLower.includes('chorizo') ||
         nomLower.includes('tocino') ||
-        nomLower.includes('pepperoni');
+        nomLower.includes('pepperoni')
+      );
 
       return {
         id: p.id,
         nombre: p.nombre,
         marca: p.marca || '',
         categoria: p.categoria,
-        unidad: (isWeight ? 'kg' : (p.unidad || 'pieza')) as any,
+        unidad: (p.unidad || (isWeight ? 'kg' : 'pieza')) as any,
         precioBase: p.precioBase,
         precioCompra: p.precioCompra || 0,
         existencia: p.existenciaPiezas,
         precioPorPeso: isWeight,
+        manejaMultiplesPresentaciones: isMultipres,
         sku: p.sku || p.id,
         codigoBarras: p.codigoBarras || '',
         favorito: p.favorito,
@@ -374,6 +382,11 @@ class HttpApiService {
 
   // ABC Productos
   async createProducto(prod: Partial<Producto>): Promise<Producto> {
+    const isMultipres = Boolean(
+      prod.manejaMultiplesPresentaciones ||
+      (prod.presentaciones && prod.presentaciones.length > 1) ||
+      prod.unidad === 'paquete'
+    );
     const p = await this.request<any>('/productos', {
       method: 'POST',
       body: JSON.stringify({
@@ -387,6 +400,7 @@ class HttpApiService {
         sku: prod.sku,
         codigoBarras: prod.codigoBarras,
         favorito: prod.favorito ?? false,
+        manejaMultiplesPresentaciones: isMultipres,
         presentaciones: prod.presentaciones || [],
       }),
     });
@@ -399,7 +413,8 @@ class HttpApiService {
       precioBase: p.precioBase,
       precioCompra: p.precioCompra || 0,
       existencia: p.existenciaPiezas ?? p.existencia ?? 0,
-      precioPorPeso: p.precioPorPeso ?? (p.unidad === 'kg'),
+      precioPorPeso: isMultipres ? false : (p.precioPorPeso ?? (p.unidad === 'kg')),
+      manejaMultiplesPresentaciones: p.manejaMultiplesPresentaciones ?? isMultipres,
       sku: p.sku || p.id,
       codigoBarras: p.codigoBarras || '',
       favorito: p.favorito,
@@ -409,6 +424,11 @@ class HttpApiService {
   }
 
   async updateProducto(id: string, prod: Partial<Producto>): Promise<Producto> {
+    const isMultipres = Boolean(
+      prod.manejaMultiplesPresentaciones ||
+      (prod.presentaciones && prod.presentaciones.length > 1) ||
+      prod.unidad === 'paquete'
+    );
     const p = await this.request<any>(`/productos/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -422,6 +442,7 @@ class HttpApiService {
         sku: prod.sku,
         codigoBarras: prod.codigoBarras,
         favorito: prod.favorito,
+        manejaMultiplesPresentaciones: isMultipres,
         presentaciones: prod.presentaciones,
       }),
     });
@@ -434,7 +455,8 @@ class HttpApiService {
       precioBase: p.precioBase ?? prod.precioBase ?? 0,
       precioCompra: p.precioCompra ?? prod.precioCompra ?? 0,
       existencia: p.existenciaPiezas ?? p.existencia ?? prod.existencia ?? 0,
-      precioPorPeso: p.precioPorPeso ?? prod.precioPorPeso ?? (p.unidad === 'kg'),
+      precioPorPeso: isMultipres ? false : (p.precioPorPeso ?? prod.precioPorPeso ?? (p.unidad === 'kg')),
+      manejaMultiplesPresentaciones: p.manejaMultiplesPresentaciones ?? isMultipres,
       sku: p.sku || prod.sku || id,
       codigoBarras: p.codigoBarras || prod.codigoBarras || '',
       favorito: p.favorito ?? prod.favorito ?? false,

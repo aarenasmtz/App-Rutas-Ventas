@@ -41,6 +41,39 @@ export default function CarritoScreen() {
 
   const handleCheckout = () => {
     if (carrito.length === 0) return;
+
+    // Validación de stock unificado por producto en inventario
+    const requerimientoPorProducto: {
+      [id: string]: { nombre: string; requerido: number; disponible: number; unidad: string };
+    } = {};
+
+    for (const item of carrito) {
+      const pId = item.producto.id;
+      const factor = item.presentacion?.piezasEquivalentes || 1;
+      const unidades = item.piezasTotales || Math.round(item.cantidad * factor);
+
+      if (!requerimientoPorProducto[pId]) {
+        requerimientoPorProducto[pId] = {
+          nombre: item.producto.nombre,
+          requerido: 0,
+          disponible: item.producto.existencia,
+          unidad: item.producto.unidad || 'pieza',
+        };
+      }
+      requerimientoPorProducto[pId].requerido += unidades;
+    }
+
+    for (const pId in requerimientoPorProducto) {
+      const req = requerimientoPorProducto[pId];
+      if (req.requerido > req.disponible) {
+        Alert.alert(
+          'Inventario insuficiente',
+          `No es posible continuar con la venta. Se solicitan ${req.requerido} ${req.unidad}s de "${req.nombre}", pero solo hay ${req.disponible} disponibles en inventario.`
+        );
+        return;
+      }
+    }
+
     setVentaTotal(total);
     router.push('/(tabs)/venta/pago');
   };
@@ -173,7 +206,7 @@ export default function CarritoScreen() {
                       </Text>
                     ) : (
                       <Text style={styles.equivCalcText}>
-                        {item.cantidad} {pres?.tipo || 'pza'}{item.cantidad > 1 ? 's' : ''} = <Text style={{ fontWeight: 'bold', color: colors.primary[800] }}>{piezasEquiv} piezas</Text>
+                        {item.cantidad} {pres?.nombre || pres?.tipo || item.producto.unidad || 'pza'}{item.cantidad > 1 ? 's' : ''} = <Text style={{ fontWeight: 'bold', color: colors.primary[800] }}>{piezasEquiv} {item.producto.unidad || 'pieza'}{piezasEquiv === 1 ? '' : 's'}</Text>
                       </Text>
                     )}
                   </View>
