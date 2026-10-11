@@ -1,14 +1,23 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import type { ItemCarrito, MetodoPago, Pago } from '@/types';
+import type { ItemCarrito, Pago } from '@/types';
+import { apiService } from '@/services/httpApiService';
 
 type ConexionEstado = 'Sincronizado' | 'Pendiente' | 'Sin conexión';
-type AuthUser = { nombre: string; rol: string } | null;
+export type UserRole = 'Administrador' | 'Vendedor';
+export type AuthUser = {
+  id?: string;
+  nombre: string;
+  rol: UserRole;
+  token?: string;
+  rutaNombre?: string;
+} | null;
 
 interface AppContextType {
   loggedIn: boolean;
   user: AuthUser;
-  login: () => void;
+  login: (credentials?: { usuario?: string; password?: string; role?: UserRole } | UserRole) => Promise<void> | void;
   logout: () => void;
+  switchRole: (role: UserRole) => void;
 
   online: boolean;
   toggleOnline: () => void;
@@ -28,22 +37,71 @@ interface AppContextType {
 
   clienteActivoId: string | null;
   setClienteActivoId: (id: string | null) => void;
+
+  ultimoFolioVenta: string | null;
+  setUltimoFolioVenta: (folio: string | null) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [user, setUser] = useState<AuthUser>(null);
+  const [loggedIn, setLoggedIn] = useState(true); // Default logged in for immediate demo experience
+  const [user, setUser] = useState<AuthUser>({ id: '1', nombre: 'Miguel', rol: 'Administrador', rutaNombre: 'Ruta Centro' });
   const [online, setOnline] = useState(true);
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [pagos, setPagosState] = useState<Pago[]>([]);
   const [ventaTotal, setVentaTotal] = useState(0);
-  const [clienteActivoId, setClienteActivoId] = useState<string | null>(null);
+  const [clienteActivoId, setClienteActivoId] = useState<string | null>('c1'); // ABTS ARENAS por defecto
+  const [ultimoFolioVenta, setUltimoFolioVenta] = useState<string | null>(null);
 
-  const login = useCallback(() => {
+  const login = useCallback(async (params?: { usuario?: string; password?: string; role?: UserRole } | UserRole) => {
+    let targetRole: UserRole = 'Administrador';
+    let targetName = 'Miguel';
+    let targetId = '1';
+    let targetToken = '';
+
+    if (typeof params === 'string') {
+      targetRole = params;
+      targetName = params === 'Administrador' ? 'Miguel' : 'Juan';
+    } else if (params && typeof params === 'object') {
+      const { usuario, password, role } = params;
+      if (usuario && password) {
+        try {
+          const resp = await apiService.login({ usuario, password });
+          if (resp && resp.usuario) {
+            targetId = resp.usuario.id;
+            targetName = resp.usuario.nombre;
+            targetRole = resp.usuario.rol as UserRole;
+            targetToken = resp.token;
+          }
+        } catch {
+          // Fallback a credenciales mock
+          if (role) targetRole = role;
+          targetName = usuario.toLowerCase().includes('juan') ? 'Juan' : 'Miguel';
+        }
+      } else if (role) {
+        targetRole = role;
+        targetName = role === 'Administrador' ? 'Miguel' : 'Juan';
+      }
+    }
+
     setLoggedIn(true);
-    setUser({ nombre: 'Miguel', rol: 'Administrador' });
+    setUser({
+      id: targetId,
+      nombre: targetName,
+      rol: targetRole,
+      token: targetToken,
+      rutaNombre: 'Ruta Centro',
+    });
+  }, []);
+
+  const switchRole = useCallback((role: UserRole) => {
+    setUser({
+      id: role === 'Administrador' ? '1' : '2',
+      nombre: role === 'Administrador' ? 'Miguel' : 'Juan',
+      rol: role,
+      rutaNombre: role === 'Administrador' ? 'Ruta Centro' : 'Ruta Norte',
+    });
   }, []);
 
   const logout = useCallback(() => {
@@ -53,6 +111,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPagosState([]);
     setVentaTotal(0);
     setClienteActivoId(null);
+    setUltimoFolioVenta(null);
   }, []);
 
   const toggleOnline = useCallback(() => setOnline((v) => !v), []);
@@ -61,13 +120,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addToCarrito = useCallback((item: ItemCarrito) => {
     setCarrito((prev) => {
-      const existing = prev.findIndex((i) => i.producto.id === item.producto.id);
+      // Comparar por ID de producto Y presentación
+      const existing = prev.findIndex(
+        (i) =>
+          i.producto.id === item.producto.id &&
+          (i.presentacion?.tipo === item.presentacion?.tipo || (!i.presentacion && !item.presentacion))
+      );
+
       if (existing >= 0) {
         const updated = [...prev];
+        const prevItem = updated[existing];
+        const newCantidad = prevItem.cantidad + item.cantidad;
+        const factor = item.presentacion?.piezasEquivalentes || 1;
         updated[existing] = {
-          ...updated[existing],
-          cantidad: updated[existing].cantidad + item.cantidad,
-          subtotal: (updated[existing].cantidad + item.cantidad) * item.precioFinal,
+          ...prevItem,
+          cantidad: newCantidad,
+          piezasTotales: newCantidad * factor,
+          subtotal: newCantidad * prevItem.precioFinal,
         };
         return updated;
       }
@@ -102,6 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user,
         login,
         logout,
+        switchRole,
         online,
         toggleOnline,
         conexionEstado,
@@ -116,6 +186,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setVentaTotal,
         clienteActivoId,
         setClienteActivoId,
+        ultimoFolioVenta,
+        setUltimoFolioVenta,
       }}
     >
       {children}

@@ -1,25 +1,48 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Check, RotateCcw } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { clientes, productos, devoluciones as devolucionesMock } from '@/constants/mockData';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getEstadoColor } from '@/utils/helpers';
-import type { Unidad } from '@/types';
+import { useApp } from '@/context/AppContext';
+import { DataService, mockClientes, mockProductos } from '@/services/mockDataService';
+import type { Cliente, Producto } from '@/types';
 
 const motivos = ['Producto dañado', 'Caducidad', 'Cambio', 'Pedido incorrecto', 'Otro'];
 const destinos = ['Inventario', 'Merma', 'Cambio'] as const;
 
 export default function DevolucionesScreen() {
   const router = useRouter();
+  const { user } = useApp();
   const [step, setStep] = useState<'lista' | 'nueva'>('lista');
+  const [clientesList, setClientesList] = useState<Cliente[]>(mockClientes);
+  const [productosList, setProductosList] = useState<Producto[]>(mockProductos);
+  const [devolucionesList, setDevolucionesList] = useState<any[]>([]);
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [productoId, setProductoId] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState('');
   const [motivo, setMotivo] = useState<string | null>(null);
   const [destino, setDestino] = useState<typeof destinos[number] | null>(null);
   const [registrada, setRegistrada] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const loadData = async () => {
+    try {
+      const devs = await DataService.getDevoluciones();
+      if (devs) setDevolucionesList(devs);
+      const cls = await DataService.getClientes();
+      if (cls && cls.length > 0) setClientesList(cls);
+      const prs = await DataService.getProductos();
+      if (prs && prs.length > 0) setProductosList(prs);
+    } catch {
+      // Fallback
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const reset = () => {
     setStep('lista');
@@ -31,31 +54,58 @@ export default function DevolucionesScreen() {
     setRegistrada(false);
   };
 
-  const handleRegistrar = () => {
+  const handleRegistrar = async () => {
     if (!clienteId || !productoId || !motivo || !destino) {
       Alert.alert('Completa todos los campos');
       return;
     }
-    if (!cantidad || parseFloat(cantidad) <= 0) {
+    const cant = parseFloat(cantidad) || 0;
+    if (cant <= 0) {
       Alert.alert('Ingresa una cantidad válida');
       return;
     }
-    setRegistrada(true);
+
+    const prod = productosList.find((p) => p.id === productoId);
+    const cli = clientesList.find((c) => c.id === clienteId);
+    const precio = prod?.precioBase || 0;
+
+    setLoading(true);
+    try {
+      await DataService.registrarDevolucion({
+        clienteId,
+        empleadoId: user?.id || '1',
+        productoId,
+        cantidad: cant,
+        presentacionTipo: 'pieza',
+        precioUnitario: precio,
+        total: cant * precio,
+        motivo,
+        destino,
+        metodoReembolso: 'SaldoAFavor',
+        observaciones: `Devolución de ${cli?.nombre || ''}`,
+      });
+      await loadData();
+      setRegistrada(true);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo registrar la devolución');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (registrada) {
-    const cliente = clientes.find((c) => c.id === clienteId);
-    const producto = productos.find((p) => p.id === productoId);
+    const cliente = clientesList.find((c) => c.id === clienteId);
+    const producto = productosList.find((p) => p.id === productoId);
     return (
       <View style={styles.container}>
         <ScreenHeader title="Devolución" onBack={() => router.back()} />
         <View style={styles.confirmContent}>
           <View style={styles.successIcon}><Check size={56} color={colors.success[600]} /></View>
-          <Text style={styles.confirmTitle}>¡Devolución registrada!</Text>
+          <Text style={styles.confirmTitle}>¡Devolución registrada en base de datos!</Text>
           <View style={styles.confirmCard}>
             <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Cliente</Text><Text style={styles.confirmValue}>{cliente?.nombre}</Text></View>
             <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Producto</Text><Text style={styles.confirmValue}>{producto?.nombre}</Text></View>
-            <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Cantidad</Text><Text style={styles.confirmValue}>{cantidad} {producto?.unidad}</Text></View>
+            <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Cantidad</Text><Text style={styles.confirmValue}>{cantidad} {producto?.unidad || 'piezas'}</Text></View>
             <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Motivo</Text><Text style={styles.confirmValue}>{motivo}</Text></View>
             <View style={[styles.confirmRow, { borderBottomWidth: 0 }]}><Text style={styles.confirmLabel}>Destino</Text><Text style={styles.confirmValue}>{destino}</Text></View>
           </View>
@@ -68,8 +118,8 @@ export default function DevolucionesScreen() {
   }
 
   if (step === 'nueva') {
-    const cliente = clientes.find((c) => c.id === clienteId);
-    const producto = productos.find((p) => p.id === productoId);
+    const cliente = clientesList.find((c) => c.id === clienteId);
+    const producto = productosList.find((p) => p.id === productoId);
     return (
       <View style={styles.container}>
         <ScreenHeader title="Nueva devolución" onBack={() => setStep('lista')} />
@@ -81,7 +131,7 @@ export default function DevolucionesScreen() {
               <TouchableOpacity onPress={() => setClienteId(null)}><Text style={styles.changeText}>Cambiar</Text></TouchableOpacity>
             </View>
           ) : (
-            clientes.map((c) => (
+            clientesList.map((c) => (
               <TouchableOpacity key={c.id} onPress={() => setClienteId(c.id)}>
                 <View style={styles.optionCard}><Text style={styles.optionText}>{c.nombre}</Text></View>
               </TouchableOpacity>
@@ -97,11 +147,11 @@ export default function DevolucionesScreen() {
                   <TouchableOpacity onPress={() => setProductoId(null)}><Text style={styles.changeText}>Cambiar</Text></TouchableOpacity>
                 </View>
               ) : (
-                productos.map((p) => (
+                productosList.map((p) => (
                   <TouchableOpacity key={p.id} onPress={() => setProductoId(p.id)}>
                     <View style={styles.optionCard}>
                       <Text style={styles.optionText}>{p.nombre}</Text>
-                      <Text style={styles.optionSub}>{p.existencia} {p.unidad} disp.</Text>
+                      <Text style={styles.optionSub}>{p.existencia} {p.unidad || 'pzas'} disp.</Text>
                     </View>
                   </TouchableOpacity>
                 ))
@@ -111,10 +161,10 @@ export default function DevolucionesScreen() {
 
           {producto && (
             <>
-              <Text style={styles.sectionLabel}>3. Cantidad ({producto.unidad})</Text>
+              <Text style={styles.sectionLabel}>3. Cantidad ({producto.unidad || 'piezas'})</Text>
               <View style={styles.qtyInputWrap}>
                 <TextInput style={styles.qtyInput} placeholder="0" placeholderTextColor={colors.neutral[300]} value={cantidad} onChangeText={setCantidad} keyboardType="decimal-pad" />
-                <Text style={styles.qtyUnit}>{producto.unidad}</Text>
+                <Text style={styles.qtyUnit}>{producto.unidad || 'piezas'}</Text>
               </View>
 
               <Text style={styles.sectionLabel}>4. Motivo</Text>
@@ -146,6 +196,8 @@ export default function DevolucionesScreen() {
     );
   }
 
+  const itemsToRender = devolucionesList;
+
   return (
     <View style={styles.container}>
       <ScreenHeader title="Devoluciones" onBack={() => router.back()} />
@@ -155,20 +207,27 @@ export default function DevolucionesScreen() {
           <Text style={styles.nuevaBtnText}>Nueva devolución</Text>
         </TouchableOpacity>
 
-        <Text style={styles.sectionLabel}>Historial</Text>
-        {devolucionesMock.map((d) => (
-          <Card key={d.id} style={styles.devCard}>
-            <View style={styles.devTop}>
-              <Text style={styles.devCliente}>{d.cliente}</Text>
-              <Badge label={d.destino} color={d.destino === 'Merma' ? 'rojo' : d.destino === 'Cambio' ? 'amber' : 'verde'} />
-            </View>
-            <Text style={styles.devProducto}>{d.cantidad} {d.unidad} · {d.producto}</Text>
-            <View style={styles.devBottom}>
-              <Text style={styles.devMotivo}>{d.motivo}</Text>
-              <Text style={styles.devFecha}>{d.fecha}</Text>
-            </View>
-          </Card>
-        ))}
+        <Text style={styles.sectionLabel}>Historial de devoluciones</Text>
+        {itemsToRender.map((d: any) => {
+          const clienteNombre = d.clienteNombre || d.cliente || 'Cliente';
+          const productoNombre = d.productoNombre || d.producto || 'Producto';
+          const destinoLabel = d.destino || 'Merma';
+          const fechaStr = d.fechaHora ? new Date(d.fechaHora).toLocaleDateString() : d.fecha || 'Hoy';
+
+          return (
+            <Card key={d.id || d.folio} style={styles.devCard}>
+              <View style={styles.devTop}>
+                <Text style={styles.devCliente}>{clienteNombre}</Text>
+                <Badge label={destinoLabel} color={destinoLabel === 'Merma' ? 'rojo' : destinoLabel === 'Cambio' ? 'amber' : 'verde'} />
+              </View>
+              <Text style={styles.devProducto}>{d.cantidad} {d.presentacionTipo || d.unidad || 'pzas'} · {productoNombre}</Text>
+              <View style={styles.devBottom}>
+                <Text style={styles.devMotivo}>{d.motivo}</Text>
+                <Text style={styles.devFecha}>{fechaStr}</Text>
+              </View>
+            </Card>
+          );
+        })}
       </ScrollView>
     </View>
   );

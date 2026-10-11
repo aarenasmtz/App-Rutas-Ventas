@@ -1,133 +1,178 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  CreditCard, Wallet, RotateCcw, Package, Truck, Receipt,
-  DollarSign, Scissors, Box, BarChart3, Users, ScrollText,
-  RefreshCw, ChevronRight, LogOut, Wifi, WifiOff, User,
+  Boxes,
+  Scissors,
+  Wallet,
+  MapPin,
+  ClipboardCheck,
+  ScrollText,
+  Settings,
+  User,
+  ChevronRight,
+  LogOut,
+  Wifi,
+  WifiOff,
+  ShieldCheck,
+  RefreshCw,
+  Tag,
+  Users,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { Card, ConnectivityIndicator } from '@/components/shared';
+import { AppShell, PageHeader, RoleSwitcher } from '@/components/DesignSystem';
 
 interface MenuItem {
   title: string;
   subtitle: string;
-  icon: typeof CreditCard;
+  icon: any;
   color: string;
   bg: string;
   route: string;
 }
 
-const menuItems: MenuItem[] = [
-  { title: 'Créditos', subtitle: 'Cartera de clientes y saldos', icon: CreditCard, color: colors.warning[600], bg: colors.warning[50], route: '/(tabs)/mas/creditos' },
-  { title: 'Cobranza', subtitle: 'Registrar abonos', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
-  { title: 'Devoluciones', subtitle: 'Cambios y mermas', icon: RotateCcw, color: colors.error[500], bg: colors.error[50], route: '/(tabs)/mas/devoluciones' },
-  { title: 'Inventario', subtitle: 'Existencias en camioneta', icon: Package, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/inventario' },
-  { title: 'Carga del día', subtitle: 'Mercancía inicial', icon: Truck, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/carga' },
-  { title: 'Gastos', subtitle: 'Gasolina, comida y más', icon: Receipt, color: colors.warning[600], bg: colors.warning[50], route: '/(tabs)/mas/gastos' },
-  { title: 'Caja', subtitle: 'Flujo de efectivo', icon: DollarSign, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/caja' },
-  { title: 'Corte diario', subtitle: 'Resumen del día', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
-  { title: 'Productos', subtitle: 'Catálogo y precios', icon: Box, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/productos' },
-  { title: 'Reportes', subtitle: 'Análisis y exportación', icon: BarChart3, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/reportes' },
-  { title: 'Empleados', subtitle: 'Vendedores y rutas', icon: Users, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/empleados' },
-  { title: 'Bitácora', subtitle: 'Registro de actividad', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },
-  { title: 'Sincronización', subtitle: 'Estado de datos', icon: RefreshCw, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/sincronizacion' },
-];
-
 export default function MasScreen() {
   const router = useRouter();
-  const { user, logout, online, toggleOnline } = useApp();
+  const { user, switchRole, logout, online, toggleOnline } = useApp();
+  const isAdmin = user?.rol === 'Administrador';
+
+  // Menú según rol requerido en el prompt
+  const adminMenuItems: MenuItem[] = [
+    { title: 'Productos (ABC)', subtitle: 'Altas, bajas y catálogo por peso/pieza', icon: Boxes, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/productos' },
+    { title: 'Categorías (ABC)', subtitle: 'Administrar familias y emojis de productos', icon: Tag, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/categorias' },
+    { title: 'Clientes (ABC)', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes' },
+    { title: 'Cortes', subtitle: 'Cortes diarios por trabajador', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
+    { title: 'Cobranza', subtitle: 'Registrar y consultar abonos', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
+    { title: 'Rutas y Mapa', subtitle: 'Secuencia de paradas y mapa León, Gto', icon: MapPin, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/ruta' },
+    { title: 'Revisión', subtitle: 'Auditoría rápida física vs sistema', icon: ClipboardCheck, color: colors.success[700], bg: colors.success[50], route: '/(tabs)/mas/revision' },
+    { title: 'Auditoría', subtitle: 'Bitácora de movimientos y accesos', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },
+    { title: 'Configuración', subtitle: 'Sincronización y parámetros', icon: Settings, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/sincronizacion' },
+  ];
+
+  const vendedorMenuItems: MenuItem[] = [
+    { title: 'Cobranza', subtitle: 'Registrar abonos de clientes', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
+    { title: 'Mi ruta', subtitle: 'Secuencia y mapa de visitas', icon: MapPin, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/ruta' },
+    { title: 'Perfil', subtitle: 'Datos de la unidad y turno', icon: User, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/sincronizacion' },
+  ];
+
+  const currentMenuItems = isAdmin ? adminMenuItems : vendedorMenuItems;
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-      <View style={styles.header}>
-        <View style={styles.profileRow}>
-          <View style={styles.avatar}>
-            <User size={28} color={colors.neutral[0]} />
+    <AppShell>
+      <PageHeader
+        title="Más Opciones"
+        subtitle={isAdmin ? 'Módulos de Administrador' : 'Herramientas de Vendedor en Ruta'}
+        right={
+          <RoleSwitcher
+            currentRole={user?.rol || 'Administrador'}
+            onSwitch={switchRole}
+          />
+        }
+      />
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Tarjeta de Perfil y Rol Actual */}
+        <View style={[styles.profileCard, shadows.card]}>
+          <View style={styles.profileAvatar}>
+            <User size={28} color={colors.primary[600]} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.nombre}</Text>
-            <Text style={styles.profileRole}>{user?.rol}</Text>
+            <Text style={styles.profileName}>{user?.nombre || 'Miguel'}</Text>
+            <View style={styles.roleBadgeRow}>
+              {isAdmin ? (
+                <ShieldCheck size={14} color={colors.primary[700]} />
+              ) : (
+                <User size={14} color={colors.neutral[600]} />
+              )}
+              <Text style={styles.profileRole}>{user?.rol || 'Administrador'}</Text>
+            </View>
           </View>
-          <ConnectivityIndicator />
         </View>
-      </View>
 
-      <View style={styles.body}>
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <TouchableOpacity key={item.title} activeOpacity={0.85} onPress={() => router.push(item.route as never)}>
-              <Card style={styles.menuCard}>
-                <View style={[styles.menuIcon, { backgroundColor: item.bg }]}>
-                  <Icon size={22} color={item.color} />
+        {/* Lista de Módulos según Rol */}
+        <View style={styles.menuSection}>
+          <Text style={styles.sectionHeading}>
+            {isAdmin ? 'Módulos Administrativos (Miguel):' : 'Módulos de Ruta (Vendedor):'}
+          </Text>
+
+          {currentMenuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <TouchableOpacity
+                key={item.title}
+                activeOpacity={0.82}
+                onPress={() => router.push(item.route as never)}
+              >
+                <View style={[styles.menuCard, shadows.card]}>
+                  <View style={[styles.menuIcon, { backgroundColor: item.bg }]}>
+                    <Icon size={22} color={item.color} />
+                  </View>
+                  <View style={styles.menuInfo}>
+                    <Text style={styles.menuTitle}>{item.title}</Text>
+                    <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                  </View>
+                  <ChevronRight size={20} color={colors.neutral[300]} />
                 </View>
-                <View style={styles.menuInfo}>
-                  <Text style={styles.menuTitle}>{item.title}</Text>
-                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-                </View>
-                <ChevronRight size={22} color={colors.neutral[300]} />
-              </Card>
-            </TouchableOpacity>
-          );
-        })}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-        <View style={styles.divider} />
+        {/* Ajustes de Red / Demo */}
+        <View style={styles.systemSection}>
+          <Text style={styles.sectionHeading}>Herramientas de Red:</Text>
 
-        <TouchableOpacity activeOpacity={0.85} onPress={toggleOnline}>
-          <Card style={styles.menuCard}>
-            <View style={[styles.menuIcon, { backgroundColor: online ? colors.success[50] : colors.error[50] }]}>
-              {online ? <Wifi size={22} color={colors.success[600]} /> : <WifiOff size={22} color={colors.error[500]} />}
+          <TouchableOpacity activeOpacity={0.82} onPress={toggleOnline}>
+            <View style={[styles.menuCard, shadows.card]}>
+              <View style={[styles.menuIcon, { backgroundColor: online ? colors.success[50] : colors.error[50] }]}>
+                {online ? <Wifi size={22} color={colors.success[600]} /> : <WifiOff size={22} color={colors.error[500]} />}
+              </View>
+              <View style={styles.menuInfo}>
+                <Text style={styles.menuTitle}>Modo {online ? 'En Línea (Online)' : 'Sin Conexión (Offline)'}</Text>
+                <Text style={styles.menuSubtitle}>Cambiar estado para simulación en ruta</Text>
+              </View>
+              <ChevronRight size={20} color={colors.neutral[300]} />
             </View>
-            <View style={styles.menuInfo}>
-              <Text style={styles.menuTitle}>Modo {online ? 'Online' : 'Offline'}</Text>
-              <Text style={styles.menuSubtitle}>Cambiar estado de conexión (DEMO)</Text>
-            </View>
-            <ChevronRight size={22} color={colors.neutral[300]} />
-          </Card>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity activeOpacity={0.85} onPress={logout}>
-          <Card style={[styles.menuCard, { marginBottom: 0 }]}>
-            <View style={[styles.menuIcon, { backgroundColor: colors.error[50] }]}>
-              <LogOut size={22} color={colors.error[500]} />
+          <TouchableOpacity activeOpacity={0.82} onPress={logout}>
+            <View style={[styles.menuCard, shadows.card]}>
+              <View style={[styles.menuIcon, { backgroundColor: colors.error[50] }]}>
+                <LogOut size={22} color={colors.error[500]} />
+              </View>
+              <View style={styles.menuInfo}>
+                <Text style={[styles.menuTitle, { color: colors.error[600] }]}>Cerrar Sesión</Text>
+                <Text style={styles.menuSubtitle}>Regresar a pantalla de acceso</Text>
+              </View>
             </View>
-            <View style={styles.menuInfo}>
-              <Text style={[styles.menuTitle, { color: colors.error[600] }]}>Cerrar sesión</Text>
-              <Text style={styles.menuSubtitle}>Salir de la aplicación</Text>
-            </View>
-          </Card>
-        </TouchableOpacity>
-
-        <Text style={styles.version}>Ruta Ventas v1.0.0 · Demo</Text>
-      </View>
-    </ScrollView>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.neutral[50],
+  scroll: {
+    paddingBottom: 100,
   },
-  header: {
-    backgroundColor: colors.primary[700],
-    paddingTop: 50,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-  },
-  profileRow: {
+  profileCard: {
+    backgroundColor: colors.neutral[0],
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radius.xl,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[100],
   },
-  avatar: {
+  profileAvatar: {
     width: 52,
     height: 52,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -137,27 +182,47 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
+    color: colors.neutral[900],
   },
-  profileRole: {
-    fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
+  roleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginTop: 2,
   },
-  body: {
-    padding: spacing.md,
-    paddingTop: spacing.lg,
+  profileRole: {
+    fontSize: fontSize.xs + 1,
+    color: colors.primary[700],
+    fontWeight: fontWeight.semibold,
+  },
+  menuSection: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs + 2,
+  },
+  sectionHeading: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[600],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
   },
   menuCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[100],
+    marginBottom: spacing.xs + 2,
   },
   menuIcon: {
     width: 44,
     height: 44,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -166,23 +231,17 @@ const styles = StyleSheet.create({
   },
   menuTitle: {
     fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
   menuSubtitle: {
     fontSize: fontSize.xs,
-    color: colors.neutral[400],
-    marginTop: 1,
+    color: colors.neutral[500],
+    marginTop: 2,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.neutral[200],
-    marginVertical: spacing.md,
-  },
-  version: {
-    textAlign: 'center',
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
+  systemSection: {
     marginTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs + 2,
   },
 });

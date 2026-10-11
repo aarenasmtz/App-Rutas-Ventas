@@ -1,426 +1,511 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { DollarSign, CreditCard, Wallet, TrendingUp, MapPin, Navigation, ChevronRight, Bell, LogOut } from 'lucide-react-native';
+import {
+  ShoppingBag,
+  Users,
+  Package,
+  MapPin,
+  Wallet,
+  Scissors,
+  ClipboardCheck,
+  Boxes,
+  Settings,
+  TrendingUp,
+  CreditCard,
+  Truck,
+  ArrowRight,
+  LogOut,
+  Bell,
+  Database,
+} from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { dashboardData, clientes } from '@/constants/mockData';
-import { Card, Badge, ConnectivityIndicator } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
+import {
+  AppShell,
+  DashboardTile,
+  RoleSwitcher,
+  MoneyDisplay,
+} from '@/components/DesignSystem';
+import { mockClientes, DataService } from '@/services/mockDataService';
 
-export default function DashboardScreen() {
+export default function HomeScreen() {
   const router = useRouter();
-  const { user, logout } = useApp();
-  const siguienteCliente = clientes.find((c) => c.id === dashboardData.siguienteCliente)!;
-  const progreso = (dashboardData.clientesVisitados / dashboardData.clientesTotal) * 100;
+  const { user, switchRole, logout, setClienteActivoId } = useApp();
+  const isAdmin = user?.rol === 'Administrador';
+
+  const [resumen, setResumen] = useState({
+    ventasHoy: 0,
+    cobranzaHoy: 0,
+    creditoColocadoHoy: 0,
+    efectivoEnCaja: 0,
+    clientesVisitados: 0,
+    clientesTotalRuta: 0,
+    totalPiezasVendidas: 0,
+    clienteCercano: null as any,
+  });
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+
+  // Fecha dinámica real en español
+  const fechaHoy = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const fechaHoyFormateada = fechaHoy.charAt(0).toUpperCase() + fechaHoy.slice(1);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDashboard = async () => {
+      try {
+        const live = await DataService.getDashboardResumen();
+        if (isMounted && live) {
+          setResumen((prev) => ({
+            ...prev,
+            ...live,
+            clienteCercano: live.clienteCercano || prev.clienteCercano,
+          }));
+          setIsLiveConnected(true);
+        }
+      } catch {
+        // Fallback
+      }
+    };
+    fetchDashboard();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Siguiente cliente o cercano para venta rápida
+  const clienteCercano = resumen.clienteCercano || {
+    id: 'c1',
+    nombre: 'ABTS ARENAS',
+    propietario: 'Aaron Arenas',
+    saldo: 0,
+    distanciaMetros: 50,
+  };
+
+  const handleVenderACercano = () => {
+    if (clienteCercano?.id) {
+      setClienteActivoId(clienteCercano.id);
+    }
+    router.push('/(tabs)/venta');
+  };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.greeting}>Buenos días, {user?.nombre}</Text>
-            <Text style={styles.date}>Lunes 15 de septiembre, 2026</Text>
+    <AppShell>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Cabecera Principal */}
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.greeting}>Hola, {user?.nombre || 'Miguel'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <Text style={styles.date}>{fechaHoyFormateada} · {user?.rutaNombre || 'Ruta Centro'}</Text>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: isLiveConnected ? colors.success[100] : colors.neutral[200],
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
+                  borderRadius: 10,
+                }}>
+                  <View style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: isLiveConnected ? colors.success[600] : colors.neutral[500]
+                  }} />
+                  <Text style={{
+                    fontSize: 10,
+                    fontWeight: '700',
+                    color: isLiveConnected ? colors.success[700] : colors.neutral[600]
+                  }}>
+                    {isLiveConnected ? 'API .NET 9' : 'Offline'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity activeOpacity={0.7} onPress={logout} style={styles.logoutBtn}>
+              <LogOut size={18} color={colors.neutral[600]} />
+            </TouchableOpacity>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.iconBtn}>
-              <Bell size={22} color={colors.neutral[0]} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn} onPress={logout}>
-              <LogOut size={20} color={colors.neutral[0]} />
-            </TouchableOpacity>
+
+          {/* Selector interactivo de Rol para pruebas de UX */}
+          <View style={styles.roleWrap}>
+            <Text style={styles.roleHelpLabel}>Vista activa:</Text>
+            <RoleSwitcher
+              currentRole={user?.rol || 'Administrador'}
+              onSwitch={switchRole}
+            />
           </View>
         </View>
 
-        <View style={styles.routeCard}>
-          <View style={styles.routeInfo}>
-            <Text style={styles.routeLabel}>Ruta actual</Text>
-            <Text style={styles.routeName}>Ruta Centro</Text>
-          </View>
-          <View style={styles.progressWrap}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progreso}%` }]} />
+        {/* Indicadores rápidos (KPIs conectados a base de datos) */}
+        <View style={styles.kpiContainer}>
+          <View style={[styles.kpiCard, shadows.card]}>
+            <View style={styles.kpiHeader}>
+              <TrendingUp size={16} color={colors.primary[600]} />
+              <Text style={styles.kpiLabel}>Ventas hoy</Text>
             </View>
-            <Text style={styles.progressText}>{dashboardData.clientesVisitados} de {dashboardData.clientesTotal} clientes</Text>
+            <MoneyDisplay amount={resumen.ventasHoy} size="lg" color={colors.primary[700]} />
+            <Text style={styles.kpiSub}>{resumen.totalPiezasVendidas} piezas vendidas</Text>
+          </View>
+
+          <View style={[styles.kpiCard, shadows.card]}>
+            <View style={styles.kpiHeader}>
+              <Wallet size={16} color={colors.success[600]} />
+              <Text style={styles.kpiLabel}>Cobrado</Text>
+            </View>
+            <MoneyDisplay amount={resumen.cobranzaHoy} size="lg" color={colors.success[700]} />
+            <Text style={styles.kpiSub}>Efectivo y transfers</Text>
           </View>
         </View>
-      </View>
 
-      <View style={styles.connRow}>
-        <ConnectivityIndicator />
-      </View>
+        <View style={styles.kpiContainerSecondary}>
+          <View style={[styles.kpiCardMini, shadows.card]}>
+            <CreditCard size={15} color={colors.warning[600]} />
+            <View>
+              <Text style={styles.kpiMiniLabel}>Crédito colocado</Text>
+              <MoneyDisplay amount={resumen.creditoColocadoHoy} size="sm" color={colors.warning[700]} />
+            </View>
+          </View>
 
-      <View style={styles.body}>
-        <View style={styles.statsRow}>
-          <Card style={styles.statCard}>
-            <View style={styles.statIconWrap}>
-              <TrendingUp size={20} color={colors.primary[600]} />
+          <View style={[styles.kpiCardMini, shadows.card]}>
+            <Truck size={15} color={colors.neutral[600]} />
+            <View>
+              <Text style={styles.kpiMiniLabel}>Ruta avance</Text>
+              <Text style={styles.kpiMiniVal}>{resumen.clientesVisitados} de {resumen.clientesTotalRuta} visitas</Text>
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.ventasHoy)}</Text>
-            <Text style={styles.statLabel}>Ventas hoy</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <View style={styles.statIconWrap}>
-              <Wallet size={20} color={colors.success[600]} />
-            </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.cobranza)}</Text>
-            <Text style={styles.statLabel}>Cobranza</Text>
-          </Card>
+          </View>
         </View>
 
-        <View style={styles.statsRow}>
-          <Card style={styles.statCard}>
-            <View style={styles.statIconWrapAmber}>
-              <CreditCard size={20} color={colors.warning[600]} />
+        {/* Banner de Acción Rápida: Cliente Cercano Detectado */}
+        <View style={[styles.proximityBanner, shadows.card]}>
+          <View style={styles.proxLeft}>
+            <View style={styles.proxPin}>
+              <MapPin size={20} color={colors.primary[600]} />
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.creditoVendido)}</Text>
-            <Text style={styles.statLabel}>Crédito vendido</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <View style={styles.statIconWrap}>
-              <DollarSign size={20} color={colors.primary[600]} />
+            <View style={styles.proxInfo}>
+              <View style={styles.proxTag}>
+                <Text style={styles.proxTagText}>ESTÁS CERCA</Text>
+              </View>
+              <Text style={styles.proxClientName}>{clienteCercano.nombre}</Text>
+              <Text style={styles.proxClientOwner}>{clienteCercano.propietario} · Saldo: {formatCurrency(clienteCercano.saldo)}</Text>
             </View>
-            <Text style={styles.statValue}>{formatCurrency(dashboardData.cajaActual)}</Text>
-            <Text style={styles.statLabel}>Caja actual</Text>
-          </Card>
+          </View>
+
+          <TouchableOpacity activeOpacity={0.85} onPress={handleVenderACercano} style={styles.proxActionBtn}>
+            <Text style={styles.proxActionBtnText}>Vender</Text>
+            <ArrowRight size={16} color={colors.neutral[0]} />
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Siguiente cliente</Text>
-        <Card style={styles.nextClientCard}>
-          <View style={styles.nextClientHeader}>
-            <View style={styles.clientAvatar}>
-              <Text style={styles.clientAvatarText}>{siguienteCliente.nombre.charAt(0)}</Text>
-            </View>
-            <View style={styles.nextClientInfo}>
-              <Text style={styles.nextClientName}>{siguienteCliente.nombre}</Text>
-              <Text style={styles.nextClientOwner}>{siguienteCliente.propietario}</Text>
-              <View style={styles.nextClientAddressRow}>
-                <MapPin size={13} color={colors.neutral[400]} />
-                <Text style={styles.nextClientAddress}>{siguienteCliente.direccion}</Text>
-              </View>
-            </View>
-            <Badge label="Pendiente" color="amber" />
+        {/* Sección: Mosaicos Táctiles según Rol */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Módulos de Operación</Text>
+          <Text style={styles.sectionSubtitle}>
+            {isAdmin ? 'Panel completo de Miguel (Admin)' : 'Operación rápida de Vendedor'}
+          </Text>
+        </View>
+
+        <View style={styles.mosaicGrid}>
+          {/* 1. VENDER (Operación Principal con mayor jerarquía) */}
+          <View style={styles.fullRow}>
+            <DashboardTile
+              title="VENDER"
+              subtitle="Iniciar venta rápida en mostrador o ruta"
+              icon={<ShoppingBag size={28} color={colors.neutral[0]} strokeWidth={2.4} />}
+              isHero={true}
+              badge="PRIORIDAD #1"
+              onPress={() => router.push('/(tabs)/venta')}
+            />
           </View>
 
-          <View style={styles.nextClientStats}>
-            <View style={styles.nextClientStat}>
-              <Text style={styles.nextClientStatLabel}>Saldo pendiente</Text>
-              <Text style={[styles.nextClientStatValue, { color: colors.error[600] }]}>{formatCurrency(siguienteCliente.saldo)}</Text>
-            </View>
-            <View style={styles.nextClientStatDivider} />
-            <View style={styles.nextClientStat}>
-              <Text style={styles.nextClientStatLabel}>Secuencia</Text>
-              <Text style={styles.nextClientStatValue}>#1</Text>
-            </View>
-            <View style={styles.nextClientStatDivider} />
-            <View style={styles.nextClientStat}>
-              <Text style={styles.nextClientStatLabel}>Visita</Text>
-              <Text style={styles.nextClientStatValue}>~09:30</Text>
-            </View>
+          {/* 2. CLIENTES */}
+          <View style={styles.gridRow}>
+            <DashboardTile
+              title="CLIENTES"
+              subtitle="Cartera y saldos"
+              icon={<Users size={24} color={colors.primary[600]} />}
+              badge="5 hoy"
+              onPress={() => router.push('/(tabs)/clientes')}
+            />
+
+            {/* 3. INVENTARIO */}
+            <DashboardTile
+              title={isAdmin ? 'INVENTARIO' : 'MI INVENTARIO'}
+              subtitle={isAdmin ? 'Bodega y rutas' : 'En camioneta'}
+              icon={<Package size={24} color={colors.success[600]} />}
+              color={colors.success[600]}
+              bgColor={colors.success[50]}
+              onPress={() => router.push('/(tabs)/inventario')}
+            />
           </View>
 
-          <View style={styles.nextClientActions}>
-            <TouchableOpacity
-              style={styles.visitBtn}
-              onPress={() => {
-                router.push('/(tabs)/ruta/cliente/' + siguienteCliente.id);
-              }}
-            >
-              <Text style={styles.visitBtnText}>Iniciar visita</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mapBtn}>
-              <Navigation size={20} color={colors.primary[600]} />
-            </TouchableOpacity>
+          {/* 4. RUTA y COBRANZA */}
+          <View style={styles.gridRow}>
+            <DashboardTile
+              title={isAdmin ? 'RUTAS' : 'MI RUTA'}
+              subtitle="Secuencia del día"
+              icon={<MapPin size={24} color={colors.primary[600]} />}
+              onPress={() => router.push('/(tabs)/ruta')}
+            />
+
+            <DashboardTile
+              title="COBRANZA"
+              subtitle="Abonos y recibos"
+              icon={<Wallet size={24} color={colors.warning[600]} />}
+              color={colors.warning[600]}
+              bgColor={colors.warning[50]}
+              badge="Cobrar"
+              onPress={() => router.push('/(tabs)/mas/cobranza')}
+            />
           </View>
-        </Card>
 
-        <TouchableOpacity style={styles.shortcutRow} onPress={() => router.push('/(tabs)/venta')}>
-          <Card style={styles.shortcutCard}>
-            <View style={styles.shortcutLeft}>
-              <View style={styles.shortcutIcon}>
-                <TrendingUp size={22} color={colors.primary[600]} />
-              </View>
-              <View>
-                <Text style={styles.shortcutTitle}>Nueva venta</Text>
-                <Text style={styles.shortcutSubtitle}>Registra una venta rápida</Text>
-              </View>
-            </View>
-            <ChevronRight size={22} color={colors.neutral[300]} />
-          </Card>
-        </TouchableOpacity>
+          {/* Módulos exclusivos para ADMIN (Miguel) */}
+          {isAdmin && (
+            <>
+              <View style={styles.gridRow}>
+                <DashboardTile
+                  title="CORTES"
+                  subtitle="Cortes por trabajador"
+                  icon={<Scissors size={24} color={colors.primary[700]} />}
+                  badge="3 rutas"
+                  onPress={() => router.push('/(tabs)/mas/corte')}
+                />
 
-        <TouchableOpacity style={styles.shortcutRow} onPress={() => router.push('/(tabs)/mas/cobranza')}>
-          <Card style={styles.shortcutCard}>
-            <View style={styles.shortcutLeft}>
-              <View style={[styles.shortcutIcon, { backgroundColor: colors.success[50] }]}>
-                <Wallet size={22} color={colors.success[600]} />
+                <DashboardTile
+                  title="REVISIÓN"
+                  subtitle="Auditoría rápida stock"
+                  icon={<ClipboardCheck size={24} color={colors.success[700]} />}
+                  color={colors.success[700]}
+                  bgColor={colors.success[50]}
+                  badge="Pendiente"
+                  onPress={() => router.push('/(tabs)/mas/revision')}
+                />
               </View>
-              <View>
-                <Text style={styles.shortcutTitle}>Cobranza</Text>
-                <Text style={styles.shortcutSubtitle}>Registra abonos</Text>
+
+              <View style={styles.gridRow}>
+                <DashboardTile
+                  title="PRODUCTOS"
+                  subtitle="Catálogo y precios"
+                  icon={<Boxes size={24} color={colors.neutral[700]} />}
+                  color={colors.neutral[700]}
+                  bgColor={colors.neutral[100]}
+                  onPress={() => router.push('/(tabs)/mas/productos')}
+                />
+
+                <DashboardTile
+                  title="CONFIG"
+                  subtitle="Ajustes y reportes"
+                  icon={<Settings size={24} color={colors.neutral[700]} />}
+                  color={colors.neutral[700]}
+                  bgColor={colors.neutral[100]}
+                  onPress={() => router.push('/(tabs)/mas')}
+                />
               </View>
-            </View>
-            <ChevronRight size={22} color={colors.neutral[300]} />
-          </Card>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.neutral[50],
+  scroll: {
+    paddingBottom: 100,
   },
   header: {
-    backgroundColor: colors.primary[700],
-    paddingTop: 50,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
+    backgroundColor: colors.neutral[0],
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'ios' ? 44 : spacing.md,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
   greeting: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
-  },
-  date: {
-    fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  routeCard: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  routeInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  routeLabel: {
-    fontSize: fontSize.sm,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  routeName: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
-  },
-  progressWrap: {},
-  progressBar: {
-    height: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.neutral[0],
-    borderRadius: 999,
-  },
-  progressText: {
-    fontSize: fontSize.xs,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: spacing.xs + 2,
-  },
-  connRow: {
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  body: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-  },
-  statIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary[50],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  statIconWrapAmber: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.warning[50],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  statValue: {
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
-  statLabel: {
-    fontSize: fontSize.sm,
+  date: {
+    fontSize: fontSize.xs + 1,
     color: colors.neutral[500],
     marginTop: 2,
   },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[800],
-    marginBottom: spacing.sm,
+  logoutBtn: {
+    padding: spacing.sm,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+  },
+  roleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.xs,
+  },
+  roleHelpLabel: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    fontWeight: fontWeight.semibold,
+  },
+  kpiContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+  },
+  kpiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: spacing.xs,
+  },
+  kpiLabel: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    fontWeight: fontWeight.semibold,
+  },
+  kpiSub: {
+    fontSize: fontSize.xs - 1,
+    color: colors.neutral[400],
+    marginTop: 2,
+  },
+  kpiContainerSecondary: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
     marginTop: spacing.sm,
   },
-  nextClientCard: {
-    marginBottom: spacing.md,
-  },
-  nextClientHeader: {
+  kpiCardMini: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
   },
-  clientAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary[100],
-    alignItems: 'center',
-    justifyContent: 'center',
+  kpiMiniLabel: {
+    fontSize: fontSize.xs - 1,
+    color: colors.neutral[400],
   },
-  clientAvatarText: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.primary[700],
-  },
-  nextClientInfo: {
-    flex: 1,
-  },
-  nextClientName: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
-  },
-  nextClientOwner: {
+  kpiMiniVal: {
     fontSize: fontSize.sm,
-    color: colors.neutral[500],
-    marginTop: 1,
-  },
-  nextClientAddressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  nextClientAddress: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
-  },
-  nextClientStats: {
-    flexDirection: 'row',
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md - 2,
-    marginBottom: spacing.md,
-  },
-  nextClientStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  nextClientStatDivider: {
-    width: 1,
-    backgroundColor: colors.neutral[200],
-  },
-  nextClientStatLabel: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
-  },
-  nextClientStatValue: {
-    fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
-    marginTop: 2,
+    color: colors.neutral[800],
   },
-  nextClientActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  visitBtn: {
-    flex: 1,
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md - 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  visitBtnText: {
-    color: colors.neutral[0],
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-  },
-  mapBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary[50],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shortcutRow: {
-    marginBottom: spacing.md,
-  },
-  shortcutCard: {
+  proximityBanner: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    backgroundColor: '#eff6ff',
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  shortcutLeft: {
+  proxLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
+    flex: 1,
   },
-  shortcutIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary[50],
+  proxPin: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    backgroundColor: '#dbeafe',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shortcutTitle: {
+  proxInfo: {
+    flex: 1,
+  },
+  proxTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  proxTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.neutral[0],
+    letterSpacing: 0.5,
+  },
+  proxClientName: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
-  shortcutSubtitle: {
+  proxClientOwner: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+  },
+  proxActionBtn: {
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  proxActionBtnText: {
+    color: colors.neutral[0],
     fontSize: fontSize.sm,
-    color: colors.neutral[400],
+    fontWeight: fontWeight.bold,
+  },
+  sectionHeader: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  sectionSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
     marginTop: 1,
+  },
+  mosaicGrid: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  fullRow: {
+    width: '100%',
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
 });

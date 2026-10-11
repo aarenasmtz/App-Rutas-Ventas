@@ -1,66 +1,228 @@
-import { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, FlatList } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { Search, ShoppingCart, ChevronRight, Clock, Flame } from 'lucide-react-native';
+import {
+  Search,
+  ShoppingCart,
+  ChevronRight,
+  Clock,
+  Flame,
+  User,
+  Check,
+  X,
+} from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { productos, categorias, clientes } from '@/constants/mockData';
+import {
+  mockProductos,
+  mockCategorias,
+  mockClientes,
+  DataService,
+} from '@/services/mockDataService';
 import { useApp } from '@/context/AppContext';
 import { Card, ConnectivityIndicator } from '@/components/shared';
 import { formatCurrency, getStockEstado } from '@/utils/helpers';
-import type { Producto, ItemCarrito } from '@/types';
+import type { Producto, Cliente, ItemCarrito } from '@/types';
+
+// Helper para detectar productos que se venden por kilo (Carnes frías, quesos, embutidos)
+export function isProductoPorKilo(p: Producto): boolean {
+  if (p.precioPorPeso === true) return true;
+  if (p.unidad?.toLowerCase() === 'kg' || p.unidad?.toLowerCase() === 'kilo') return true;
+  const cat = (p.categoria || '').toLowerCase();
+  const kiloCategorias = [
+    'jamón',
+    'jamon',
+    'salchicha',
+    'chorizo',
+    'quesos',
+    'queso',
+    'carnes frías',
+    'carnes frias',
+  ];
+  if (kiloCategorias.includes(cat)) return true;
+  const nom = (p.nombre || '').toLowerCase();
+  if (
+    nom.includes('jamón') ||
+    nom.includes('jamon') ||
+    nom.includes('queso') ||
+    nom.includes('salchicha') ||
+    nom.includes('chorizo') ||
+    nom.includes('tocino') ||
+    nom.includes('pepperoni')
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export default function VentaScreen() {
   const router = useRouter();
-  const { carrito, addToCarrito, clienteActivoId } = useApp();
+  const {
+    carrito,
+    addToCarrito,
+    clienteActivoId,
+    setClienteActivoId,
+  } = useApp();
+
   const [search, setSearch] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('Todas');
   const [showQtyModal, setShowQtyModal] = useState<Producto | null>(null);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
-  const cliente = clientes.find((c) => c.id === clienteActivoId);
+  // Estados de datos vivos (VPS / fallback local)
+  const [clientesList, setClientesList] = useState<Cliente[]>([]);
+  const [productosList, setProductosList] = useState<Producto[]>([]);
+  const [categoriasList, setCategoriasList] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadLiveData = async () => {
+      try {
+        const [cls, prs, cats] = await Promise.all([
+          DataService.getClientes(),
+          DataService.getProductos(),
+          DataService.getCategorias(),
+        ]);
+        if (mounted) {
+          if (cls && cls.length > 0) setClientesList(cls);
+          if (prs && prs.length > 0) setProductosList(prs);
+          if (cats && cats.length > 0) setCategoriasList(cats);
+        }
+      } catch (err) {
+        console.warn('Error loading live data in VentaScreen:', err);
+      }
+    };
+    loadLiveData();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const effectiveClientes = clientesList.length > 0 ? clientesList : mockClientes;
+  const effectiveProductos = productosList.length > 0 ? productosList : mockProductos;
+
+  // Lista unificada de categorías
+  const categorias = useMemo(() => {
+    const defaultCats = [
+      'Todas',
+      'Jamón',
+      'Salchicha',
+      'Chorizo',
+      'Quesos',
+      'Carnes frías',
+      'Abarrotes',
+      'Enlatados',
+      'Mantequillas',
+      'Mayonesas',
+    ];
+    if (categoriasList.length > 0) {
+      const liveNames = categoriasList.map((c) => c.nombre);
+      return ['Todas', ...Array.from(new Set([...defaultCats.slice(1), ...liveNames]))];
+    }
+    return defaultCats;
+  }, [categoriasList]);
+
+  // Cliente activo
+  const cliente = useMemo(() => {
+    return (
+      effectiveClientes.find((c) => c.id === clienteActivoId) ||
+      effectiveClientes[0] ||
+      null
+    );
+  }, [effectiveClientes, clienteActivoId]);
+
+  // Productos frecuentes del cliente seleccionado
   const productosFrecuentes = useMemo(() => {
-    if (!cliente) return [];
-    return cliente.sugerido.map((s) => productos.find((p) => p.id === s.productoId)).filter(Boolean) as Producto[];
-  }, [cliente]);
+    if (!cliente || !cliente.sugerido) return [];
+    return cliente.sugerido
+      .map((s) => effectiveProductos.find((p) => p.id === s.productoId))
+      .filter(Boolean) as Producto[];
+  }, [cliente, effectiveProductos]);
 
+  // Filtrado de productos por texto y categoría
   const filtered = useMemo(() => {
-    return productos.filter((p) => {
-      const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase());
-      const matchCat = categoriaActiva === 'Todas' || p.categoria === categoriaActiva;
+    return effectiveProductos.filter((p) => {
+      const q = search.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        p.nombre.toLowerCase().includes(q) ||
+        p.categoria.toLowerCase().includes(q) ||
+        p.marca?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q);
+
+      const matchCat =
+        categoriaActiva === 'Todas' ||
+        p.categoria.toLowerCase() === categoriaActiva.toLowerCase();
+
       return matchSearch && matchCat;
     });
-  }, [search, categoriaActiva]);
+  }, [effectiveProductos, search, categoriaActiva]);
 
+  // Totales de carrito
   const cartTotal = carrito.reduce((s, i) => s + i.subtotal, 0);
   const cartCount = carrito.length;
 
+  // Precio final según cliente (respeta precios especiales pactados por Don Juan / Miguel)
   const getPrecio = (producto: Producto): number => {
-    if (cliente?.precioEspecial?.[producto.id]) return cliente.precioEspecial[producto.id];
+    if (cliente?.precioEspecial?.[producto.id]) {
+      return cliente.precioEspecial[producto.id];
+    }
     return producto.precioBase;
   };
 
+  // Agregar al carrito según el flujo de venta rápida de Miguel
   const handleAddProduct = (producto: Producto, cantidad: number) => {
+    const isWeight = isProductoPorKilo(producto);
     const precioLista = getPrecio(producto);
     const precioFinal = precioLista;
+    const subtotal = Math.round(cantidad * precioFinal * 100) / 100;
+
     const item: ItemCarrito = {
-      producto,
+      producto: {
+        ...producto,
+        unidad: isWeight ? 'kg' : (producto.unidad || 'pieza'),
+        precioPorPeso: isWeight,
+      },
       cantidad,
+      unidad: isWeight ? 'kg' : (producto.unidad || 'pieza'),
       precioLista,
       descuento: 0,
       precioFinal,
-      subtotal: cantidad * precioFinal,
+      subtotal,
+      piezasTotales: isWeight ? cantidad : Math.round(cantidad),
     };
+
     addToCarrito(item);
     setShowQtyModal(null);
   };
 
   return (
     <View style={styles.container}>
+      {/* ========================================================= */}
+      {/* ENCABEZADO DE VENTA                                       */}
+      {/* ========================================================= */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <View>
+          <View style={styles.headerTitleWrap}>
             <Text style={styles.title}>Nueva venta</Text>
             {cliente ? (
-              <Text style={styles.subtitle}>Cliente: {cliente.nombre}</Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setIsClientModalOpen(true)}
+                style={styles.clientSelectorRow}
+              >
+                <Text style={styles.subtitle}>
+                  Cliente: <Text style={styles.clientNameHighlight}>{cliente.nombre}</Text>
+                </Text>
+                <ChevronRight size={14} color={colors.primary[600]} />
+              </TouchableOpacity>
             ) : (
               <Text style={styles.subtitle}>Selecciona productos para vender</Text>
             )}
@@ -68,6 +230,7 @@ export default function VentaScreen() {
           <ConnectivityIndicator />
         </View>
 
+        {/* Buscador de productos */}
         <View style={styles.searchWrap}>
           <Search size={18} color={colors.neutral[400]} />
           <TextInput
@@ -77,44 +240,101 @@ export default function VentaScreen() {
             value={search}
             onChangeText={setSearch}
           />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <X size={16} color={colors.neutral[400]} />
+            </TouchableOpacity>
+          )}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catsRow}>
+        {/* Categorías deslizables */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.catsRow}
+        >
           {categorias.map((cat) => (
             <TouchableOpacity
               key={cat}
               style={[styles.catChip, categoriaActiva === cat && styles.catChipActive]}
               onPress={() => setCategoriaActiva(cat)}
             >
-              <Text style={[styles.catChipText, categoriaActiva === cat && styles.catChipTextActive]}>{cat}</Text>
+              <Text
+                style={[
+                  styles.catChipText,
+                  categoriaActiva === cat && styles.catChipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      {/* ========================================================= */}
+      {/* LISTADO DE PRODUCTOS                                      */}
+      {/* ========================================================= */}
+      <ScrollView
+        style={styles.list}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 110 }}
+      >
+        {/* Frecuentes del cliente */}
         {productosFrecuentes.length > 0 && !search && categoriaActiva === 'Todas' && (
           <>
-            <Text style={styles.sectionLabel}><Flame size={14} color={colors.warning[600]} /> Frecuentes del cliente</Text>
+            <View style={styles.sectionLabelRow}>
+              <Flame size={15} color={colors.warning[600]} />
+              <Text style={styles.sectionLabel}>Frecuentes del cliente</Text>
+            </View>
             {productosFrecuentes.map((p) => (
-              <ProductRow key={'freq-' + p.id} producto={p} precio={getPrecio(p)} onPress={() => setShowQtyModal(p)} />
+              <ProductRow
+                key={'freq-' + p.id}
+                producto={p}
+                precio={getPrecio(p)}
+                onPress={() => setShowQtyModal(p)}
+              />
             ))}
           </>
         )}
 
-        <Text style={styles.sectionLabel}><Clock size={14} color={colors.neutral[400]} /> Productos</Text>
+        {/* Catálogo completo */}
+        <View style={styles.sectionLabelRow}>
+          <Clock size={15} color={colors.neutral[400]} />
+          <Text style={styles.sectionLabel}>Productos</Text>
+        </View>
         {filtered.map((p) => (
-          <ProductRow key={p.id} producto={p} precio={getPrecio(p)} onPress={() => setShowQtyModal(p)} />
+          <ProductRow
+            key={p.id}
+            producto={p}
+            precio={getPrecio(p)}
+            onPress={() => setShowQtyModal(p)}
+          />
         ))}
+
+        {filtered.length === 0 && (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>No se encontraron productos.</Text>
+          </View>
+        )}
       </ScrollView>
 
+      {/* ========================================================= */}
+      {/* BARRA FLOTANTE DE CARRITO (CUANDO HAY ARTÍCULOS)          */}
+      {/* ========================================================= */}
       {cartCount > 0 && (
-        <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/(tabs)/venta/carrito')} style={styles.cartBar}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onPress={() => router.push('/(tabs)/venta/carrito')}
+          style={styles.cartBar}
+        >
           <View style={styles.cartBarLeft}>
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{cartCount}</Text>
             </View>
-            <Text style={styles.cartBarText}>{cartCount} {cartCount === 1 ? 'producto' : 'productos'}</Text>
+            <Text style={styles.cartBarText}>
+              {cartCount} {cartCount === 1 ? 'producto' : 'productos'}
+            </Text>
           </View>
           <View style={styles.cartBarRight}>
             <Text style={styles.cartBarTotal}>{formatCurrency(cartTotal)}</Text>
@@ -126,89 +346,230 @@ export default function VentaScreen() {
         </TouchableOpacity>
       )}
 
+      {/* ========================================================= */}
+      {/* MODAL DE CANTIDAD (FLUJO RÁPIDO EXACTO DE MIGUEL)         */}
+      {/* ========================================================= */}
       {showQtyModal && (
-        <QtyModal producto={showQtyModal} precio={getPrecio(showQtyModal)} onClose={() => setShowQtyModal(null)} onConfirm={handleAddProduct} />
+        <QtyModal
+          producto={showQtyModal}
+          precio={getPrecio(showQtyModal)}
+          onClose={() => setShowQtyModal(null)}
+          onConfirm={handleAddProduct}
+        />
       )}
+
+      {/* ========================================================= */}
+      {/* MODAL PARA CAMBIAR CLIENTE ACTIVO                         */}
+      {/* ========================================================= */}
+      <Modal
+        visible={isClientModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsClientModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsClientModalOpen(false)}
+        >
+          <View style={styles.clientPickerCard}>
+            <Text style={styles.clientPickerTitle}>Seleccionar cliente</Text>
+            <ScrollView style={{ maxHeight: 350 }}>
+              {effectiveClientes.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[
+                    styles.clientItem,
+                    cliente?.id === c.id && styles.clientItemActive,
+                  ]}
+                  onPress={() => {
+                    setClienteActivoId(c.id);
+                    setIsClientModalOpen(false);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.clientItemName}>{c.nombre}</Text>
+                    <Text style={styles.clientItemSub}>
+                      {c.propietario} · {c.direccion}
+                    </Text>
+                  </View>
+                  {cliente?.id === c.id && <Check size={18} color={colors.primary[600]} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
-function ProductRow({ producto, precio, onPress }: { producto: Producto; precio: number; onPress: () => void }) {
-  const stockEstado = getStockEstado(producto.existencia, producto.precioPorPeso);
-  const stockColor = stockEstado === 'Normal' ? colors.success[600] : stockEstado === 'Bajo' ? colors.warning[600] : colors.error[500];
+// =========================================================
+// FILA DE PRODUCTO INDIVIDUAL
+// =========================================================
+function ProductRow({
+  producto,
+  precio,
+  onPress,
+}: {
+  producto: Producto;
+  precio: number;
+  onPress: () => void;
+}) {
+  const isWeight = isProductoPorKilo(producto);
+  const stockEstado = getStockEstado(producto.existencia, isWeight);
+  const stockColor =
+    stockEstado === 'Normal'
+      ? colors.success[600]
+      : stockEstado === 'Bajo'
+      ? colors.warning[600]
+      : colors.error[500];
+
+  const displayUnit = isWeight ? 'kg' : producto.unidad || 'pieza';
 
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
       <Card style={styles.productCard}>
         <View style={styles.productIcon}>
-          <Text style={styles.productIconText}>{producto.categoria.charAt(0)}</Text>
+          <Text style={styles.productIconText}>
+            {producto.categoria ? producto.categoria.charAt(0).toUpperCase() : 'P'}
+          </Text>
         </View>
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{producto.nombre}</Text>
           <Text style={styles.productCat}>{producto.categoria}</Text>
           <View style={styles.productMeta}>
             <Text style={styles.productStock}>
-              <Text style={{ color: stockColor, fontWeight: fontWeight.semibold }}>{producto.existencia} {producto.unidad}</Text>
-              {' · '}<Text style={{ color: stockColor }}>{stockEstado}</Text>
+              <Text style={{ color: stockColor, fontWeight: fontWeight.semibold }}>
+                {isWeight ? producto.existencia.toFixed(1) : producto.existencia} {displayUnit}
+              </Text>
+              {' · '}
+              <Text style={{ color: stockColor }}>{stockEstado}</Text>
             </Text>
           </View>
         </View>
         <View style={styles.productRight}>
           <Text style={styles.productPrice}>{formatCurrency(precio)}</Text>
-          <Text style={styles.productUnit}>/{producto.unidad}</Text>
+          <Text style={styles.productUnit}>/{displayUnit}</Text>
         </View>
       </Card>
     </TouchableOpacity>
   );
 }
 
-function QtyModal({ producto, precio, onClose, onConfirm }: { producto: Producto; precio: number; onClose: () => void; onConfirm: (p: Producto, c: number) => void }) {
-  const [qty, setQty] = useState(producto.precioPorPeso ? 0.5 : 1);
-  const pesos = [0.25, 0.5, 0.75, 1, 1.25, 1.5];
+// =========================================================
+// MODAL DE VENTA DE MIGUEL (POR KILOS Y POR PIEZAS)
+// =========================================================
+function QtyModal({
+  producto,
+  precio,
+  onClose,
+  onConfirm,
+}: {
+  producto: Producto;
+  precio: number;
+  onClose: () => void;
+  onConfirm: (p: Producto, c: number) => void;
+}) {
+  const isWeight = isProductoPorKilo(producto);
+
+  // Valor inicial: 0.500 kg para productos de peso, 1 para productos de pieza
+  const [qty, setQty] = useState(isWeight ? 0.5 : 1);
+
+  // Chips de selección rápida
+  const pesos = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
   const piezas = [1, 2, 3, 6, 12, 24];
-  const opciones = producto.precioPorPeso ? pesos : piezas;
+  const opciones = isWeight ? pesos : piezas;
+
+  const displayUnit = isWeight ? 'kg' : producto.unidad || 'pieza';
+
+  const handleMinus = () => {
+    if (isWeight) {
+      setQty((q) => Math.max(0.25, Math.round((q - 0.25) * 1000) / 1000));
+    } else {
+      setQty((q) => Math.max(1, q - 1));
+    }
+  };
+
+  const handlePlus = () => {
+    if (isWeight) {
+      setQty((q) => Math.round((q + 0.25) * 1000) / 1000);
+    } else {
+      setQty((q) => q + 1);
+    }
+  };
+
+  const subtotal = Math.round(qty * precio * 100) / 100;
 
   return (
     <View style={modalStyles.overlay}>
-      <TouchableOpacity style={modalStyles.backdrop} onPress={onClose} />
+      <TouchableOpacity style={modalStyles.backdrop} onPress={onClose} activeOpacity={1} />
       <View style={modalStyles.sheet}>
         <View style={modalStyles.handle} />
+
         <Text style={modalStyles.title}>{producto.nombre}</Text>
-        <Text style={modalStyles.subtitle}>{formatCurrency(precio)} / {producto.unidad}</Text>
+        <Text style={modalStyles.subtitle}>
+          {formatCurrency(precio)} / {displayUnit}
+        </Text>
 
         <Text style={modalStyles.label}>Cantidad</Text>
+
+        {/* Stepper principal [-]  0.500 kg  [+] */}
         <View style={modalStyles.qtyRow}>
-          <TouchableOpacity style={modalStyles.qtyBtn} onPress={() => setQty((q) => Math.max(0.25, q - (producto.precioPorPeso ? 0.25 : 1)))}>
+          <TouchableOpacity
+            style={modalStyles.qtyBtn}
+            activeOpacity={0.7}
+            onPress={handleMinus}
+          >
             <Text style={modalStyles.qtyBtnText}>−</Text>
           </TouchableOpacity>
+
           <Text style={modalStyles.qtyDisplay}>
-            {producto.precioPorPeso ? qty.toFixed(3) : qty.toString()} {producto.unidad}
+            {isWeight ? `${qty.toFixed(3)} kg` : `${qty} ${displayUnit}`}
           </Text>
-          <TouchableOpacity style={modalStyles.qtyBtn} onPress={() => setQty((q) => q + (producto.precioPorPeso ? 0.25 : 1))}>
+
+          <TouchableOpacity
+            style={modalStyles.qtyBtn}
+            activeOpacity={0.7}
+            onPress={handlePlus}
+          >
             <Text style={modalStyles.qtyBtnText}>+</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Opciones rápidas de un toque */}
         <View style={modalStyles.opcionesRow}>
           {opciones.map((o) => (
             <TouchableOpacity
               key={o}
               style={[modalStyles.opcionChip, qty === o && modalStyles.opcionChipActive]}
               onPress={() => setQty(o)}
+              activeOpacity={0.75}
             >
-              <Text style={[modalStyles.opcionText, qty === o && modalStyles.opcionTextActive]}>
-                {producto.precioPorPeso ? o.toFixed(3) : o}
+              <Text
+                style={[
+                  modalStyles.opcionText,
+                  qty === o && modalStyles.opcionTextActive,
+                ]}
+              >
+                {isWeight ? o.toFixed(3) : o}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
+        {/* Subtotal en tiempo real */}
         <View style={modalStyles.totalRow}>
           <Text style={modalStyles.totalLabel}>Subtotal</Text>
-          <Text style={modalStyles.totalValue}>{formatCurrency(qty * precio)}</Text>
+          <Text style={modalStyles.totalValue}>{formatCurrency(subtotal)}</Text>
         </View>
 
-        <TouchableOpacity style={modalStyles.addBtn} onPress={() => onConfirm(producto, qty)}>
+        {/* Botón de confirmar */}
+        <TouchableOpacity
+          style={modalStyles.addBtn}
+          activeOpacity={0.88}
+          onPress={() => onConfirm(producto, qty)}
+        >
           <ShoppingCart size={20} color={colors.neutral[0]} />
           <Text style={modalStyles.addBtnText}>Agregar al carrito</Text>
         </TouchableOpacity>
@@ -217,6 +578,9 @@ function QtyModal({ producto, precio, onClose, onConfirm }: { producto: Producto
   );
 }
 
+// =========================================================
+// ESTILOS
+// =========================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -236,6 +600,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  headerTitleWrap: {
+    flex: 1,
+  },
   title: {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
@@ -245,6 +612,16 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.neutral[500],
     marginTop: 2,
+  },
+  clientSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  clientNameHighlight: {
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
   },
   searchWrap: {
     flexDirection: 'row',
@@ -260,7 +637,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.base,
     color: colors.neutral[900],
-    fontFamily: 'Inter-Regular',
   },
   catsRow: {
     gap: spacing.sm,
@@ -286,15 +662,17 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
   },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
   sectionLabel: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: colors.neutral[700],
-    marginBottom: spacing.sm,
-    marginTop: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
   },
   productCard: {
     flexDirection: 'row',
@@ -348,6 +726,14 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.neutral[400],
   },
+  emptyWrap: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: fontSize.base,
+    color: colors.neutral[400],
+  },
   cartBar: {
     position: 'absolute',
     bottom: 0,
@@ -359,7 +745,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    paddingBottom: 18,
+    paddingBottom: 22,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     ...shadows.floating,
@@ -409,6 +795,49 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: colors.neutral[0],
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  clientPickerCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 420,
+    ...shadows.floating,
+  },
+  clientPickerTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+    marginBottom: spacing.md,
+  },
+  clientItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  clientItemActive: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+  clientItemName: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.neutral[900],
+  },
+  clientItemSub: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    marginTop: 2,
   },
 });
 
@@ -486,7 +915,7 @@ const modalStyles = StyleSheet.create({
     fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
-    minWidth: 120,
+    minWidth: 140,
     textAlign: 'center',
   },
   opcionesRow: {

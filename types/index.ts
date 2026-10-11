@@ -6,17 +6,39 @@ export type Categoria =
   | 'Chorizo'
   | 'Quesos'
   | 'Carnes frías'
-  | 'Abarrotes';
+  | 'Abarrotes'
+  | 'Mantequillas'
+  | 'Mayonesas'
+  | 'Enlatados'
+  | 'Otros';
+
+export type PresentacionTipo = 'pieza' | 'paquete' | 'caja' | 'exhibidor';
+
+export interface PresentacionConfig {
+  tipo: PresentacionTipo;
+  nombre: string;
+  piezasEquivalentes: number;
+  precio: number;
+  descripcionEquivalencia?: string;
+}
 
 export interface Producto {
   id: string;
   nombre: string;
+  marca?: string;
   categoria: Categoria;
   unidad: Unidad;
   precioBase: number;
-  existencia: number;
+  precioCompra?: number;
+  existencia: number; // Siempre expresado en piezas totales en inventario
   precioPorPeso: boolean;
   ultimaCategoria?: string;
+  sku?: string;
+  codigoBarras?: string;
+  favorito?: boolean;
+  activo?: boolean;
+  imagen?: string;
+  presentaciones?: PresentacionConfig[];
 }
 
 export type DiaVisita = 'Lun' | 'Mar' | 'Mié' | 'Jue' | 'Vie' | 'Sáb' | 'Dom';
@@ -39,9 +61,26 @@ export interface Cliente {
   limiteCredito: number;
   estado: EstadoCliente;
   ultimaVisita: string;
+  telefono?: string;
+  distanciaMock?: string;
+  ultimaCompra?: string;
+  ultimoPago?: string;
+  latitud?: number;
+  longitud?: number;
+  ciudad?: string;
+  colonia?: string;
+  activo?: boolean;
   precioEspecial?: { [productoId: string]: number };
   historial: HistorialVenta[];
   sugerido: { productoId: string; cantidad: number; frecuencia: string }[];
+}
+
+export interface CategoriaItem {
+  id: string;
+  nombre: string;
+  icono: string;
+  descripcion?: string;
+  activa?: boolean;
 }
 
 export interface HistorialVenta {
@@ -55,13 +94,16 @@ export interface HistorialVenta {
 export interface ItemCarrito {
   producto: Producto;
   cantidad: number;
+  unidad?: string;
+  presentacion?: PresentacionConfig;
+  piezasTotales?: number;
   precioLista: number;
   descuento: number;
   precioFinal: number;
   subtotal: number;
 }
 
-export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Crédito';
+export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Tarjeta' | 'Crédito';
 
 export interface Pago {
   metodo: MetodoPago;
@@ -122,4 +164,35 @@ export interface Devolucion {
   motivo: 'Producto dañado' | 'Caducidad' | 'Cambio' | 'Pedido incorrecto' | 'Otro';
   destino: 'Inventario' | 'Merma' | 'Cambio';
   fecha: string;
+}
+
+export interface RevisionItem {
+  productoId: string;
+  productoNombre: string;
+  marca?: string;
+  sistema: number;
+  fisico: number;
+  unidad: string;
+  diferencia: number;
+  revisado: boolean;
+  comentario: string;
+}
+
+export interface CorteTrabajador {
+  empleadoId: string;
+  nombre: string;
+  ruta: string;
+  ventasTotales: number;
+  efectivo: number;
+  transferencias: number;
+  tarjetas: number;
+  credito: number;
+  abonosCobranza: number;
+  gastos: number;
+  devoluciones: number;
+  efectivoEsperado: number;
+  inventarioInicialPiezas: number;
+  inventarioActualPiezas: number;
+  piezasVendidas: number;
+  diferenciaCaja: number;
 }

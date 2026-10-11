@@ -1,91 +1,392 @@
-import { View, Text, StyleSheet, ScrollView, type ViewStyle } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Linking,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { MapPin, Navigation, Layers } from 'lucide-react-native';
-import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
+import {
+  MapPin,
+  Navigation,
+  Layers,
+  ExternalLink,
+  Compass,
+  Phone,
+  ShoppingCart,
+  Maximize2,
+  RotateCcw,
+} from 'lucide-react-native';
+import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { ScreenHeader, Card, Badge } from '@/components/shared';
-import { clientes } from '@/constants/mockData';
+import { DataService, mockClientes } from '@/services/mockDataService';
+import { useApp } from '@/context/AppContext';
+import type { Cliente } from '@/types';
+
+let NativeWebView: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    NativeWebView = require('react-native-webview').WebView;
+  } catch {}
+}
 
 export default function MapaScreen() {
   const router = useRouter();
+  const { setClienteActivoId } = useApp();
+  const [clientesList, setClientesList] = useState<Cliente[]>(mockClientes);
+  const [selectedClient, setSelectedClient] = useState<Cliente | null>(mockClientes[0]);
+
+  useEffect(() => {
+    const fetchClientes = async () => {
+      try {
+        const list = await DataService.getClientes();
+        if (list && list.length > 0) {
+          setClientesList(list);
+          setSelectedClient(list[0]);
+        }
+      } catch {}
+    };
+    fetchClientes();
+  }, []);
+
+  const leonClientes = useMemo(() => {
+    return clientesList.filter((c) => c.activo !== false);
+  }, [clientesList]);
+
+  // Abrir GPS en Google Maps para parada individual
+  const handleOpenGps = (cliente: Cliente) => {
+    const lat = cliente.latitud || 21.1221;
+    const lng = cliente.longitud || -101.6828;
+    const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}`);
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    Linking.openURL(url);
+  };
+
+  // Abrir ruta completa de entrega en León en Google Maps
+  const handleOpenFullRouteGps = () => {
+    if (leonClientes.length === 0) return;
+    const stops = leonClientes.slice(0, 8);
+    const origin = `${stops[0].latitud || 21.1221},${stops[0].longitud || -101.6828}`;
+    const destination = `${stops[stops.length - 1].latitud || 21.1090},${stops[stops.length - 1].longitud || -101.6750}`;
+    const waypoints = stops.slice(1, -1).map((s) => `${s.latitud},${s.longitud}`).join('|');
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+    Linking.openURL(url);
+  };
+
+  const handleIniciarVenta = (cliente: Cliente) => {
+    setClienteActivoId(cliente.id);
+    router.push('/(tabs)/venta');
+  };
+
+  const handleVerCliente = (cliente: Cliente) => {
+    router.push(('/(tabs)/ruta/cliente/' + cliente.id) as any);
+  };
+
+  // Generar HTML interactivo con Leaflet y OpenStreetMap centrado en León, Guanajuato
+  const leafletMapHtml = useMemo(() => {
+    const centerLat = 21.1221;
+    const centerLng = -101.6828;
+
+    const markersData = leonClientes.map((c, i) => ({
+      id: c.id,
+      index: i + 1,
+      nombre: c.nombre.replace(/'/g, "\\'"),
+      propietario: (c.propietario || '').replace(/'/g, "\\'"),
+      direccion: (c.direccion || '').replace(/'/g, "\\'"),
+      lat: c.latitud || (centerLat + (i * 0.005 - 0.01)),
+      lng: c.longitud || (centerLng + (i * 0.004 - 0.008)),
+      saldo: c.saldo || 0,
+      telefono: c.telefono || '',
+    }));
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          * { box-sizing: border-box; }
+          html, body, #map {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          }
+          .custom-pin {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #2563eb;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2.5px solid #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+            transition: transform 0.2s;
+          }
+          .custom-pin.first {
+            background: #16a34a;
+            border-color: #fef08a;
+            width: 36px;
+            height: 36px;
+            font-size: 15px;
+          }
+          .custom-pin:hover {
+            transform: scale(1.15);
+          }
+          .leaflet-popup-content-wrapper {
+            border-radius: 14px;
+            padding: 4px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+          }
+          .popup-content {
+            padding: 6px 4px;
+            min-width: 170px;
+          }
+          .popup-badge {
+            display: inline-block;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+          }
+          .popup-name {
+            font-size: 14px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 2px;
+          }
+          .popup-addr {
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 6px;
+          }
+          .popup-saldo {
+            font-size: 11px;
+            font-weight: 600;
+            color: #dc2626;
+            margin-bottom: 8px;
+          }
+          .popup-btn {
+            display: block;
+            text-align: center;
+            background: #2563eb;
+            color: #ffffff !important;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: none;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', {
+            zoomControl: true,
+            attributionControl: false
+          }).setView([${centerLat}, ${centerLng}], 13.5);
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+          }).addTo(map);
+
+          var stops = ${JSON.stringify(markersData)};
+          var latlngs = [];
+
+          stops.forEach(function(s, index) {
+            latlngs.push([s.lat, s.lng]);
+            var isFirst = index === 0;
+
+            var icon = L.divIcon({
+              className: 'custom-pin-wrap',
+              html: '<div class="custom-pin ' + (isFirst ? 'first' : '') + '">' + s.index + '</div>',
+              iconSize: [32, 32],
+              iconAnchor: [16, 16]
+            });
+
+            var marker = L.marker([s.lat, s.lng], { icon: icon }).addTo(map);
+
+            var popupHtml = '<div class="popup-content">' +
+              '<span class="popup-badge">Parada #' + s.index + '</span>' +
+              '<div class="popup-name">' + s.nombre + '</div>' +
+              '<div class="popup-addr">' + s.direccion + '</div>' +
+              (s.saldo > 0 ? '<div class="popup-saldo">Saldo: $' + s.saldo.toLocaleString() + '</div>' : '') +
+              '<a href="https://www.google.com/maps/search/?api=1&query=' + s.lat + ',' + s.lng + '" target="_blank" class="popup-btn">📍 Abrir en GPS</a>' +
+              '</div>';
+
+            marker.bindPopup(popupHtml);
+          });
+
+          // Polilínea trazada de ruta entre clientes de León
+          if (latlngs.length > 1) {
+            L.polyline(latlngs, {
+              color: '#2563eb',
+              weight: 4,
+              opacity: 0.75,
+              dashArray: '8, 8'
+            }).addTo(map);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+  }, [leonClientes]);
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Mapa de ruta" subtitle="Ruta Centro" onBack={() => router.back()} />
+      <ScreenHeader
+        title="Mapa de Ruta León, Gto"
+        subtitle={`Ruta Centro · ${leonClientes.length} negocios programados`}
+        onBack={() => router.back()}
+      />
 
+      {/* ÁREA DEL MAPA REAL INTERACTIVO */}
       <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          {/* Simulated map roads */}
-          <View style={[styles.road, { width: '100%', height: 3, top: '20%' }]} />
-          <View style={[styles.road, { width: '100%', height: 3, top: '55%' }]} />
-          <View style={[styles.road, { width: 3, height: '100%', left: '30%' }]} />
-          <View style={[styles.road, { width: 3, height: '100%', left: '70%' }]} />
-
-          {/* Pins */}
-          {clientes.slice(0, 6).map((c, i) => {
-            const positions: ViewStyle[] = [
-              { top: '15%', left: '25%' },
-              { top: '30%', left: '60%' },
-              { top: '45%', left: '35%' },
-              { top: '55%', left: '75%' },
-              { top: '70%', left: '20%' },
-              { top: '80%', left: '55%' },
-            ];
-            const pos = positions[i] || positions[0];
-            const isCurrent = i === 0;
-            return (
-              <View key={c.id} style={[styles.pinWrap, pos]}>
-                <View style={[styles.pin, isCurrent && styles.pinCurrent]}>
-                  <Text style={[styles.pinText, isCurrent && styles.pinTextCurrent]}>{i + 1}</Text>
-                </View>
-                {isCurrent && <View style={styles.pinPulse} />}
-              </View>
-            );
-          })}
-
-          {/* Route line */}
-          <View style={styles.routeLine1} />
-          <View style={styles.routeLine2} />
-          <View style={styles.routeLine3} />
-
-          {/* Map controls */}
-          <View style={styles.mapControls}>
-            <View style={styles.mapControlBtn}>
-              <Layers size={20} color={colors.neutral[700]} />
-            </View>
-            <View style={styles.mapControlBtn}>
-              <Navigation size={20} color={colors.primary[600]} />
-            </View>
+        {Platform.OS === 'web' ? (
+          <iframe
+            srcDoc={leafletMapHtml}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            title="Mapa León Guanajuato"
+          />
+        ) : NativeWebView ? (
+          <NativeWebView
+            originWhitelist={['*']}
+            source={{ html: leafletMapHtml }}
+            style={{ flex: 1 }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+          />
+        ) : (
+          <View style={styles.fallbackBox}>
+            <MapPin size={32} color={colors.primary[600]} />
+            <Text style={styles.fallbackTitle}>León, Guanajuato</Text>
+            <Text style={styles.fallbackSub}>Coordenadas: 21.1221, -101.6828</Text>
           </View>
+        )}
 
-          {/* Demo label */}
-          <View style={styles.demoLabel}>
-            <Text style={styles.demoLabelText}>Vista de mapa DEMO</Text>
-          </View>
+        {/* Botón flotante para abrir ruta completa en GPS */}
+        <View style={styles.floatingControls}>
+          <TouchableOpacity
+            style={styles.gpsFullRouteBtn}
+            activeOpacity={0.85}
+            onPress={handleOpenFullRouteGps}
+          >
+            <Navigation size={18} color="#FFFFFF" />
+            <Text style={styles.gpsFullRouteText}>Navegar Ruta en GPS</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Etiqueta de ciudad */}
+        <View style={styles.cityBadge}>
+          <Compass size={14} color={colors.primary[700]} />
+          <Text style={styles.cityBadgeText}>León, Guanajuato · GPS en Vivo</Text>
         </View>
       </View>
 
+      {/* DETALLE DE PARADA SELECCIONADA / LISTA */}
       <View style={styles.bottomSheet}>
         <View style={styles.sheetHandle} />
-        <Text style={styles.sheetTitle}>Ruta Centro · 10 paradas</Text>
+
+        {selectedClient && (
+          <View style={styles.selectedClientCard}>
+            <View style={styles.selHeader}>
+              <View style={styles.selBadge}>
+                <Text style={styles.selBadgeText}>CLIENTE ACTIVO</Text>
+              </View>
+              <Text style={styles.selDistText}>{selectedClient.distanciaMock || 'León, Gto'}</Text>
+            </View>
+
+            <Text style={styles.selName}>{selectedClient.nombre}</Text>
+            <Text style={styles.selAddr}>{selectedClient.propietario} · {selectedClient.direccion}</Text>
+
+            <View style={styles.selButtonsRow}>
+              <TouchableOpacity
+                style={styles.btnActionVender}
+                activeOpacity={0.85}
+                onPress={() => handleIniciarVenta(selectedClient)}
+              >
+                <ShoppingCart size={16} color="#FFFFFF" />
+                <Text style={styles.btnActionVenderText}>Vender</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnActionGps}
+                activeOpacity={0.85}
+                onPress={() => handleOpenGps(selectedClient)}
+              >
+                <ExternalLink size={16} color={colors.primary[700]} />
+                <Text style={styles.btnActionGpsText}>GPS</Text>
+              </TouchableOpacity>
+
+              {selectedClient.telefono && (
+                <TouchableOpacity
+                  style={styles.btnActionPhone}
+                  activeOpacity={0.85}
+                  onPress={() => Linking.openURL(`tel:${selectedClient.telefono}`)}
+                >
+                  <Phone size={16} color={colors.neutral[700]} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
+        <Text style={styles.sheetTitle}>Paradas programadas en León, Gto:</Text>
         <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
-          {clientes.slice(0, 6).map((c, i) => (
-            <Card key={c.id} style={styles.stopCard}>
-              <View style={[styles.stopNumber, i === 0 && styles.stopNumberCurrent]}>
-                <Text style={[styles.stopNumberText, i === 0 && styles.stopNumberTextCurrent]}>{i + 1}</Text>
-              </View>
-              <View style={styles.stopInfo}>
-                <Text style={styles.stopName}>{c.nombre}</Text>
-                <Text style={styles.stopAddress}>{c.direccion}</Text>
-              </View>
-              <View style={styles.stopRight}>
-                {i === 0 ? (
-                  <Badge label="Actual" color="azul" />
-                ) : (
-                  <Text style={styles.stopTime}>~{(9 + i * 0.5).toFixed(1).replace('.', ':')}0</Text>
-                )}
-              </View>
-            </Card>
-          ))}
+          {leonClientes.map((c, i) => {
+            const isSelected = selectedClient?.id === c.id;
+            return (
+              <Card
+                key={c.id}
+                style={[styles.stopCard, isSelected && styles.stopCardActive]}
+                onPress={() => setSelectedClient(c)}
+              >
+                <View style={[styles.stopNumber, i === 0 && styles.stopNumberCurrent, isSelected && styles.stopNumberSelected]}>
+                  <Text style={[styles.stopNumberText, (i === 0 || isSelected) && styles.stopNumberTextCurrent]}>
+                    {i + 1}
+                  </Text>
+                </View>
+                <View style={styles.stopInfo}>
+                  <Text style={styles.stopName}>{c.nombre}</Text>
+                  <Text style={styles.stopAddress} numberOfLines={1}>
+                    {c.direccion}
+                  </Text>
+                </View>
+                <View style={styles.stopRight}>
+                  {i === 0 ? (
+                    <Badge label="Próximo" color="azul" />
+                  ) : (
+                    <Text style={styles.stopTime}>~{(9 + i * 0.5).toFixed(1).replace('.', ':')}0</Text>
+                  )}
+                  <TouchableOpacity
+                    style={styles.navIconBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleOpenGps(c);
+                    }}
+                  >
+                    <Navigation size={14} color={colors.primary[600]} />
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            );
+          })}
         </ScrollView>
       </View>
     </View>
@@ -99,164 +400,210 @@ const styles = StyleSheet.create({
   },
   mapArea: {
     flex: 1,
-    margin: spacing.md,
-    borderRadius: radius.lg,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    borderRadius: radius.xl,
     overflow: 'hidden',
-  },
-  mapBg: {
-    flex: 1,
-    backgroundColor: colors.neutral[100],
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
     position: 'relative',
+    backgroundColor: '#E2E8F0',
   },
-  road: {
-    position: 'absolute',
-    backgroundColor: colors.neutral[200],
-  },
-  pinWrap: {
-    position: 'absolute',
+  fallbackBox: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#E2E8F0',
   },
-  pin: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-    backgroundColor: colors.neutral[0],
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary[600],
-    zIndex: 2,
-  },
-  pinCurrent: {
-    backgroundColor: colors.primary[600],
-    borderColor: colors.primary[700],
-    width: 36,
-    height: 36,
-  },
-  pinText: {
-    fontSize: fontSize.sm,
+  fallbackTitle: {
+    fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
-    color: colors.primary[600],
+    color: colors.neutral[800],
+    marginTop: spacing.xs,
   },
-  pinTextCurrent: {
-    color: colors.neutral[0],
+  fallbackSub: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
   },
-  pinPulse: {
+  floatingControls: {
     position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 999,
-    backgroundColor: colors.primary[600] + '30',
-  },
-  routeLine1: {
-    position: 'absolute',
-    top: '17%',
-    left: '28%',
-    width: '35%',
-    height: 3,
-    backgroundColor: colors.primary[400],
-    transform: [{ rotate: '15deg' }],
-  },
-  routeLine2: {
-    position: 'absolute',
-    top: '45%',
-    left: '33%',
-    width: '45%',
-    height: 3,
-    backgroundColor: colors.primary[400],
-    transform: [{ rotate: '-10deg' }],
-  },
-  routeLine3: {
-    position: 'absolute',
-    top: '68%',
-    left: '20%',
-    width: '40%',
-    height: 3,
-    backgroundColor: colors.primary[400],
-    transform: [{ rotate: '20deg' }],
-  },
-  mapControls: {
-    position: 'absolute',
-    right: spacing.md,
     top: spacing.md,
-    gap: spacing.sm,
+    right: spacing.md,
+    zIndex: 10,
   },
-  mapControlBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[0],
+  gpsFullRouteBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: colors.neutral[900],
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    gap: 6,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    ...shadows.card,
   },
-  demoLabel: {
+  gpsFullRouteText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs + 1,
+    fontWeight: fontWeight.bold,
+  },
+  cityBadge: {
     position: 'absolute',
     bottom: spacing.md,
     left: spacing.md,
-    backgroundColor: colors.neutral[900],
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    ...shadows.card,
+    zIndex: 10,
   },
-  demoLabelText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[0],
+  cityBadgeText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[800],
   },
   bottomSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    maxHeight: '45%',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: spacing.md,
+    maxHeight: 330,
+    ...shadows.floating,
   },
   sheetHandle: {
     width: 40,
-    height: 5,
-    borderRadius: 999,
+    height: 4,
+    borderRadius: radius.full,
     backgroundColor: colors.neutral[300],
     alignSelf: 'center',
-    marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
-  sheetTitle: {
-    fontSize: fontSize.md,
+  selectedClientCard: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.sm + 4,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  selHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  selBadge: {
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  selBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+  },
+  selDistText: {
+    fontSize: 11,
+    color: colors.primary[700],
+    fontWeight: fontWeight.semibold,
+  },
+  selName: {
+    fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
-    marginBottom: spacing.sm,
+  },
+  selAddr: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    marginTop: 2,
+  },
+  selButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    marginTop: spacing.sm,
+  },
+  btnActionVender: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.primary[600],
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  btnActionVenderText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  btnActionGps: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.neutral[0],
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  btnActionGpsText: {
+    color: colors.primary[700],
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  btnActionPhone: {
+    backgroundColor: colors.neutral[0],
+    padding: 8,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  sheetTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[800],
+    marginBottom: spacing.xs,
   },
   sheetList: {
-    maxHeight: 250,
+    maxHeight: 140,
   },
   stopCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md - 2,
-    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  stopCardActive: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50] + '40',
   },
   stopNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
   },
   stopNumberCurrent: {
+    backgroundColor: colors.success[600],
+  },
+  stopNumberSelected: {
     backgroundColor: colors.primary[600],
   },
   stopNumberText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[600],
+    color: colors.neutral[700],
   },
   stopNumberTextCurrent: {
     color: colors.neutral[0],
@@ -265,21 +612,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stopName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[900],
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[800],
   },
   stopAddress: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
-    marginTop: 2,
+    fontSize: 10,
+    color: colors.neutral[500],
+    marginTop: 1,
   },
   stopRight: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   stopTime: {
-    fontSize: fontSize.sm,
-    color: colors.neutral[500],
-    fontWeight: fontWeight.medium,
+    fontSize: 10,
+    color: colors.neutral[400],
+  },
+  navIconBtn: {
+    padding: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
   },
 });

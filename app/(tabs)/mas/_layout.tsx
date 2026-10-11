@@ -13,7 +13,9 @@ export default function MasLayout() {
       <Stack.Screen name="caja" />
       <Stack.Screen name="corte" />
       <Stack.Screen name="productos" />
+      <Stack.Screen name="categorias" />
       <Stack.Screen name="reportes" />
+      <Stack.Screen name="revision" />
       <Stack.Screen name="empleados" />
       <Stack.Screen name="bitacora" />
       <Stack.Screen name="sincronizacion" />

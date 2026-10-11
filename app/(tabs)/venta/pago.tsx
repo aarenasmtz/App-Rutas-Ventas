@@ -1,294 +1,510 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Banknote, Smartphone, CreditCard, Check, AlertCircle } from 'lucide-react-native';
+import {
+  Banknote,
+  Smartphone,
+  CreditCard,
+  CreditCard as CardIcon,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  User,
+} from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { clientes } from '@/constants/mockData';
-import { ScreenHeader } from '@/components/shared';
+import { mockClientes, DataService } from '@/services/mockDataService';
+import { AppShell, PageHeader, MoneyDisplay } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
 import type { MetodoPago, Pago } from '@/types';
 
 export default function PagoScreen() {
   const router = useRouter();
-  const { ventaTotal, pagos, setPagos, clienteActivoId, clearCarrito } = useApp();
-  const [efectivo, setEfectivo] = useState('');
+  const { ventaTotal, setPagos, clienteActivoId, user, carrito, setUltimoFolioVenta } = useApp();
+
+  const cliente = mockClientes.find((c) => c.id === clienteActivoId) || mockClientes[0];
+  const creditoActual = cliente?.saldo || 0;
+  const limiteCredito = cliente?.limiteCredito || 5000;
+  const creditoDisponible = Math.max(0, limiteCredito - creditoActual);
+
+  // Estados de montos
+  const [efectivo, setEfectivo] = useState(ventaTotal.toString());
   const [transferencia, setTransferencia] = useState('');
+  const [tarjeta, setTarjeta] = useState('');
   const [credito, setCredito] = useState('');
 
-  const cliente = clientes.find((c) => c.id === clienteActivoId);
-  const creditoActual = cliente?.saldo || 0;
-  const creditoDisponible = cliente ? cliente.limiteCredito - cliente.saldo : 0;
+  // Prevención de doble envío
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const ef = parseFloat(efectivo) || 0;
   const tr = parseFloat(transferencia) || 0;
+  const tj = parseFloat(tarjeta) || 0;
   const cr = parseFloat(credito) || 0;
-  const totalPagado = ef + tr + cr;
+
+  const totalPagado = ef + tr + tj + cr;
   const diferencia = ventaTotal - totalPagado;
   const completo = Math.abs(diferencia) < 0.01;
+  const nuevoSaldo = creditoActual + cr;
+  const excedeCredito = nuevoSaldo > limiteCredito;
 
-  const metodos: { key: MetodoPago; label: string; icon: typeof Banknote; value: string; set: (v: string) => void; color: string; bg: string }[] = [
-    { key: 'Efectivo', label: 'Efectivo', icon: Banknote, value: efectivo, set: setEfectivo, color: colors.success[600], bg: colors.success[50] },
-    { key: 'Transferencia', label: 'Transferencia', icon: Smartphone, value: transferencia, set: setTransferencia, color: colors.primary[600], bg: colors.primary[50] },
-    { key: 'Crédito', label: 'Crédito', icon: CreditCard, value: credito, set: setCredito, color: colors.warning[600], bg: colors.warning[50] },
-  ];
+  // Acciones rápidas de un toque
+  const setExacto = (metodo: MetodoPago) => {
+    setEfectivo(metodo === 'Efectivo' ? ventaTotal.toString() : '');
+    setTransferencia(metodo === 'Transferencia' ? ventaTotal.toString() : '');
+    setTarjeta(metodo === 'Tarjeta' ? ventaTotal.toString() : '');
+    setCredito(metodo === 'Crédito' ? ventaTotal.toString() : '');
+  };
 
-  const handleConfirm = () => {
+  // Simular pago combinado según especificación del requerimiento
+  const handleSimularCombinado = () => {
+    if (ventaTotal <= 0) return;
+    // Repartir proporcionalmente o con el ejemplo mock
+    const pEfectivo = Math.round(ventaTotal * 0.35);
+    const pTransfer = Math.round(ventaTotal * 0.15);
+    const pCredito = ventaTotal - pEfectivo - pTransfer;
+
+    setEfectivo(pEfectivo.toString());
+    setTransferencia(pTransfer.toString());
+    setTarjeta('');
+    setCredito(pCredito.toString());
+  };
+
+  const handleConfirm = async () => {
+    if (isSubmitting) return;
+
     if (!completo) {
-      Alert.alert('Pago incompleto', `Faltan ${formatCurrency(diferencia)} por cubrir.`);
+      Alert.alert('Pago incompleto', `Aún faltan ${formatCurrency(diferencia)} por cubrir.`);
       return;
     }
+
+    if (excedeCredito) {
+      Alert.alert(
+        'Límite de crédito excedido',
+        `El nuevo saldo (${formatCurrency(nuevoSaldo)}) excede el límite autorizado del cliente (${formatCurrency(limiteCredito)}).`
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
     const pagosValidos: Pago[] = [];
     if (ef > 0) pagosValidos.push({ metodo: 'Efectivo', monto: ef });
     if (tr > 0) pagosValidos.push({ metodo: 'Transferencia', monto: tr });
+    if (tj > 0) pagosValidos.push({ metodo: 'Tarjeta', monto: tj });
     if (cr > 0) pagosValidos.push({ metodo: 'Crédito', monto: cr });
+
     setPagos(pagosValidos);
-    router.push('/(tabs)/venta/confirmacion');
+
+    try {
+      const res = await DataService.registrarVenta({
+        clienteId: cliente.id,
+        empleadoId: user?.id || '1',
+        total: ventaTotal,
+        items: carrito.map((i) => ({
+          productoId: i.producto.id,
+          presentacionTipo: i.presentacion?.tipo || 'pieza',
+          cantidadPresentaciones: i.cantidad,
+          piezasTotalesCalculadas: i.piezasTotales || i.cantidad,
+          precioUnitario: i.precioFinal,
+          subtotal: i.subtotal,
+        })),
+        pagos: pagosValidos.map((p) => ({ metodo: p.metodo, monto: p.monto })),
+      });
+
+      if (res && res.folio) {
+        setUltimoFolioVenta(res.folio);
+      }
+    } catch (err: any) {
+      console.warn('Error al registrar venta live:', err);
+    } finally {
+      setIsSubmitting(false);
+      router.push('/(tabs)/venta/confirmacion');
+    }
   };
 
-  const nuevoSaldo = creditoActual + cr;
-
   return (
-    <View style={styles.container}>
-      <ScreenHeader title="Pago" onBack={() => router.back()} />
+    <AppShell>
+      <PageHeader
+        title="Cobro de Venta"
+        subtitle={`Total a liquidar: ${formatCurrency(ventaTotal)}`}
+        onBack={() => router.back()}
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        <View style={styles.totalCard}>
-          <Text style={styles.totalLabel}>Total a pagar</Text>
-          <Text style={styles.totalValue}>{formatCurrency(ventaTotal)}</Text>
-        </View>
-
-        <Text style={styles.sectionTitle}>Métodos de pago (pago mixto)</Text>
-
-        {metodos.map((m) => {
-          const Icon = m.icon;
-          return (
-            <View key={m.key} style={styles.metodoCard}>
-              <View style={[styles.metodoIcon, { backgroundColor: m.bg }]}>
-                <Icon size={22} color={m.color} />
-              </View>
-              <View style={styles.metodoInfo}>
-                <Text style={styles.metodoLabel}>{m.label}</Text>
-                <View style={styles.metodoInputWrap}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.metodoInput}
-                    placeholder="0"
-                    placeholderTextColor={colors.neutral[300]}
-                    value={m.value}
-                    onChangeText={m.set}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-              </View>
-            </View>
-          );
-        })}
-
-        <View style={styles.resumenCard}>
-          <View style={styles.resumenRow}>
-            <Text style={styles.resumenLabel}>Total pagado</Text>
-            <Text style={[styles.resumenValue, { color: completo ? colors.success[600] : colors.neutral[900] }]}>{formatCurrency(totalPagado)}</Text>
-          </View>
-          <View style={styles.resumenRow}>
-            <Text style={styles.resumenLabel}>Diferencia</Text>
-            <Text style={[styles.resumenValue, { color: Math.abs(diferencia) < 0.01 ? colors.success[600] : colors.error[600] }]}>
-              {diferencia > 0 ? '+' : ''}{formatCurrency(diferencia)}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Tarjeta de Total a Cobrar */}
+        <View style={[styles.heroCard, shadows.card]}>
+          <Text style={styles.heroSub}>TOTAL DE LA NOTA</Text>
+          <Text style={styles.heroAmount}>{formatCurrency(ventaTotal)}</Text>
+          <View style={styles.clientInline}>
+            <User size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.clientInlineText}>
+              {cliente.nombre} · Saldo actual: {formatCurrency(cliente.saldo)}
             </Text>
           </View>
         </View>
 
-        {cr > 0 && cliente && (
-          <View style={styles.creditoInfoCard}>
-            <View style={styles.creditoInfoRow}>
-              <Text style={styles.creditoInfoLabel}>Crédito actual</Text>
-              <Text style={styles.creditoInfoValue}>{formatCurrency(creditoActual)}</Text>
-            </View>
-            <View style={styles.creditoInfoRow}>
-              <Text style={styles.creditoInfoLabel}>Nuevo saldo</Text>
-              <Text style={[styles.creditoInfoValue, { color: nuevoSaldo > cliente.limiteCredito ? colors.error[600] : colors.warning[600] }]}>
-                {formatCurrency(nuevoSaldo)}
-              </Text>
-            </View>
-            <View style={styles.creditoInfoRow}>
-              <Text style={styles.creditoInfoLabel}>Límite de crédito</Text>
-              <Text style={styles.creditoInfoValue}>{formatCurrency(cliente.limiteCredito)}</Text>
-            </View>
-            {nuevoSaldo > cliente.limiteCredito && (
-              <View style={styles.alertRow}>
-                <AlertCircle size={16} color={colors.error[600]} />
-                <Text style={styles.alertText}>El nuevo saldo excede el límite de crédito</Text>
-              </View>
-            )}
-          </View>
-        )}
+        {/* Acceso Rápido de Métodos (Un Toque) */}
+        <View style={styles.quickMethodsSection}>
+          <Text style={styles.sectionHeading}>Asignación rápida de monto:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setExacto('Efectivo')} style={styles.quickChip}>
+              <Banknote size={15} color={colors.success[700]} />
+              <Text style={styles.quickChipText}>100% Efectivo</Text>
+            </TouchableOpacity>
 
-        {completo && (
-          <View style={styles.completeBanner}>
-            <Check size={20} color={colors.success[600]} />
-            <Text style={styles.completeText}>Pago completo</Text>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setExacto('Transferencia')} style={styles.quickChip}>
+              <Smartphone size={15} color={colors.primary[700]} />
+              <Text style={styles.quickChipText}>100% Transfer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setExacto('Tarjeta')} style={styles.quickChip}>
+              <CreditCard size={15} color={colors.neutral[800]} />
+              <Text style={styles.quickChipText}>100% Tarjeta</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setExacto('Crédito')} style={styles.quickChip}>
+              <CardIcon size={15} color={colors.warning[700]} />
+              <Text style={styles.quickChipText}>100% Crédito</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity activeOpacity={0.8} onPress={handleSimularCombinado} style={[styles.quickChip, styles.quickChipCombinado]}>
+              <Sparkles size={15} color={colors.primary[700]} />
+              <Text style={[styles.quickChipText, { color: colors.primary[700], fontWeight: 'bold' }]}>
+                Simular Combinado
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* Desglose de Métodos de Pago */}
+        <View style={styles.inputsSection}>
+          <Text style={styles.sectionHeading}>Captura de métodos de pago:</Text>
+
+          {/* 1. Efectivo */}
+          <View style={[styles.paymentInputCard, shadows.card]}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.success[50] }]}>
+              <Banknote size={22} color={colors.success[600]} />
+            </View>
+            <View style={styles.inputBody}>
+              <Text style={styles.inputLabel}>Efectivo en mano</Text>
+              <View style={styles.currencyRow}>
+                <Text style={styles.currencyPrefix}>$</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={efectivo}
+                  onChangeText={setEfectivo}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.neutral[300]}
+                />
+              </View>
+            </View>
           </View>
-        )}
+
+          {/* 2. Transferencia */}
+          <View style={[styles.paymentInputCard, shadows.card]}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.primary[50] }]}>
+              <Smartphone size={22} color={colors.primary[600]} />
+            </View>
+            <View style={styles.inputBody}>
+              <Text style={styles.inputLabel}>Transferencia bancaria / SPEI</Text>
+              <View style={styles.currencyRow}>
+                <Text style={styles.currencyPrefix}>$</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={transferencia}
+                  onChangeText={setTransferencia}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.neutral[300]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* 3. Tarjeta */}
+          <View style={[styles.paymentInputCard, shadows.card]}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.neutral[100] }]}>
+              <CreditCard size={22} color={colors.neutral[700]} />
+            </View>
+            <View style={styles.inputBody}>
+              <Text style={styles.inputLabel}>Tarjeta de Débito / Crédito</Text>
+              <View style={styles.currencyRow}>
+                <Text style={styles.currencyPrefix}>$</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={tarjeta}
+                  onChangeText={setTarjeta}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.neutral[300]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* 4. Crédito */}
+          <View style={[styles.paymentInputCard, shadows.card]}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.warning[50] }]}>
+              <CardIcon size={22} color={colors.warning[600]} />
+            </View>
+            <View style={styles.inputBody}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.inputLabel}>A Crédito (Fiado en cuenta)</Text>
+                <Text style={styles.disponibleText}>Disp: {formatCurrency(creditoDisponible)}</Text>
+              </View>
+              <View style={styles.currencyRow}>
+                <Text style={styles.currencyPrefix}>$</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={credito}
+                  onChangeText={setCredito}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.neutral[300]}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Resumen de Validación en tiempo real */}
+        <View style={[styles.statusCard, shadows.card]}>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Total cubierto:</Text>
+            <MoneyDisplay amount={totalPagado} size="md" color={colors.neutral[900]} />
+          </View>
+
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>Diferencia por cubrir:</Text>
+            <Text
+              style={[
+                styles.diffValue,
+                { color: completo ? colors.success[600] : colors.error[600] },
+              ]}
+            >
+              {completo ? '✓ Cubierto al 100%' : formatCurrency(diferencia)}
+            </Text>
+          </View>
+
+          {cr > 0 && (
+            <View style={styles.creditoImpactBox}>
+              <View style={styles.statusRow}>
+                <Text style={styles.statusLabel}>Nuevo saldo del cliente:</Text>
+                <MoneyDisplay
+                  amount={nuevoSaldo}
+                  size="sm"
+                  color={excedeCredito ? colors.error[600] : colors.warning[700]}
+                />
+              </View>
+              {excedeCredito && (
+                <View style={styles.alertRow}>
+                  <AlertCircle size={14} color={colors.error[600]} />
+                  <Text style={styles.alertText}>
+                    Supera el límite de crédito ({formatCurrency(limiteCredito)})
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      {/* Botón Inferior: CONFIRMAR VENTA (con protección anti doble clic) */}
+      <View style={[styles.bottomBar, shadows.floating]}>
         <TouchableOpacity
-          style={[styles.confirmBtn, !completo && styles.confirmBtnDisabled]}
+          activeOpacity={0.88}
+          disabled={!completo || isSubmitting || excedeCredito}
           onPress={handleConfirm}
-          disabled={!completo}
+          style={[
+            styles.confirmBtn,
+            (!completo || isSubmitting || excedeCredito) && styles.confirmBtnDisabled,
+          ]}
         >
-          <Check size={22} color={colors.neutral[0]} />
-          <Text style={styles.confirmBtnText}>Confirmar pago</Text>
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color={colors.neutral[0]} />
+          ) : (
+            <>
+              <CheckCircle2 size={22} color={colors.neutral[0]} />
+              <Text style={styles.confirmBtnText}>CONFIRMAR VENTA</Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
-    </View>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.neutral[50],
+  scroll: {
+    paddingBottom: 140,
   },
-  totalCard: {
+  heroCard: {
     backgroundColor: colors.primary[700],
-    margin: spacing.md,
-    borderRadius: radius.lg,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radius.xxl,
     padding: spacing.lg,
     alignItems: 'center',
   },
-  totalLabel: {
-    fontSize: fontSize.sm,
+  heroSub: {
+    fontSize: fontSize.xs,
     color: 'rgba(255,255,255,0.7)',
+    fontWeight: '800',
+    letterSpacing: 1,
   },
-  totalValue: {
+  heroAmount: {
     fontSize: fontSize.display,
     fontWeight: fontWeight.bold,
     color: colors.neutral[0],
+    marginVertical: spacing.xs,
+  },
+  clientInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.full,
     marginTop: spacing.xs,
   },
-  sectionTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[800],
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+  clientInlineText: {
+    color: colors.neutral[0],
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
   },
-  metodoCard: {
+  quickMethodsSection: {
+    marginTop: spacing.md,
+  },
+  sectionHeading: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[600],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xs + 2,
+  },
+  quickRow: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs + 2,
+  },
+  quickChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: colors.neutral[0],
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+  },
+  quickChipCombinado: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[300],
+  },
+  quickChipText: {
+    fontSize: fontSize.xs + 1,
+    color: colors.neutral[800],
+    fontWeight: fontWeight.semibold,
+  },
+  inputsSection: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  paymentInputCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    ...shadows.card,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[100],
   },
-  metodoIcon: {
+  iconCircle: {
     width: 48,
     height: 48,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metodoInfo: {
+  inputBody: {
     flex: 1,
   },
-  metodoLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
+  inputLabel: {
+    fontSize: fontSize.xs + 1,
     color: colors.neutral[600],
-    marginBottom: spacing.xs + 2,
+    fontWeight: fontWeight.semibold,
   },
-  metodoInputWrap: {
+  disponibleText: {
+    fontSize: fontSize.xs - 1,
+    color: colors.neutral[400],
+  },
+  currencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.neutral[200],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    gap: 4,
+    marginTop: 2,
   },
-  currencySymbol: {
-    fontSize: fontSize.lg,
+  currencyPrefix: {
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.neutral[400],
-    marginRight: spacing.xs,
   },
-  metodoInput: {
+  textInput: {
     flex: 1,
-    fontSize: fontSize.lg,
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
+    padding: 0,
   },
-  resumenCard: {
+  statusCard: {
     backgroundColor: colors.neutral[0],
-    margin: spacing.md,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    ...shadows.card,
-  },
-  resumenRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm - 2,
-  },
-  resumenLabel: {
-    fontSize: fontSize.sm,
-    color: colors.neutral[500],
-  },
-  resumenValue: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-  },
-  creditoInfoCard: {
-    backgroundColor: colors.warning[50],
     marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
+    marginTop: spacing.md,
+    borderRadius: radius.xl,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    gap: spacing.xs + 2,
   },
-  creditoInfoRow: {
+  statusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs + 1,
+    alignItems: 'center',
   },
-  creditoInfoLabel: {
+  statusLabel: {
     fontSize: fontSize.sm,
-    color: colors.warning[700],
+    color: colors.neutral[600],
   },
-  creditoInfoValue: {
-    fontSize: fontSize.sm,
+  diffValue: {
+    fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
+  },
+  creditoImpactBox: {
+    backgroundColor: colors.warning[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.warning[100],
   },
   alertRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs + 2,
-    marginTop: spacing.sm,
+    gap: 4,
+    marginTop: 4,
   },
   alertText: {
     fontSize: fontSize.xs,
     color: colors.error[600],
     fontWeight: fontWeight.semibold,
-  },
-  completeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.success[50],
-    marginHorizontal: spacing.md,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md - 2,
-    marginBottom: spacing.md,
-  },
-  completeText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.success[700],
   },
   bottomBar: {
     position: 'absolute',
@@ -299,14 +515,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    ...shadows.floating,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
   },
   confirmBtn: {
     backgroundColor: colors.primary[600],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md + 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -317,7 +534,8 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     color: colors.neutral[0],
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
+    fontSize: fontSize.base,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

@@ -1,41 +1,64 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, Banknote, Smartphone } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { gastos as gastosMock } from '@/constants/mockData';
 import { Card, ScreenHeader, BottomSheet } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
+import { useApp } from '@/context/AppContext';
+import { DataService } from '@/services/mockDataService';
 import type { Gasto, MetodoPago } from '@/types';
 
 const conceptos = ['Gasolina', 'Comida', 'Estacionamiento', 'Mantenimiento', 'Otro'] as const;
 
 export default function GastosScreen() {
   const router = useRouter();
+  const { user } = useApp();
   const [showForm, setShowForm] = useState(false);
-  const [gastos, setGastos] = useState<Gasto[]>(gastosMock);
+  const [loading, setLoading] = useState(false);
+  const [gastos, setGastos] = useState<any[]>([]);
   const [concepto, setConcepto] = useState<typeof conceptos[number]>('Gasolina');
   const [importe, setImporte] = useState('');
   const [metodo, setMetodo] = useState<MetodoPago>('Efectivo');
   const [observaciones, setObservaciones] = useState('');
 
-  const totalHoy = gastos.filter((g) => g.fecha === '2026-09-15').reduce((s, g) => s + g.importe, 0);
+  const loadGastos = async () => {
+    try {
+      const data = await DataService.getGastos();
+      if (data) setGastos(data);
+    } catch {
+      // Fallback
+    }
+  };
 
-  const handleGuardar = () => {
+  useEffect(() => {
+    loadGastos();
+  }, []);
+
+  const totalHoy = gastos.reduce((s, g) => s + (g.importe || 0), 0);
+
+  const handleGuardar = async () => {
     const imp = parseFloat(importe) || 0;
     if (imp <= 0) { Alert.alert('Ingresa un importe válido'); return; }
-    const nuevo: Gasto = {
-      id: 'g' + (gastos.length + 1),
-      concepto,
-      importe: imp,
-      metodo,
-      observaciones,
-      fecha: '2026-09-15',
-    };
-    setGastos([nuevo, ...gastos]);
-    setShowForm(false);
-    setImporte('');
-    setObservaciones('');
+    
+    setLoading(true);
+    try {
+      await DataService.registrarGasto({
+        empleadoId: user?.id || '1',
+        concepto,
+        importe: imp,
+        metodoPago: metodo,
+        observaciones,
+      });
+      await loadGastos();
+      setShowForm(false);
+      setImporte('');
+      setObservaciones('');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo guardar el gasto');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

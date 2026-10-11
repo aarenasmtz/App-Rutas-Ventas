@@ -1,29 +1,49 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MapPin, ShoppingCart, Wallet, RotateCcw, Navigation, Phone, Calendar } from 'lucide-react-native';
+import { MapPin, ShoppingCart, Wallet, RotateCcw, Navigation, Phone, Calendar, FileText, Clock } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { clientes, productos } from '@/constants/mockData';
+import { mockClientes, mockProductos, DataService } from '@/services/mockDataService';
+import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getEstadoColor } from '@/utils/helpers';
+import type { Cliente } from '@/types';
 
 type Tab = 'resumen' | 'sugerido' | 'historial' | 'cuenta';
 
 export default function ClienteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const cliente = clientes.find((c) => c.id === id);
+  const { setClienteActivoId } = useApp();
+  const [cliente, setCliente] = useState<Cliente>(() => {
+    return mockClientes.find((c) => c.id === id) || mockClientes[0];
+  });
   const [tab, setTab] = useState<Tab>('resumen');
 
-  if (!cliente) {
-    return (
-      <View style={styles.center}>
-        <Text>Cliente no encontrado</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    const fetchLiveCliente = async () => {
+      try {
+        const list = await DataService.getClientes();
+        const found = list.find((c) => c.id === id);
+        if (found) setCliente(found);
+      } catch {
+        // Keep fallback
+      }
+    };
+    fetchLiveCliente();
+  }, [id]);
 
   const creditoDisponible = cliente.limiteCredito - cliente.saldo;
+
+  const handleVender = () => {
+    setClienteActivoId(cliente.id);
+    router.push('/(tabs)/venta');
+  };
+
+  const handleCobrar = () => {
+    setClienteActivoId(cliente.id);
+    router.push('/(tabs)/mas/cobranza');
+  };
 
   return (
     <View style={styles.container}>
@@ -38,12 +58,18 @@ export default function ClienteDetailScreen() {
             <View style={styles.headerInfo}>
               <Text style={styles.clientName}>{cliente.nombre}</Text>
               <Text style={styles.owner}>Propietario: {cliente.propietario}</Text>
+              {cliente.telefono && (
+                <View style={styles.addressRow}>
+                  <Phone size={13} color={colors.primary[600]} />
+                  <Text style={[styles.addressText, { color: colors.primary[700], fontWeight: '600' }]}>{cliente.telefono}</Text>
+                </View>
+              )}
               <View style={styles.diasRow}>
-                <Calendar size={14} color={colors.neutral[400]} />
+                <Calendar size={13} color={colors.neutral[400]} />
                 <Text style={styles.diasText}>Visita: {cliente.diasVisita.join(' - ')}</Text>
               </View>
               <View style={styles.addressRow}>
-                <MapPin size={14} color={colors.neutral[400]} />
+                <MapPin size={13} color={colors.neutral[400]} />
                 <Text style={styles.addressText}>{cliente.direccion}</Text>
               </View>
             </View>
@@ -63,28 +89,44 @@ export default function ClienteDetailScreen() {
             </View>
             <View style={styles.balanceDivider} />
             <View style={styles.balanceItem}>
-              <Text style={styles.balanceLabel}>Límite</Text>
+              <Text style={styles.balanceLabel}>Límite crédito</Text>
               <Text style={styles.balanceValue}>{formatCurrency(cliente.limiteCredito)}</Text>
+            </View>
+          </View>
+
+          {/* Última compra y último pago */}
+          <View style={styles.recentActivityRow}>
+            <View style={styles.activityItem}>
+              <Clock size={12} color={colors.neutral[400]} />
+              <Text style={styles.activityText}>Última compra: <Text style={{ fontWeight: '600', color: colors.neutral[800] }}>{cliente.ultimaCompra || 'Sin registro'}</Text></Text>
+            </View>
+            <View style={styles.activityItem}>
+              <Wallet size={12} color={colors.success[600]} />
+              <Text style={styles.activityText}>Último pago: <Text style={{ fontWeight: '600', color: colors.success[700] }}>{cliente.ultimoPago || 'Sin registro'}</Text></Text>
             </View>
           </View>
         </View>
 
+        {/* Acciones principales: Vender, Cobrar, Ubicación, Estado de cuenta */}
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/venta')}>
-            <View style={styles.actionIcon}><ShoppingCart size={22} color={colors.primary[600]} /></View>
-            <Text style={styles.actionText}>Nueva venta</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={handleVender}>
+            <View style={styles.actionIcon}><ShoppingCart size={22} color={colors.neutral[0]} /></View>
+            <Text style={[styles.actionText, { color: colors.primary[700], fontWeight: 'bold' }]}>Vender</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/mas/cobranza')}>
-            <View style={[styles.actionIcon, { backgroundColor: colors.success[50] }]}><Wallet size={22} color={colors.success[600]} /></View>
-            <Text style={styles.actionText}>Cobrar</Text>
+
+          <TouchableOpacity style={styles.actionBtn} onPress={handleCobrar}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.success[600] }]}><Wallet size={22} color={colors.neutral[0]} /></View>
+            <Text style={[styles.actionText, { color: colors.success[700], fontWeight: 'bold' }]}>Cobrar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/mas/devoluciones')}>
-            <View style={[styles.actionIcon, { backgroundColor: colors.warning[50] }]}><RotateCcw size={22} color={colors.warning[600]} /></View>
-            <Text style={styles.actionText}>Devolución</Text>
-          </TouchableOpacity>
+
           <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/ruta/mapa')}>
-            <View style={[styles.actionIcon, { backgroundColor: colors.primary[50] }]}><Navigation size={22} color={colors.primary[600]} /></View>
-            <Text style={styles.actionText}>Cómo llegar</Text>
+            <View style={[styles.actionIcon, { backgroundColor: colors.neutral[700] }]}><Navigation size={22} color={colors.neutral[0]} /></View>
+            <Text style={styles.actionText}>Ubicación</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setTab('cuenta')}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.warning[600] }]}><FileText size={22} color={colors.neutral[0]} /></View>
+            <Text style={styles.actionText}>Estado cta</Text>
           </TouchableOpacity>
         </View>
 
@@ -113,7 +155,7 @@ export default function ClienteDetailScreen() {
   );
 }
 
-function ResumenTab({ cliente }: { cliente: typeof clientes[0] }) {
+function ResumenTab({ cliente }: { cliente: Cliente }) {
   return (
     <View style={styles.tabInner}>
       <Card style={styles.summaryCard}>
@@ -140,7 +182,7 @@ function ResumenTab({ cliente }: { cliente: typeof clientes[0] }) {
         <Text style={styles.cardTitle}>Resumen financiero</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Total ventas (últimas 5)</Text>
-          <Text style={styles.summaryValue}>{formatCurrency(cliente.historial.reduce((s, h) => s + h.total, 0))}</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(cliente.historial.reduce((s: number, h) => s + h.total, 0))}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Ventas al crédito</Text>
@@ -155,7 +197,7 @@ function ResumenTab({ cliente }: { cliente: typeof clientes[0] }) {
   );
 }
 
-function SugeridoTab({ cliente }: { cliente: typeof clientes[0] }) {
+function SugeridoTab({ cliente }: { cliente: Cliente }) {
   if (cliente.sugerido.length === 0) {
     return (
       <Card style={styles.emptyTab}>
@@ -167,7 +209,7 @@ function SugeridoTab({ cliente }: { cliente: typeof clientes[0] }) {
     <View style={styles.tabInner}>
       <Text style={styles.sugeridoTitle}>Sugerido para hoy</Text>
       {cliente.sugerido.map((s) => {
-        const producto = productos.find((p) => p.id === s.productoId);
+        const producto = mockProductos.find((p) => p.id === s.productoId);
         if (!producto) return null;
         return (
           <Card key={s.productoId} style={styles.sugeridoCard}>
@@ -192,7 +234,7 @@ function SugeridoTab({ cliente }: { cliente: typeof clientes[0] }) {
   );
 }
 
-function HistorialTab({ cliente }: { cliente: typeof clientes[0] }) {
+function HistorialTab({ cliente }: { cliente: Cliente }) {
   if (cliente.historial.length === 0) {
     return (
       <Card style={styles.emptyTab}>
@@ -220,7 +262,7 @@ function HistorialTab({ cliente }: { cliente: typeof clientes[0] }) {
   );
 }
 
-function CuentaTab({ cliente }: { cliente: typeof clientes[0] }) {
+function CuentaTab({ cliente }: { cliente: Cliente }) {
   const movimientos = [
     { fecha: '2026-09-15', concepto: 'Abono en efectivo', monto: -500, tipo: 'abono' },
     { fecha: '2026-09-11', concepto: 'Venta a crédito', monto: 2350, tipo: 'cargo' },
@@ -571,5 +613,21 @@ const styles = StyleSheet.create({
   cuentaMonto: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
+  },
+  recentActivityRow: {
+    marginTop: spacing.sm + 2,
+    paddingTop: spacing.xs + 2,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    gap: 4,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  activityText: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
   },
 });

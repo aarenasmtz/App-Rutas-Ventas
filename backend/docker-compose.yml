@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. BASE DE DATOS (SQL SERVER 2022 LINUX)
+  # ==========================================
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: rutaventas_sqlserver
+    restart: unless-stopped
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=MiguelRutaVenta2026!*
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - rutaventas_net
+
+  # ==========================================
+  # 2. BACKEND API (.NET 9 WEB API)
+  # ==========================================
+  api:
+    build:
+      context: ./RutaVentas.Api
+      dockerfile: Dockerfile
+    container_name: rutaventas_api
+    restart: unless-stopped
+    depends_on:
+      - sqlserver
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=RutaVentasDb;User Id=sa;Password=MiguelRutaVenta2026!*;TrustServerCertificate=True;MultipleActiveResultSets=true
+    ports:
+      - "5000:8080"
+    networks:
+      - rutaventas_net
+
+  # ==========================================
+  # 3. NGINX REVERSE PROXY CON SSL
+  # ==========================================
+  nginx:
+    image: nginx:alpine
+    container_name: rutaventas_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certs_data:/etc/letsencrypt:ro
+    depends_on:
+      - api
+    networks:
+      - rutaventas_net
+
+volumes:
+  sqlserver_data:
+  certs_data:
+
+networks:
+  rutaventas_net:
+    driver: bridge

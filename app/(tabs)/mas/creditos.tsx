@@ -1,24 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
-import { clientes } from '@/constants/mockData';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getEstadoColor } from '@/utils/helpers';
+import { DataService, mockClientes } from '@/services/mockDataService';
+import type { Cliente } from '@/types';
 
 type Filtro = 'Todos' | 'Al corriente' | 'Con saldo' | 'Vencidos';
 
 export default function CreditosScreen() {
   const router = useRouter();
   const [filtro, setFiltro] = useState<Filtro>('Todos');
+  const [clientesList, setClientesList] = useState<Cliente[]>(mockClientes);
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      try {
+        const data = await DataService.getClientes();
+        if (isMounted && data && data.length > 0) setClientesList(data);
+      } catch {
+        // Fallback
+      }
+    };
+    load();
+    return () => { isMounted = false; };
+  }, []);
 
   const filtered = useMemo(() => {
-    if (filtro === 'Todos') return clientes;
-    if (filtro === 'Al corriente') return clientes.filter((c) => c.saldo === 0);
-    if (filtro === 'Con saldo') return clientes.filter((c) => c.saldo > 0 && c.saldo <= c.limiteCredito);
-    if (filtro === 'Vencidos') return clientes.filter((c) => c.saldo > c.limiteCredito);
-    return clientes;
-  }, [filtro]);
+    if (filtro === 'Todos') return clientesList;
+    if (filtro === 'Al corriente') return clientesList.filter((c) => c.saldo === 0);
+    if (filtro === 'Con saldo') return clientesList.filter((c) => c.saldo > 0 && c.saldo <= c.limiteCredito);
+    if (filtro === 'Vencidos') return clientesList.filter((c) => c.saldo > c.limiteCredito);
+    return clientesList;
+  }, [clientesList, filtro]);
 
   const totalCartera = filtered.reduce((s, c) => s + c.saldo, 0);
 
@@ -44,7 +60,7 @@ export default function CreditosScreen() {
           const estadoLabel = vencido ? 'Vencido' : c.saldo === 0 ? 'Al corriente' : 'Con saldo';
           const estadoColor = getEstadoColor(estadoLabel);
           return (
-            <Card key={c.id} style={styles.card} onPress={() => router.push('/(tabs)/ruta/cliente/' + c.id)}>
+            <Card key={c.id} style={styles.card} onPress={() => router.push(('/(tabs)/ruta/cliente/' + c.id) as any)}>
               <View style={styles.cardTop}>
                 <View>
                   <Text style={styles.clientName}>{c.nombre}</Text>

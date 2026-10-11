@@ -31,6 +31,8 @@ export function ConnectivityIndicator() {
   );
 }
 
+import { useRouter } from 'expo-router';
+
 export function ScreenHeader({
   title,
   subtitle,
@@ -42,10 +44,22 @@ export function ScreenHeader({
   right?: ReactNode;
   onBack?: () => void;
 }) {
+  const router = useRouter();
+
+  const handleBackPress = () => {
+    if (onBack) {
+      if (router.canGoBack()) {
+        onBack();
+      } else {
+        router.replace('/(tabs)/mas');
+      }
+    }
+  };
+
   return (
     <View style={headerStyles.container}>
       {onBack && (
-        <TouchableOpacity onPress={onBack} style={headerStyles.backBtn}>
+        <TouchableOpacity onPress={handleBackPress} style={headerStyles.backBtn}>
           <Text style={headerStyles.backText}>‹</Text>
         </TouchableOpacity>
       )}

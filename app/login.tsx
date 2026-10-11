@@ -9,15 +9,23 @@ export default function LoginScreen() {
   const [usuario, setUsuario] = useState('miguel');
   const [password, setPassword] = useState('demo1234');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!usuario.trim() || !password.trim()) {
       setError('Ingresa usuario y contraseña');
       return;
     }
     setError('');
-    login();
+    setLoading(true);
+    try {
+      await login({ usuario, password });
+    } catch (err: any) {
+      setError(err?.message || 'Error al autenticar');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,7 +35,7 @@ export default function LoginScreen() {
           <View style={styles.logoWrap}>
             <Truck size={36} color={colors.neutral[0]} />
           </View>
-          <Text style={styles.appName}>Ruta Ventas</Text>
+          <Text style={styles.appName}>demo-miguelappventa</Text>
           <Text style={styles.tagline}>Sistema de reparto y preventa</Text>
         </View>
 
