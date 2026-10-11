@@ -43,48 +43,9 @@ class OfflineSyncQueueService {
       // Fallback
     }
 
-    // Si está vacío, sembrar operaciones de ejemplo para auditoría
-    if (this.queue.length === 0) {
-      this.queue = [
-        {
-          id: 'SYNC-001',
-          tipo: 'Venta',
-          idempotencyKey: 'FOL-20260930-001',
-          descripcion: 'Venta a ABTS ARENAS · 2 Queso Castel Barra',
-          monto: 390,
-          payload: {},
-          estado: 'Sincronizado',
-          fechaCreacion: new Date(Date.now() - 3600000).toISOString(),
-          fechaSincronizacion: new Date(Date.now() - 3500000).toISOString(),
-          intentos: 1,
-          folioAsignado: 'FOL-20260930-001',
-        },
-        {
-          id: 'SYNC-002',
-          tipo: 'Gasto',
-          idempotencyKey: 'GAS-20260930-001',
-          descripcion: 'Gasolina magna en ruta',
-          monto: 350,
-          payload: {},
-          estado: 'Sincronizado',
-          fechaCreacion: new Date(Date.now() - 1800000).toISOString(),
-          fechaSincronizacion: new Date(Date.now() - 1700000).toISOString(),
-          intentos: 1,
-        },
-        {
-          id: 'SYNC-003',
-          tipo: 'Devolucion',
-          idempotencyKey: 'DEV-20260930-001',
-          descripcion: 'Devolución empaque roto · ABTS ARENAS',
-          monto: 0,
-          payload: {},
-          estado: 'Sincronizado',
-          fechaCreacion: new Date(Date.now() - 900000).toISOString(),
-          fechaSincronizacion: new Date(Date.now() - 850000).toISOString(),
-          intentos: 1,
-          folioAsignado: 'DEV-20260930-001',
-        },
-      ];
+    // Cola inicial limpia y vacía lista para nueva captura en ruta
+    if (!this.queue) {
+      this.queue = [];
     }
   }
 
