@@ -318,6 +318,52 @@ export const DataService = {
     }
   },
 
+  getVentas: async (limit = 50) => {
+    try {
+      const live = await apiService.getVentas(limit);
+      if (live && live.length > 0) return live;
+    } catch {
+      // Fallback
+    }
+    return [
+      {
+        id: 1,
+        folio: 'FOL-20261012-001',
+        clienteId: 1,
+        cliente: { id: 1, nombre: 'Abarrotes Don Pepe', propietario: 'José López', direccion: 'Av. León 102', ruta: 'Ruta Lunes' },
+        usuario: { id: 1, nombre: 'Miguel', rol: 'Administrador' },
+        total: 1850,
+        subtotal: 1850,
+        estado: 'Completada',
+        fechaHora: new Date().toISOString(),
+        detalles: [
+          { productoId: 1, presentacionNombre: 'Caja 24', cantidadPresentaciones: 2, precioUnitario: 580, subtotal: 1160 },
+          { productoId: 3, presentacionNombre: 'Paquete 12', cantidadPresentaciones: 3, precioUnitario: 230, subtotal: 690 },
+        ],
+        pagos: [{ metodo: 'Efectivo', monto: 1850 }],
+      },
+      {
+        id: 2,
+        folio: 'FOL-20261012-002',
+        clienteId: 2,
+        cliente: { id: 2, nombre: 'Cremería La Fina', propietario: 'María Torres', direccion: 'Calle Juárez 45', ruta: 'Ruta Lunes' },
+        usuario: { id: 1, nombre: 'Miguel', rol: 'Administrador' },
+        total: 2420,
+        subtotal: 2420,
+        estado: 'Completada',
+        fechaHora: new Date(Date.now() - 3600000).toISOString(),
+        detalles: [
+          { productoId: 6, presentacionNombre: 'Caja Barra', cantidadPresentaciones: 1, precioUnitario: 1420, subtotal: 1420 },
+          { productoId: 2, presentacionNombre: 'Exhibidor', cantidadPresentaciones: 2, precioUnitario: 500, subtotal: 1000 },
+        ],
+        pagos: [
+          { metodo: 'Efectivo', monto: 1420 },
+          { metodo: 'Crédito', monto: 1000 },
+        ],
+      },
+    ];
+  },
+
   registrarVenta: async (venta: RegistrarVentaRequestDto) => {
     try {
       return await apiService.registrarVenta(venta);
@@ -651,13 +697,18 @@ export const DataService = {
     tipo?: string;
     modulo?: string;
     accion: string;
+    usuario?: string;
     usuarioNombre?: string;
     dispositivo?: string;
     detalle?: string;
     estado?: string;
   }) => {
     try {
-      return await apiService.registrarBitacora(evento);
+      const payload = {
+        ...evento,
+        usuarioNombre: evento.usuarioNombre || evento.usuario || 'Sistema',
+      };
+      return await apiService.registrarBitacora(payload);
     } catch {
       return { id: Date.now(), ...evento, fecha: new Date().toISOString().split('T')[0] };
     }

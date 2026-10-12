@@ -1,42 +1,75 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { Check, RotateCcw } from 'lucide-react-native';
+import {
+  RotateCcw,
+  Plus,
+  Search,
+  Package,
+  User,
+  AlertTriangle,
+  CheckCircle2,
+  X,
+  Boxes,
+  FileText,
+  Calendar,
+  Layers,
+} from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { Card, Badge, ScreenHeader } from '@/components/shared';
-import { formatCurrency, getEstadoColor } from '@/utils/helpers';
+import { AppShell, PageHeader, MoneyDisplay, SearchBar } from '@/components/DesignSystem';
+import { DataService } from '@/services/mockDataService';
+import { formatCurrency } from '@/utils/helpers';
 import { useApp } from '@/context/AppContext';
-import { DataService, mockClientes, mockProductos } from '@/services/mockDataService';
 import type { Cliente, Producto } from '@/types';
-
-const motivos = ['Producto dañado', 'Caducidad', 'Cambio', 'Pedido incorrecto', 'Otro'];
-const destinos = ['Inventario', 'Merma', 'Cambio'] as const;
 
 export default function DevolucionesScreen() {
   const router = useRouter();
   const { user } = useApp();
-  const [step, setStep] = useState<'lista' | 'nueva'>('lista');
-  const [clientesList, setClientesList] = useState<Cliente[]>([]);
-  const [productosList, setProductosList] = useState<Producto[]>([]);
-  const [devolucionesList, setDevolucionesList] = useState<any[]>([]);
-  const [clienteId, setClienteId] = useState<string | null>(null);
-  const [productoId, setProductoId] = useState<string | null>(null);
-  const [cantidad, setCantidad] = useState('');
-  const [motivo, setMotivo] = useState<string | null>(null);
-  const [destino, setDestino] = useState<typeof destinos[number] | null>(null);
-  const [registrada, setRegistrada] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [devoluciones, setDevoluciones] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+
+  // Modal de registro
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Form states
+  const [selectedClienteId, setSelectedClienteId] = useState('');
+  const [selectedProductoId, setSelectedProductoId] = useState('');
+  const [cantidad, setCantidad] = useState('1');
+  const [motivo, setMotivo] = useState<'Caducado' | 'Producto dañado' | 'Cambio' | 'Otro'>('Producto dañado');
+  const [destino, setDestino] = useState<'Merma' | 'Inventario' | 'Cambio'>('Merma');
+  const [metodoReembolso, setMetodoReembolso] = useState<'CambioFisico' | 'SaldoAFavor' | 'Efectivo'>('CambioFisico');
+  const [observaciones, setObservaciones] = useState('');
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      const devs = await DataService.getDevoluciones();
-      if (devs) setDevolucionesList(devs);
-      const cls = await DataService.getClientes();
-      if (cls && cls.length > 0) setClientesList(cls);
-      const prs = await DataService.getProductos();
-      if (prs && prs.length > 0) setProductosList(prs);
+      const [devs, clis, prods] = await Promise.all([
+        DataService.getDevoluciones(),
+        DataService.getClientes(),
+        DataService.getProductos(),
+      ]);
+      setDevoluciones(devs || []);
+      setClientes(clis || []);
+      setProductos(prods || []);
+      if (clis && clis.length > 0) setSelectedClienteId(clis[0].id);
+      if (prods && prods.length > 0) setSelectedProductoId(prods[0].id);
     } catch {
       // Fallback
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,235 +77,628 @@ export default function DevolucionesScreen() {
     loadData();
   }, []);
 
-  const reset = () => {
-    setStep('lista');
-    setClienteId(null);
-    setProductoId(null);
-    setCantidad('');
-    setMotivo(null);
-    setDestino(null);
-    setRegistrada(false);
+  const totalPiezasDevueltas = useMemo(() => {
+    return devoluciones.reduce((s, d) => s + (d.cantidad || 0), 0);
+  }, [devoluciones]);
+
+  const totalValorDevuelto = useMemo(() => {
+    return devoluciones.reduce((s, d) => s + (d.total || 0), 0);
+  }, [devoluciones]);
+
+  const handleOpenNuevo = () => {
+    if (clientes.length > 0 && !selectedClienteId) setSelectedClienteId(clientes[0].id);
+    if (productos.length > 0 && !selectedProductoId) setSelectedProductoId(productos[0].id);
+    setCantidad('1');
+    setObservaciones('');
+    setModalVisible(true);
   };
 
-  const handleRegistrar = async () => {
-    if (!clienteId || !productoId || !motivo || !destino) {
-      Alert.alert('Completa todos los campos');
-      return;
-    }
-    const cant = parseFloat(cantidad) || 0;
-    if (cant <= 0) {
-      Alert.alert('Ingresa una cantidad válida');
+  const handleGuardarDevolucion = async () => {
+    const cantNum = parseInt(cantidad, 10);
+    if (isNaN(cantNum) || cantNum <= 0) {
+      Alert.alert('Cantidad inválida', 'Ingresa una cantidad mayor a 0');
       return;
     }
 
-    const prod = productosList.find((p) => p.id === productoId);
-    const cli = clientesList.find((c) => c.id === clienteId);
-    const precio = prod?.precioBase || 0;
+    const prod = productos.find((p) => p.id === selectedProductoId);
+    const cli = clientes.find((c) => c.id === selectedClienteId);
+    const precioU = prod ? prod.precioBase : 0;
+    const totalCalc = precioU * cantNum;
 
-    setLoading(true);
+    setIsSaving(true);
     try {
-      await DataService.registrarDevolucion({
-        clienteId,
-        empleadoId: user?.id || '1',
-        productoId,
-        cantidad: cant,
-        presentacionTipo: 'pieza',
-        precioUnitario: precio,
-        total: cant * precio,
+      const nuevaDev = await DataService.registrarDevolucion({
+        clienteId: selectedClienteId,
+        empleadoId: user?.id ? String(user.id) : '1',
+        productoId: selectedProductoId,
+        cantidad: cantNum,
+        presentacionTipo: prod?.unidad || 'pieza',
+        precioUnitario: precioU,
+        total: totalCalc,
         motivo,
         destino,
-        metodoReembolso: 'SaldoAFavor',
-        observaciones: `Devolución de ${cli?.nombre || ''}`,
+        metodoReembolso,
+        observaciones,
       });
-      await loadData();
-      setRegistrada(true);
+
+      // Registrar en Bitácora de eventos
+      await DataService.registrarBitacora({
+        modulo: 'Devoluciones',
+        accion: 'Devolución Registrada',
+        detalle: `${cantNum} pzas de ${prod?.nombre || 'Producto'} devuelto por ${cli?.nombre || 'Cliente'} (${motivo})`,
+        usuario: user?.nombre || 'Miguel',
+      });
+
+      setDevoluciones((prev) => [
+        {
+          id: nuevaDev.id || Date.now(),
+          folio: nuevaDev.folio || `DEV-${Date.now().toString().slice(-4)}`,
+          clienteId: selectedClienteId,
+          clienteNombre: cli?.nombre || 'Cliente',
+          productoId: selectedProductoId,
+          productoNombre: prod?.nombre || 'Producto',
+          cantidad: cantNum,
+          total: totalCalc,
+          motivo,
+          destino,
+          metodoReembolso,
+          fechaHora: new Date().toISOString(),
+          observaciones,
+        },
+        ...prev,
+      ]);
+
+      setModalVisible(false);
+      Alert.alert('Éxito', 'La devolución se ha registrado correctamente.');
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'No se pudo registrar la devolución');
+      Alert.alert('Error', err.message || 'No se pudo guardar la devolución');
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
 
-  if (registrada) {
-    const cliente = clientesList.find((c) => c.id === clienteId);
-    const producto = productosList.find((p) => p.id === productoId);
-    return (
-      <View style={styles.container}>
-        <ScreenHeader title="Devolución" onBack={() => router.back()} />
-        <View style={styles.confirmContent}>
-          <View style={styles.successIcon}><Check size={56} color={colors.success[600]} /></View>
-          <Text style={styles.confirmTitle}>¡Devolución registrada en base de datos!</Text>
-          <View style={styles.confirmCard}>
-            <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Cliente</Text><Text style={styles.confirmValue}>{cliente?.nombre}</Text></View>
-            <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Producto</Text><Text style={styles.confirmValue}>{producto?.nombre}</Text></View>
-            <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Cantidad</Text><Text style={styles.confirmValue}>{cantidad} {producto?.unidad || 'piezas'}</Text></View>
-            <View style={styles.confirmRow}><Text style={styles.confirmLabel}>Motivo</Text><Text style={styles.confirmValue}>{motivo}</Text></View>
-            <View style={[styles.confirmRow, { borderBottomWidth: 0 }]}><Text style={styles.confirmLabel}>Destino</Text><Text style={styles.confirmValue}>{destino}</Text></View>
-          </View>
-          <TouchableOpacity style={styles.confirmBtn} onPress={reset}>
-            <Text style={styles.confirmBtnText}>Registrar otra devolución</Text>
+  return (
+    <AppShell>
+      <PageHeader
+        title="Devoluciones y Cambios"
+        subtitle="Registro de mermas y cambios de mercancía"
+        onBack={() => router.replace('/(tabs)/mas' as any)}
+        right={
+          <TouchableOpacity activeOpacity={0.8} onPress={handleOpenNuevo} style={styles.createBtnHeader}>
+            <Plus size={18} color="#FFFFFF" />
+            <Text style={styles.createBtnHeaderText}>Registrar</Text>
           </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+        }
+      />
 
-  if (step === 'nueva') {
-    const cliente = clientesList.find((c) => c.id === clienteId);
-    const producto = productosList.find((p) => p.id === productoId);
-    return (
-      <View style={styles.container}>
-        <ScreenHeader title="Nueva devolución" onBack={() => setStep('lista')} />
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-          <Text style={styles.sectionLabel}>1. Cliente</Text>
-          {cliente ? (
-            <View style={styles.selectedCard}>
-              <Text style={styles.selectedText}>{cliente.nombre}</Text>
-              <TouchableOpacity onPress={() => setClienteId(null)}><Text style={styles.changeText}>Cambiar</Text></TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* KPIs */}
+        <View style={styles.kpisRow}>
+          <View style={[styles.kpiCard, { borderLeftColor: colors.error[500], borderLeftWidth: 4 }]}>
+            <Text style={styles.kpiLabel}>Piezas Devueltas</Text>
+            <Text style={[styles.kpiValue, { color: colors.error[700] }]}>{totalPiezasDevueltas}</Text>
+            <Text style={styles.kpiSub}>En camioneta / ruta</Text>
+          </View>
+
+          <View style={[styles.kpiCard, { borderLeftColor: colors.warning[500], borderLeftWidth: 4 }]}>
+            <Text style={styles.kpiLabel}>Valor Estimado</Text>
+            <Text style={[styles.kpiValue, { color: colors.warning[700] }]}>{formatCurrency(totalValorDevuelto)}</Text>
+            <Text style={styles.kpiSub}>Costo de mercancía</Text>
+          </View>
+
+          <View style={[styles.kpiCard, { borderLeftColor: colors.primary[500], borderLeftWidth: 4 }]}>
+            <Text style={styles.kpiLabel}>Incidencias</Text>
+            <Text style={styles.kpiValue}>{devoluciones.length}</Text>
+            <Text style={styles.kpiSub}>Registros del día</Text>
+          </View>
+        </View>
+
+        {/* Lista de devoluciones */}
+        <View style={styles.listSection}>
+          <Text style={styles.sectionTitle}>Historial de Devoluciones del Día</Text>
+
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={colors.primary[600]} />
+              <Text style={styles.loadingText}>Cargando devoluciones...</Text>
+            </View>
+          ) : devoluciones.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <RotateCcw size={40} color={colors.neutral[300]} />
+              <Text style={styles.emptyTitle}>No hay devoluciones registradas</Text>
+              <Text style={styles.emptySub}>
+                Cuando un cliente cambie producto por caducidad o daño, regístralo con el botón superior.
+              </Text>
             </View>
           ) : (
-            clientesList.map((c) => (
-              <TouchableOpacity key={c.id} onPress={() => setClienteId(c.id)}>
-                <View style={styles.optionCard}><Text style={styles.optionText}>{c.nombre}</Text></View>
-              </TouchableOpacity>
-            ))
-          )}
+            devoluciones.map((dev) => {
+              const fechaStr = new Date(dev.fechaHora || Date.now()).toLocaleTimeString('es-MX', {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
 
-          {cliente && (
-            <>
-              <Text style={styles.sectionLabel}>2. Producto</Text>
-              {producto ? (
-                <View style={styles.selectedCard}>
-                  <Text style={styles.selectedText}>{producto.nombre}</Text>
-                  <TouchableOpacity onPress={() => setProductoId(null)}><Text style={styles.changeText}>Cambiar</Text></TouchableOpacity>
-                </View>
-              ) : (
-                productosList.map((p) => (
-                  <TouchableOpacity key={p.id} onPress={() => setProductoId(p.id)}>
-                    <View style={styles.optionCard}>
-                      <Text style={styles.optionText}>{p.nombre}</Text>
-                      <Text style={styles.optionSub}>{p.existencia} {p.unidad || 'pzas'} disp.</Text>
+              return (
+                <View key={dev.id} style={[styles.devCard, shadows.card]}>
+                  <View style={styles.devCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <Text style={styles.motivoBadge}>{dev.motivo}</Text>
+                        <Text style={styles.destinoBadge}>Destino: {dev.destino || 'Merma'}</Text>
+                      </View>
+                      <Text style={styles.devCliente}>{dev.clienteNombre || dev.cliente}</Text>
+                      <Text style={styles.devProd}>{dev.productoNombre || dev.producto}</Text>
                     </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.cantText}>
+                        {dev.cantidad} {dev.cantidad === 1 ? 'pieza' : 'piezas'}
+                      </Text>
+                      <Text style={styles.devTotal}>{formatCurrency(dev.total || 0)}</Text>
+                      <Text style={styles.horaText}>{fechaStr}</Text>
+                    </View>
+                  </View>
+
+                  {dev.observaciones ? (
+                    <Text style={styles.observacionesText}>Nota: {dev.observaciones}</Text>
+                  ) : null}
+                </View>
+              );
+            })
           )}
-
-          {producto && (
-            <>
-              <Text style={styles.sectionLabel}>3. Cantidad ({producto.unidad || 'piezas'})</Text>
-              <View style={styles.qtyInputWrap}>
-                <TextInput style={styles.qtyInput} placeholder="0" placeholderTextColor={colors.neutral[300]} value={cantidad} onChangeText={setCantidad} keyboardType="decimal-pad" />
-                <Text style={styles.qtyUnit}>{producto.unidad || 'piezas'}</Text>
-              </View>
-
-              <Text style={styles.sectionLabel}>4. Motivo</Text>
-              <View style={styles.optionsWrap}>
-                {motivos.map((m) => (
-                  <TouchableOpacity key={m} style={[styles.optChip, motivo === m && styles.optChipActive]} onPress={() => setMotivo(m)}>
-                    <Text style={[styles.optChipText, motivo === m && styles.optChipTextActive]}>{m}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.sectionLabel}>5. Destino</Text>
-              <View style={styles.destinosRow}>
-                {destinos.map((d) => (
-                  <TouchableOpacity key={d} style={[styles.destinoBtn, destino === d && styles.destinoBtnActive]} onPress={() => setDestino(d)}>
-                    <Text style={[styles.destinoText, destino === d && styles.destinoTextActive]}>{d}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity style={styles.registrarBtn} onPress={handleRegistrar}>
-                <RotateCcw size={20} color={colors.neutral[0]} />
-                <Text style={styles.registrarBtnText}>Registrar devolución</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  const itemsToRender = devolucionesList;
-
-  return (
-    <View style={styles.container}>
-      <ScreenHeader title="Devoluciones" onBack={() => router.back()} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        <TouchableOpacity style={styles.nuevaBtn} onPress={() => setStep('nueva')}>
-          <RotateCcw size={20} color={colors.neutral[0]} />
-          <Text style={styles.nuevaBtnText}>Nueva devolución</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.sectionLabel}>Historial de devoluciones</Text>
-        {itemsToRender.map((d: any) => {
-          const clienteNombre = d.clienteNombre || d.cliente || 'Cliente';
-          const productoNombre = d.productoNombre || d.producto || 'Producto';
-          const destinoLabel = d.destino || 'Merma';
-          const fechaStr = d.fechaHora ? new Date(d.fechaHora).toLocaleDateString() : d.fecha || 'Hoy';
-
-          return (
-            <Card key={d.id || d.folio} style={styles.devCard}>
-              <View style={styles.devTop}>
-                <Text style={styles.devCliente}>{clienteNombre}</Text>
-                <Badge label={destinoLabel} color={destinoLabel === 'Merma' ? 'rojo' : destinoLabel === 'Cambio' ? 'amber' : 'verde'} />
-              </View>
-              <Text style={styles.devProducto}>{d.cantidad} {d.presentacionTipo || d.unidad || 'pzas'} · {productoNombre}</Text>
-              <View style={styles.devBottom}>
-                <Text style={styles.devMotivo}>{d.motivo}</Text>
-                <Text style={styles.devFecha}>{fechaStr}</Text>
-              </View>
-            </Card>
-          );
-        })}
+        </View>
       </ScrollView>
-    </View>
+
+      {/* Modal Registrar Devolución */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, shadows.floating]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Registrar Devolución / Cambio</Text>
+                <Text style={styles.modalSubtitle}>Recepción de producto del cliente</Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
+                <X size={20} color={colors.neutral[600]} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Seleccionar Cliente */}
+              <Text style={styles.inputLabel}>Cliente:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                {clientes.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => setSelectedClienteId(c.id)}
+                    style={[styles.selectorChip, selectedClienteId === c.id && styles.selectorChipActive]}
+                  >
+                    <Text style={[styles.selectorChipText, selectedClienteId === c.id && styles.selectorChipTextActive]}>
+                      {c.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Seleccionar Producto */}
+              <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Producto devuelto:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                {productos.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => setSelectedProductoId(p.id)}
+                    style={[styles.selectorChip, selectedProductoId === p.id && styles.selectorChipActive]}
+                  >
+                    <Text style={[styles.selectorChipText, selectedProductoId === p.id && styles.selectorChipTextActive]}>
+                      {p.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Cantidad */}
+              <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Cantidad de piezas:</Text>
+              <TextInput
+                value={cantidad}
+                onChangeText={setCantidad}
+                keyboardType="numeric"
+                style={styles.textInput}
+                placeholder="1"
+              />
+
+              {/* Motivo */}
+              <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Motivo de la devolución:</Text>
+              <View style={styles.optionsRow}>
+                {(['Producto dañado', 'Caducado', 'Cambio', 'Otro'] as const).map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setMotivo(m)}
+                    style={[styles.optionBtn, motivo === m && styles.optionBtnActive]}
+                  >
+                    <Text style={[styles.optionBtnText, motivo === m && styles.optionBtnTextActive]}>
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Destino físico */}
+              <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Destino físico de la pieza:</Text>
+              <View style={styles.optionsRow}>
+                {(['Merma', 'Inventario', 'Cambio'] as const).map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    onPress={() => setDestino(d)}
+                    style={[styles.optionBtn, destino === d && styles.optionBtnActive]}
+                  >
+                    <Text style={[styles.optionBtnText, destino === d && styles.optionBtnTextActive]}>
+                      {d}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Resolución con el cliente */}
+              <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Resolución con el cliente:</Text>
+              <View style={styles.optionsRow}>
+                {[
+                  { id: 'CambioFisico', label: 'Cambio Físico' },
+                  { id: 'SaldoAFavor', label: 'Saldo a Favor' },
+                  { id: 'Efectivo', label: 'Efectivo' },
+                ].map((r) => (
+                  <TouchableOpacity
+                    key={r.id}
+                    onPress={() => setMetodoReembolso(r.id as any)}
+                    style={[styles.optionBtn, metodoReembolso === r.id && styles.optionBtnActive]}
+                  >
+                    <Text style={[styles.optionBtnText, metodoReembolso === r.id && styles.optionBtnTextActive]}>
+                      {r.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Observaciones */}
+              <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Observaciones (opcional):</Text>
+              <TextInput
+                value={observaciones}
+                onChangeText={setObservaciones}
+                style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
+                placeholder="Detalles del lote, daño o acuerdo..."
+                multiline
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.cancelBtn}
+                disabled={isSaving}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleGuardarDevolucion}
+                disabled={isSaving}
+                style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Guardar Devolución</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.neutral[50] },
-  nuevaBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.primary[600], margin: spacing.md, borderRadius: radius.md, paddingVertical: spacing.md + 2 },
-  nuevaBtnText: { color: colors.neutral[0], fontSize: fontSize.md, fontWeight: fontWeight.bold },
-  sectionLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.neutral[700], paddingHorizontal: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm },
-  optionCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.neutral[0], marginHorizontal: spacing.md, marginBottom: spacing.sm, borderRadius: radius.md, padding: spacing.md, ...shadows.card },
-  optionText: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.neutral[900] },
-  optionSub: { fontSize: fontSize.xs, color: colors.neutral[400] },
-  selectedCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primary[50], marginHorizontal: spacing.md, borderRadius: radius.md, padding: spacing.md, borderWidth: 2, borderColor: colors.primary[600] },
-  selectedText: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.primary[700] },
-  changeText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.primary[600] },
-  qtyInputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.neutral[0], marginHorizontal: spacing.md, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderWidth: 2, borderColor: colors.primary[600], ...shadows.card },
-  qtyInput: { flex: 1, fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.neutral[900] },
-  qtyUnit: { fontSize: fontSize.sm, color: colors.neutral[400] },
-  optionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.md },
-  optChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderRadius: radius.md, backgroundColor: colors.neutral[100] },
-  optChipActive: { backgroundColor: colors.primary[600] },
-  optChipText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600] },
-  optChipTextActive: { color: colors.neutral[0] },
-  destinosRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.md },
-  destinoBtn: { flex: 1, backgroundColor: colors.neutral[100], borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' },
-  destinoBtnActive: { backgroundColor: colors.primary[600] },
-  destinoText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600] },
-  destinoTextActive: { color: colors.neutral[0] },
-  registrarBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.error[500], marginHorizontal: spacing.md, marginTop: spacing.lg, borderRadius: radius.md, paddingVertical: spacing.md + 2 },
-  registrarBtnText: { color: colors.neutral[0], fontSize: fontSize.md, fontWeight: fontWeight.bold },
-  devCard: { marginBottom: spacing.sm },
-  devTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs + 2 },
-  devCliente: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.neutral[900] },
-  devProducto: { fontSize: fontSize.sm, color: colors.neutral[600] },
-  devBottom: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.neutral[100], paddingTop: spacing.sm },
-  devMotivo: { fontSize: fontSize.xs, color: colors.neutral[500] },
-  devFecha: { fontSize: fontSize.xs, color: colors.neutral[400] },
-  confirmContent: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
-  successIcon: { marginBottom: spacing.md },
-  confirmTitle: { fontSize: fontSize.xxl, fontWeight: fontWeight.bold, color: colors.neutral[900] },
-  confirmCard: { backgroundColor: colors.neutral[0], width: '100%', borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.lg, ...shadows.card },
-  confirmRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm - 2, borderBottomWidth: 1, borderBottomColor: colors.neutral[100] },
-  confirmLabel: { fontSize: fontSize.sm, color: colors.neutral[500] },
-  confirmValue: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[900] },
-  confirmBtn: { backgroundColor: colors.primary[600], width: '100%', borderRadius: radius.md, paddingVertical: spacing.md + 2, alignItems: 'center', marginTop: spacing.lg },
-  confirmBtnText: { color: colors.neutral[0], fontSize: fontSize.md, fontWeight: fontWeight.bold },
+  scroll: {
+    paddingBottom: 100,
+  },
+  createBtnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.md,
+  },
+  createBtnHeaderText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  kpisRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  kpiLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[500],
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+    marginTop: 2,
+  },
+  kpiSub: {
+    fontSize: 9,
+    color: colors.neutral[400],
+    marginTop: 1,
+  },
+  listSection: {
+    paddingHorizontal: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[800],
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  loadingBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: fontSize.sm,
+    color: colors.neutral[500],
+  },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[700],
+    marginTop: spacing.sm,
+  },
+  emptySub: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[400],
+    textAlign: 'center',
+  },
+  devCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  devCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  motivoBadge: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.error[700],
+    backgroundColor: colors.error[50],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  destinoBadge: {
+    fontSize: 10,
+    color: colors.neutral[600],
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  devCliente: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+    marginTop: 2,
+  },
+  devProd: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    marginTop: 1,
+  },
+  cantText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+  },
+  devTotal: {
+    fontSize: fontSize.sm,
+    fontWeight: '900',
+    color: colors.neutral[900],
+  },
+  horaText: {
+    fontSize: 10,
+    color: colors.neutral[400],
+    marginTop: 2,
+  },
+  observacionesText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: colors.neutral[500],
+    marginTop: spacing.xs + 2,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  modalCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xxl,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  modalSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  inputLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[700],
+    marginBottom: 4,
+  },
+  chipsScroll: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  selectorChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  selectorChipActive: {
+    backgroundColor: colors.primary[700],
+    borderColor: colors.primary[700],
+  },
+  selectorChipText: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[700],
+    fontWeight: fontWeight.medium,
+  },
+  selectorChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.bold,
+  },
+  textInput: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.neutral[900],
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  optionBtn: {
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  optionBtnActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
+  },
+  optionBtnText: {
+    fontSize: 11,
+    fontWeight: fontWeight.medium,
+    color: colors.neutral[700],
+  },
+  optionBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.bold,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.neutral[100],
+  },
+  cancelBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[700],
+  },
+  saveBtn: {
+    flex: 2,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[600],
+  },
+  saveBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: '#FFFFFF',
+  },
 });

@@ -25,7 +25,7 @@ const defaultCliente: Cliente = {
   nombre: 'Venta de Mostrador / General',
   propietario: 'Cliente General',
   direccion: 'Venta directa en ruta',
-  ruta: 'Ruta Centro',
+  ruta: 'Ruta Lunes',
   diasVisita: ['Lun', 'Mié', 'Vie'],
   saldo: 0,
   limiteCredito: 0,

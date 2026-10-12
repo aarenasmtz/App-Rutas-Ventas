@@ -38,7 +38,7 @@ const defaultCliente: Cliente = {
   nombre: 'Venta de Mostrador / General',
   propietario: 'Cliente General',
   direccion: 'Venta directa en ruta',
-  ruta: 'Ruta Centro',
+  ruta: 'Ruta Lunes',
   diasVisita: ['Lun', 'Mié', 'Vie'],
   saldo: 0,
   limiteCredito: 0,
@@ -59,7 +59,9 @@ export default function ConfirmacionScreen() {
     carrito,
     clearCarrito,
     clienteActivoId,
+    setClienteActivoId,
     ultimoFolioVenta,
+    user,
   } = useApp();
 
   const [rawCliente, setRawCliente] = useState<Cliente | null>(null);
@@ -68,10 +70,37 @@ export default function ConfirmacionScreen() {
   useEffect(() => {
     if (clienteActivoId) {
       DataService.getClienteById(clienteActivoId).then((c: Cliente | undefined) => {
-        if (c) setRawCliente(c);
+        if (c) {
+          setRawCliente(c);
+          // Actualizar historial del cliente en memoria
+          const nuevaEntradaHistorial = {
+            id: ultimoFolioVenta || `F-${Date.now()}`,
+            fecha: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }),
+            total: ventaTotal,
+            items: carrito.map((i) => ({
+              productoNombre: i.producto.nombre,
+              cantidad: i.cantidad,
+              unidad: i.producto.unidad,
+            })),
+            estado: (pagos.some((p) => p.metodo === 'Crédito') ? 'Crédito' : 'Pagado') as any,
+          };
+          if (!c.historial) c.historial = [];
+          c.historial.unshift(nuevaEntradaHistorial);
+          c.estado = 'Venta realizada';
+          c.ultimaCompra = 'Hoy';
+        }
       });
     }
+
+    // Registrar evento en bitácora
+    DataService.registrarBitacora({
+      modulo: 'Ventas',
+      accion: 'Venta Registrada',
+      detalle: `Venta Folio ${ultimoFolioVenta || 'N/A'} por ${formatCurrency(ventaTotal)} a ${cliente.nombre}`,
+      usuario: user?.nombre || 'Miguel',
+    }).catch(() => {});
   }, [clienteActivoId]);
+
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [ticketImgUrl, setTicketImgUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
@@ -97,8 +126,8 @@ export default function ConfirmacionScreen() {
     clienteNombre: cliente.nombre,
     clientePropietario: cliente.propietario,
     clienteDireccion: cliente.direccion,
-    vendedorNombre: 'Miguel',
-    rutaNombre: cliente.ruta || 'Ruta Centro',
+    vendedorNombre: user?.nombre || 'Miguel',
+    rutaNombre: cliente.ruta || 'Ruta Lunes',
     items: carrito.map((item) => {
       const isWeight = Boolean(
         item.producto.precioPorPeso ||
@@ -185,11 +214,13 @@ export default function ConfirmacionScreen() {
 
   const handleNuevaVenta = () => {
     clearCarrito();
+    setClienteActivoId(null);
     router.replace('/(tabs)/venta');
   };
 
   const handleIrInicio = () => {
     clearCarrito();
+    setClienteActivoId(null);
     router.replace('/(tabs)');
   };
 

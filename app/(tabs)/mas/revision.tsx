@@ -20,6 +20,8 @@ import {
   Package,
   CheckCircle2,
   Clock,
+  RotateCcw,
+  ArrowRight,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockRevisionItems, DataService } from '@/services/mockDataService';
@@ -29,13 +31,18 @@ import type { RevisionItem } from '@/types';
 export default function RevisionInventarioScreen() {
   const router = useRouter();
   const [items, setItems] = useState<RevisionItem[]>([]);
+  const [devolucionesHoy, setDevolucionesHoy] = useState<any[]>([]);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const liveItems = await DataService.getRevisionItems();
+        const [liveItems, devs] = await Promise.all([
+          DataService.getRevisionItems(),
+          DataService.getDevoluciones(),
+        ]);
         setItems(liveItems ?? []);
+        setDevolucionesHoy(devs ?? []);
       } catch {
         // Fallback to initial
       }
@@ -225,6 +232,39 @@ export default function RevisionInventarioScreen() {
             </View>
           </View>
         </View>
+
+        {/* Banner de Devoluciones del Día en Ruta */}
+        {devolucionesHoy.length > 0 && (
+          <View style={[styles.devsBanner, shadows.card]}>
+            <View style={styles.devsHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <RotateCcw size={16} color={colors.error[600]} />
+                <Text style={styles.devsTitle}>
+                  Devoluciones de clientes hoy ({devolucionesHoy.reduce((s, d) => s + (d.cantidad || 0), 0)} pzas)
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/mas/devoluciones' as any)}
+                style={styles.devsLinkBtn}
+              >
+                <Text style={styles.devsLinkText}>Ver detalle</Text>
+                <ArrowRight size={12} color={colors.primary[700]} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.devsSub}>
+              Estas piezas regresaron a la unidad y justifican posibles sobrantes en tu revisión física:
+            </Text>
+            <View style={styles.devsChips}>
+              {devolucionesHoy.map((d, idx) => (
+                <View key={idx} style={styles.devChip}>
+                  <Text style={styles.devChipText}>
+                    📦 {d.cantidad}x {d.productoNombre || d.producto} · <Text style={{ fontStyle: 'italic' }}>{d.motivo}</Text> ({d.clienteNombre || d.cliente})
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Lista de productos a auditar */}
         <View style={styles.listSection}>
@@ -633,5 +673,61 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#15803d',
+  },
+  devsBanner: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error[500],
+  },
+  devsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  devsTitle: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  devsLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  devsLinkText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+  },
+  devsSub: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginBottom: spacing.xs + 2,
+  },
+  devsChips: {
+    gap: 4,
+  },
+  devChip: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  devChipText: {
+    fontSize: 11,
+    color: colors.neutral[800],
   },
 });

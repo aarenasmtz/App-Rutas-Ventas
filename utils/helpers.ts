@@ -54,3 +54,25 @@ export function todayDia(): 'Lun' | 'Mar' | 'Mié' | 'Jue' | 'Vie' | 'Sáb' | 'D
   const today = new Date();
   return days[today.getDay()];
 }
+
+export const RUTAS_SEMANALES = [
+  'Ruta Lunes',
+  'Ruta Martes',
+  'Ruta Miércoles',
+  'Ruta Jueves',
+  'Ruta Viernes',
+  'Ruta Sábado',
+] as const;
+
+export function getRutaDiaActual(): string {
+  const diaMap: Record<string, string> = {
+    Dom: 'Ruta Lunes',
+    Lun: 'Ruta Lunes',
+    Mar: 'Ruta Martes',
+    Mié: 'Ruta Miércoles',
+    Jue: 'Ruta Jueves',
+    Vie: 'Ruta Viernes',
+    Sáb: 'Ruta Sábado',
+  };
+  return diaMap[todayDia()] || 'Ruta Lunes';
+}

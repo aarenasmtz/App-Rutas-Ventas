@@ -24,9 +24,9 @@ type TabAtencion = 'Pendientes' | 'Atendidos' | 'Todos';
 
 const TRABAJADORES = [
   { id: 'todos', nombre: 'Todos', ruta: 'Todas las rutas' },
-  { id: '1', nombre: 'Juan Pérez', ruta: 'Ruta Centro' },
-  { id: '2', nombre: 'Pedro Ramírez', ruta: 'Ruta Norte' },
-  { id: '3', nombre: 'Carlos López', ruta: 'Ruta Sur' },
+  { id: '1', nombre: 'Juan Pérez', ruta: 'Ruta Lunes / Miércoles' },
+  { id: '2', nombre: 'Pedro Ramírez', ruta: 'Ruta Martes / Jueves' },
+  { id: '3', nombre: 'Carlos López', ruta: 'Ruta Viernes / Sábado' },
 ];
 
 export default function RutaScreen() {

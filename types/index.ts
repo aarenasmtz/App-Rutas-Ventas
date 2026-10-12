@@ -207,12 +207,29 @@ export type EstadoStock = 'Normal' | 'Bajo' | 'Agotado';
 export interface Devolucion {
   id: string;
   cliente: string;
+  clienteId?: string;
   producto: string;
+  productoId?: string;
   cantidad: number;
   unidad: Unidad;
   motivo: 'Producto dañado' | 'Caducidad' | 'Cambio' | 'Pedido incorrecto' | 'Otro';
   destino: 'Inventario' | 'Merma' | 'Cambio';
   fecha: string;
+  fechaHora?: string;
+  montoEstimado?: number;
+  usuario?: string;
+  observaciones?: string;
+}
+
+export interface GastoItem {
+  id: string;
+  categoria: 'Gasolina' | 'Casetas' | 'Alimentos' | 'Mantenimiento' | 'Otros';
+  concepto: string;
+  monto: number;
+  fechaHora: string;
+  usuario: string;
+  comprobante?: string;
+  ruta?: string;
 }
 
 export interface RevisionItem {

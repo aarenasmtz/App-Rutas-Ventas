@@ -21,6 +21,12 @@ import {
   Layers,
   Package,
   Boxes,
+  LayoutGrid,
+  List,
+  Star,
+  Sparkles,
+  Plus,
+  Store,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import {
@@ -81,6 +87,8 @@ export default function VentaScreen() {
   const [categoriaActiva, setCategoriaActiva] = useState('Todas');
   const [showQtyModal, setShowQtyModal] = useState<Producto | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'mosaico' | 'lista'>('mosaico');
 
   // Estados de datos vivos (VPS / fallback local)
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
@@ -137,12 +145,99 @@ export default function VentaScreen() {
 
   // Cliente activo
   const cliente = useMemo(() => {
+    if (!clienteActivoId) return null;
     return (
       effectiveClientes.find((c) => c.id === clienteActivoId) ||
-      effectiveClientes[0] ||
+
       null
     );
   }, [effectiveClientes, clienteActivoId]);
+
+  // Ranking dinámico de productos más vendidos / sugeridos por cliente
+  const sugeridosData = useMemo(() => {
+    const stats: Record<string, { count: number; totalQty: number; avgQty: number }> = {};
+
+    if (cliente) {
+      if (cliente.historial && cliente.historial.length > 0) {
+        cliente.historial.forEach((v) => {
+          if (v.items) {
+            v.items.forEach((it) => {
+              const prod = effectiveProductos.find(
+                (p) => p.nombre.toLowerCase().trim() === it.productoNombre.toLowerCase().trim()
+              );
+              const key = prod ? prod.id : it.productoNombre;
+              if (!stats[key]) stats[key] = { count: 0, totalQty: 0, avgQty: 0 };
+              stats[key].count += 1;
+              stats[key].totalQty += it.cantidad || 1;
+            });
+          }
+        });
+      }
+
+      if (cliente.sugerido && cliente.sugerido.length > 0) {
+        cliente.sugerido.forEach((s) => {
+          if (!stats[s.productoId]) {
+            stats[s.productoId] = { count: 3, totalQty: s.cantidad || 2, avgQty: s.cantidad || 2 };
+          } else {
+            stats[s.productoId].count += 2;
+            stats[s.productoId].totalQty += s.cantidad || 1;
+          }
+        });
+      }
+    }
+
+    Object.keys(stats).forEach((k) => {
+      const st = stats[k];
+      st.avgQty = Math.max(1, Math.round(st.totalQty / st.count));
+    });
+
+    const resultado = Object.entries(stats)
+      .sort((a, b) => b[1].count - a[1].count || b[1].totalQty - a[1].totalQty)
+      .map(([idOrName, st]) => {
+        const prod = effectiveProductos.find(
+          (p) => p.id === idOrName || p.nombre.toLowerCase().trim() === idOrName.toLowerCase().trim()
+        );
+        if (!prod) return null;
+        return {
+          producto: prod,
+          cantidadSugerida: st.avgQty,
+          frecuencia: st.count,
+          esTopCliente: true,
+          esSugeridoGeneral: false,
+        };
+      })
+      .filter(Boolean) as {
+        producto: Producto;
+        cantidadSugerida: number;
+        frecuencia: number;
+        esTopCliente: boolean;
+        esSugeridoGeneral: boolean;
+      }[];
+
+    if (resultado.length === 0 && effectiveProductos.length > 0) {
+      return effectiveProductos.slice(0, 4).map((p) => ({
+        producto: p,
+        cantidadSugerida: isProductoPorKilo(p) ? 1 : 2,
+        frecuencia: 1,
+        esTopCliente: false,
+        esSugeridoGeneral: true,
+      }));
+    }
+
+    return resultado;
+  }, [cliente, effectiveProductos]);
+
+  const sugeridosMap = useMemo(() => {
+    const map = new Map<string, {
+      producto: Producto;
+      cantidadSugerida: number;
+      frecuencia: number;
+      esTopCliente: boolean;
+      esSugeridoGeneral: boolean;
+    }>();
+    sugeridosData.forEach((s) => map.set(s.producto.id, s));
+    return map;
+  }, [sugeridosData]);
 
   // Productos frecuentes del cliente seleccionado
   const productosFrecuentes = useMemo(() => {
@@ -236,7 +331,16 @@ export default function VentaScreen() {
                 <ChevronRight size={14} color={colors.primary[600]} />
               </TouchableOpacity>
             ) : (
-              <Text style={styles.subtitle}>Selecciona productos para vender</Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setIsClientModalOpen(true)}
+                style={styles.clientSelectorRow}
+              >
+                <Text style={[styles.subtitle, { color: colors.warning[700], fontWeight: '600' }]}>
+                  ⚠️ Toca para seleccionar cliente
+                </Text>
+                <ChevronRight size={14} color={colors.warning[700]} />
+              </TouchableOpacity>
             )}
           </View>
           <ConnectivityIndicator />
@@ -260,7 +364,9 @@ export default function VentaScreen() {
         </View>
 
         {/* Categorías deslizables */}
-        <ScrollView
+        <View style={styles.controlsBar}>
+          <ScrollView
+            style={{ flex: 1 }}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.catsRow}
@@ -282,6 +388,21 @@ export default function VentaScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+          <View style={styles.viewModeToggle}>
+            <TouchableOpacity
+              style={[styles.viewModeBtn, viewMode === 'mosaico' && styles.viewModeBtnActive]}
+              onPress={() => setViewMode('mosaico')}
+            >
+              <LayoutGrid size={15} color={viewMode === 'mosaico' ? colors.primary[700] : colors.neutral[500]} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewModeBtn, viewMode === 'lista' && styles.viewModeBtnActive]}
+              onPress={() => setViewMode('lista')}
+            >
+              <List size={15} color={viewMode === 'lista' ? colors.primary[700] : colors.neutral[500]} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* ========================================================= */}
@@ -292,8 +413,96 @@ export default function VentaScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 110 }}
       >
-        {/* Frecuentes del cliente */}
-        {productosFrecuentes.length > 0 && !search && categoriaActiva === 'Todas' && (
+        {/* Banner para seleccionar cliente si no hay uno activo */}
+        {!cliente && (
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={styles.selectClientBanner}
+            onPress={() => setIsClientModalOpen(true)}
+          >
+            <View style={styles.selectClientIconCircle}>
+              <User size={22} color={colors.primary[600]} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.selectClientTitle}>Seleccionar Cliente de Ruta</Text>
+              <Text style={styles.selectClientSub}>
+                Toca aquí para asignar cliente o realizar venta de mostrador
+              </Text>
+            </View>
+            <View style={styles.selectClientActionBadge}>
+              <Text style={styles.selectClientActionText}>Elegir</Text>
+              <ChevronRight size={14} color={colors.primary[700]} />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Sección de Venta Sugerida (Top Productos del cliente / ruta) */}
+        {sugeridosData.length > 0 && !search && categoriaActiva === 'Todas' && (
+          <View style={styles.sugeridaSection}>
+            <View style={styles.sugeridaHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Sparkles size={16} color={colors.warning[600]} />
+                <Text style={styles.sugeridaTitle}>
+                  {cliente ? `Venta Sugerida · ${cliente.nombre}` : 'Venta Sugerida (Top Productos)'}
+                </Text>
+              </View>
+              <View style={styles.sugeridaBadge}>
+                <Text style={styles.sugeridaBadgeText}>
+                  {cliente && cliente.historial?.length ? 'Top más comprados' : 'Más vendidos'}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sugeridaScroll}
+            >
+              {sugeridosData.map((sug) => {
+                const isWeight = isProductoPorKilo(sug.producto);
+                const presBase = sug.producto.presentaciones?.[0];
+                const precio = presBase ? getPrecioPresentacion(sug.producto, presBase, cliente) : getPrecio(sug.producto);
+                const displayUnit = isWeight ? 'kg' : (sug.producto.unidad || 'pza');
+
+                return (
+                  <View key={'sug-' + sug.producto.id} style={styles.sugeridaCard}>
+                    <View style={styles.sugeridaCardTop}>
+                      <View style={styles.sugeridaStarBadge}>
+                        <Star size={11} color="#B45309" fill="#F59E0B" />
+                        <Text style={styles.sugeridaStarText}>
+                          {sug.esTopCliente ? 'Top Cliente' : 'Top Ruta'}
+                        </Text>
+                      </View>
+                      <Text style={styles.sugeridaCardPrice}>{formatCurrency(precio)}</Text>
+                    </View>
+
+                    <Text style={styles.sugeridaCardName} numberOfLines={2}>
+                      {sug.producto.nombre}
+                    </Text>
+
+                    <Text style={styles.sugeridaCardQty}>
+                      Sugerido: <Text style={{ fontWeight: '700', color: colors.neutral[900] }}>
+                        {sug.cantidadSugerida} {displayUnit}{sug.cantidadSugerida === 1 ? '' : 's'}
+                      </Text>
+                    </Text>
+
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.sugeridaAddBtn}
+                      onPress={() => handleAddProduct(sug.producto, sug.cantidadSugerida)}
+                    >
+                      <Plus size={13} color="#FFFFFF" strokeWidth={3} />
+                      <Text style={styles.sugeridaAddBtnText}>
+                        + Agregar {sug.cantidadSugerida}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+        {false && (
           <>
             <View style={styles.sectionLabelRow}>
               <Flame size={15} color={colors.warning[600]} />
@@ -314,9 +523,36 @@ export default function VentaScreen() {
         {/* Catálogo completo */}
         <View style={styles.sectionLabelRow}>
           <Clock size={15} color={colors.neutral[400]} />
-          <Text style={styles.sectionLabel}>Productos</Text>
+          <Text style={styles.sectionLabel}>
+            {categoriaActiva === 'Todas' ? 'Catálogo de Productos' : categoriaActiva} ({filtered.length})
+          </Text>
         </View>
-        {filtered.map((p) => (
+        {viewMode === 'mosaico' ? (
+          <View style={styles.mosaicGrid}>
+            {filtered.map((p) => (
+              <ProductGridCard
+                key={p.id}
+                producto={p}
+                precio={getPrecio(p)}
+                cliente={cliente}
+                sugerido={sugeridosMap.get(p.id)}
+                onPress={() => setShowQtyModal(p)}
+              />
+            ))}
+          </View>
+        ) : (
+          filtered.map((p) => (
+            <ProductRow
+              key={p.id}
+              producto={p}
+              precio={getPrecio(p)}
+              cliente={cliente}
+              sugerido={sugeridosMap.get(p.id)}
+              onPress={() => setShowQtyModal(p)}
+            />
+          ))
+        )}
+        {/*
           <ProductRow
             key={p.id}
             producto={p}
@@ -324,7 +560,7 @@ export default function VentaScreen() {
             cliente={cliente}
             onPress={() => setShowQtyModal(p)}
           />
-        ))}
+        */}
 
         {filtered.length === 0 && (
           <View style={styles.emptyWrap}>
@@ -388,9 +624,64 @@ export default function VentaScreen() {
           onPress={() => setIsClientModalOpen(false)}
         >
           <View style={styles.clientPickerCard}>
-            <Text style={styles.clientPickerTitle}>Seleccionar cliente</Text>
+            <View style={styles.clientPickerHeaderRow}>
+              <Text style={styles.clientPickerTitle}>Seleccionar cliente</Text>
+              <TouchableOpacity onPress={() => setIsClientModalOpen(false)}>
+                <X size={18} color={colors.neutral[500]} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Buscador de Clientes */}
+            <View style={styles.clientSearchWrap}>
+              <Search size={16} color={colors.neutral[400]} />
+              <TextInput
+                style={styles.clientSearchInput}
+                placeholder="Buscar cliente, dueño, ruta..."
+                placeholderTextColor={colors.neutral[400]}
+                value={clientSearch}
+                onChangeText={setClientSearch}
+              />
+              {clientSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setClientSearch('')}>
+                  <X size={14} color={colors.neutral[400]} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Opción Venta Mostrador */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[
+                styles.clientGeneralBtn,
+                clienteActivoId === 'general' && styles.clientGeneralBtnActive,
+              ]}
+              onPress={() => {
+                setClienteActivoId('general');
+                setIsClientModalOpen(false);
+              }}
+            >
+              <View style={styles.clientGeneralIcon}>
+                <Store size={18} color={colors.primary[700]} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.clientGeneralTitle}>Venta de Mostrador / General</Text>
+                <Text style={styles.clientGeneralSub}>Sin cuenta de crédito · Pago de contado</Text>
+              </View>
+              {clienteActivoId === 'general' && <Check size={18} color={colors.primary[600]} />}
+            </TouchableOpacity>
             <ScrollView style={{ maxHeight: 350 }}>
-              {effectiveClientes.map((c) => (
+              {effectiveClientes
+                .filter((c) => {
+                  if (!clientSearch) return true;
+                  const q = clientSearch.toLowerCase().trim();
+                  return (
+                    c.nombre.toLowerCase().includes(q) ||
+                    c.propietario?.toLowerCase().includes(q) ||
+                    c.direccion?.toLowerCase().includes(q) ||
+                    c.ruta?.toLowerCase().includes(q)
+                  );
+                })
+                .map((c) => (
                 <TouchableOpacity
                   key={c.id}
                   style={[
@@ -426,11 +717,13 @@ function ProductRow({
   producto,
   precio,
   cliente,
+  sugerido,
   onPress,
 }: {
   producto: Producto;
   precio: number;
   cliente: Cliente | null;
+  sugerido?: { cantidadSugerida: number; frecuencia: number; esTopCliente: boolean };
   onPress: () => void;
 }) {
   const isMultipres = Boolean(
@@ -466,7 +759,17 @@ function ProductRow({
           )}
         </View>
         <View style={styles.productInfo}>
-          <Text style={styles.productName}>{producto.nombre}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={styles.productName}>{producto.nombre}</Text>
+            {sugerido && (
+              <View style={styles.rowSugeridoBadge}>
+                <Star size={10} color="#B45309" fill="#F59E0B" />
+                <Text style={styles.rowSugeridoBadgeText}>
+                  {sugerido.esTopCliente ? 'Top Cliente' : 'Sugerido'}
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
             <Text style={styles.productCat}>{producto.categoria}</Text>
             {isMultipres && (
@@ -493,6 +796,92 @@ function ProductRow({
           <Text style={styles.productUnit}>/{presBase?.nombre || displayUnit}</Text>
         </View>
       </Card>
+    </TouchableOpacity>
+  );
+}
+
+// =========================================================
+// TARJETA DE PRODUCTO EN MOSAICO (DISEÑO EN CUADRÍCULA)
+// =========================================================
+function ProductGridCard({
+  producto,
+  precio,
+  cliente,
+  sugerido,
+  onPress,
+}: {
+  producto: Producto;
+  precio: number;
+  cliente: Cliente | null;
+  sugerido?: { cantidadSugerida: number; frecuencia: number; esTopCliente: boolean };
+  onPress: () => void;
+}) {
+  const isMultipres = Boolean(
+    producto.manejaMultiplesPresentaciones ||
+    (producto.presentaciones && producto.presentaciones.length > 1)
+  );
+  const isWeight = !isMultipres && isProductoPorKilo(producto);
+  const stockEstado = getStockEstado(producto.existencia, isWeight);
+  const stockColor =
+    stockEstado === 'Normal'
+      ? colors.success[600]
+      : stockEstado === 'Bajo'
+      ? colors.warning[600]
+      : colors.error[500];
+
+  const displayUnit = isWeight ? 'kg' : producto.unidad || 'pza';
+  const presBase = producto.presentaciones && producto.presentaciones.length > 0
+    ? producto.presentaciones[0]
+    : null;
+  const precioMostrar = presBase ? getPrecioPresentacion(producto, presBase, cliente) : precio;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      style={[styles.gridCard, sugerido && styles.gridCardSugerido]}
+    >
+      {sugerido && (
+        <View style={styles.gridSugeridoBadge}>
+          <Star size={10} color="#B45309" fill="#F59E0B" />
+          <Text style={styles.gridSugeridoBadgeText}>
+            {sugerido.esTopCliente ? 'Top Cliente' : 'Sugerido'}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.gridTopMeta}>
+        <Text style={styles.gridCatText} numberOfLines={1}>
+          {producto.marca || producto.categoria}
+        </Text>
+        {isMultipres && (
+          <View style={styles.gridMultiBadge}>
+            <Layers size={9} color={colors.primary[700]} />
+            <Text style={styles.gridMultiBadgeText}>Multi</Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={styles.gridNameText} numberOfLines={2}>
+        {producto.nombre}
+      </Text>
+
+      <View style={styles.gridStockRow}>
+        <View style={[styles.gridStockDot, { backgroundColor: stockColor }]} />
+        <Text style={[styles.gridStockText, { color: stockColor }]}>
+          {isWeight ? producto.existencia.toFixed(1) : producto.existencia} {displayUnit}s
+        </Text>
+      </View>
+
+      <View style={styles.gridBottomRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.gridPriceVal}>{formatCurrency(precioMostrar)}</Text>
+          <Text style={styles.gridPriceUnit}>/{presBase?.nombre || displayUnit}</Text>
+        </View>
+        <View style={styles.gridAddBtn}>
+          <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
+        </View>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -996,6 +1385,367 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: fontWeight.bold,
     color: colors.primary[700],
+  },
+  cambiarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginLeft: 6,
+  },
+  cambiarBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  controlsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  viewModeBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  viewModeBtnActive: {
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
+  },
+  selectClientBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    borderWidth: 1.5,
+    borderColor: colors.primary[300],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  selectClientIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  selectClientTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: colors.primary[900],
+  },
+  selectClientSub: {
+    fontSize: 11,
+    color: colors.primary[700],
+    marginTop: 2,
+  },
+  selectClientActionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  selectClientActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary[800],
+  },
+  sugeridaSection: {
+    marginBottom: spacing.md,
+    backgroundColor: '#FFFBEB',
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  sugeridaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  sugeridaTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  sugeridaBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  sugeridaBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  sugeridaScroll: {
+    gap: spacing.sm,
+    paddingVertical: 4,
+  },
+  sugeridaCard: {
+    width: 170,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    ...shadows.card,
+  },
+  sugeridaCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sugeridaStarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  sugeridaStarText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  sugeridaCardPrice: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    color: colors.neutral[800],
+  },
+  sugeridaCardName: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.neutral[900],
+    height: 32,
+    marginBottom: 2,
+  },
+  sugeridaCardQty: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginBottom: 6,
+  },
+  sugeridaAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.sm,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  sugeridaAddBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mosaicGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridCard: {
+    width: '48.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    ...shadows.card,
+  },
+  gridCardSugerido: {
+    borderColor: '#F59E0B',
+    borderWidth: 1.5,
+    backgroundColor: '#FFFDF5',
+  },
+  gridSugeridoBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    zIndex: 1,
+  },
+  gridSugeridoBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  gridTopMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    paddingRight: 20,
+  },
+  gridCatText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary[700],
+    textTransform: 'uppercase',
+  },
+  gridMultiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  gridMultiBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  gridNameText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.neutral[900],
+    height: 38,
+    marginBottom: 4,
+  },
+  gridStockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  gridStockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  gridStockText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  gridBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    paddingTop: 6,
+  },
+  gridPriceVal: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  gridPriceUnit: {
+    fontSize: 10,
+    color: colors.neutral[500],
+  },
+  gridAddBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowSugeridoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+    marginLeft: 4,
+  },
+  rowSugeridoBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  clientPickerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  clientSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  clientSearchInput: {
+    flex: 1,
+    fontSize: fontSize.xs + 1,
+    color: colors.neutral[900],
+    padding: 0,
+  },
+  clientGeneralBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  clientGeneralBtnActive: {
+    borderColor: colors.primary[600],
+    borderWidth: 1.5,
+  },
+  clientGeneralIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clientGeneralTitle: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: '800',
+    color: colors.primary[900],
+  },
+  clientGeneralSub: {
+    fontSize: 10,
+    color: colors.primary[700],
+    marginTop: 1,
   },
 });
 

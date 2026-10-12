@@ -44,6 +44,7 @@ export default function CorteScreen() {
   const router = useRouter();
   const [cortesList, setCortesList] = useState<CorteTrabajador[]>(mockCortesTrabajadores);
   const [selectedTrabajador, setSelectedTrabajador] = useState<CorteTrabajador | null>(null);
+  const [fondoInicial, setFondoInicial] = useState('500');
   const [efectivoContado, setEfectivoContado] = useState('');
   const [cerrando, setCerrando] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
@@ -55,7 +56,8 @@ export default function CorteScreen() {
         setCortesList(data);
         if (!selectedTrabajador) {
           setSelectedTrabajador(data[0]);
-          setEfectivoContado(data[0].efectivoEsperado.toString());
+          const ini = 500;
+          setEfectivoContado((data[0].efectivoEsperado + ini).toString());
         }
       }
     } catch {
@@ -67,26 +69,32 @@ export default function CorteScreen() {
     loadCortes();
   }, []);
 
+  const currentTrabajador = selectedTrabajador || cortesList[0] || null;
+
+  const fondoInicialNum = parseFloat(fondoInicial) || 0;
+  const efectivoVentas = currentTrabajador ? currentTrabajador.efectivo : 0;
+  const abonosCobranza = currentTrabajador ? currentTrabajador.abonosCobranza : 0;
+  const gastosRuta = currentTrabajador ? currentTrabajador.gastos : 0;
+  const esperadoNum = fondoInicialNum + efectivoVentas + abonosCobranza - gastosRuta;
+
   useEffect(() => {
     if (!selectedTrabajador && cortesList.length > 0) {
       setSelectedTrabajador(cortesList[0]);
-      setEfectivoContado(cortesList[0].efectivoEsperado.toString());
+      setEfectivoContado(esperadoNum.toString());
     }
   }, [cortesList]);
 
   const handleSelectTrabajador = (t: CorteTrabajador) => {
     setSelectedTrabajador(t);
-    setEfectivoContado(t.efectivoEsperado.toString());
+    const esp = fondoInicialNum + (t.efectivo || 0) + (t.abonosCobranza || 0) - (t.gastos || 0);
+    setEfectivoContado(esp.toString());
   };
 
-  const currentTrabajador = selectedTrabajador || cortesList[0] || null;
-
   const totalVentasDia = cortesList.reduce((acc, c) => acc + (c.ventasTotales || 0), 0);
-  const totalEfectivoGlobal = cortesList.reduce((acc, c) => acc + (c.efectivoEsperado || 0), 0);
+  const totalEfectivoGlobal = cortesList.reduce((acc, c) => acc + (c.efectivoEsperado || 0), 0) + fondoInicialNum;
   const totalCobradoGlobal = cortesList.reduce((acc, c) => acc + (c.abonosCobranza || 0), 0);
 
   const contadoNum = parseFloat(efectivoContado) || 0;
-  const esperadoNum = currentTrabajador ? currentTrabajador.efectivoEsperado : 0;
   const diferenciaCalculada = contadoNum - esperadoNum;
   const isCuadrado = Math.abs(diferenciaCalculada) < 0.01;
 
@@ -242,6 +250,42 @@ export default function CorteScreen() {
                 </View>
               </View>
 
+              {/* FONDO INICIAL DE RUTA */}
+              <View style={styles.fondoInicialCard}>
+                <View style={styles.fondoInicialTop}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <Banknote size={16} color={colors.primary[700]} />
+                    <Text style={styles.fondoInicialTitle}>Efectivo Inicial de Ruta (Fondo para Cambio)</Text>
+                  </View>
+                  <View style={styles.fondoInicialInputWrap}>
+                    <Text style={styles.fondoInicialCurrency}>$</Text>
+                    <TextInput
+                      value={fondoInicial}
+                      onChangeText={setFondoInicial}
+                      keyboardType="numeric"
+                      style={styles.fondoInicialInput}
+                      placeholder="500"
+                    />
+                  </View>
+                </View>
+                <Text style={styles.fondoInicialHelp}>
+                  Dinero en efectivo entregado a {currentTrabajador.nombre} al iniciar su jornada para dar cambio a clientes.
+                </Text>
+                <View style={styles.fondoChipsRow}>
+                  {[200, 300, 500, 1000].map((m) => (
+                    <TouchableOpacity
+                      key={m}
+                      onPress={() => setFondoInicial(m.toString())}
+                      style={[styles.fondoChip, fondoInicial === m.toString() && styles.fondoChipActive]}
+                    >
+                      <Text style={[styles.fondoChipText, fondoInicial === m.toString() && styles.fondoChipTextActive]}>
+                        ${m}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
               {/* GRID DE MÉTODOS DE PAGO Y FLUJO */}
               <Text style={styles.subTitleText}>Desglose Financiero por Canal:</Text>
               <View style={styles.breakdownGrid}>
@@ -315,11 +359,13 @@ export default function CorteScreen() {
               {/* BARRA DE TOTALES Y ENTREGA DE EFECTIVO */}
               <View style={styles.totalExpectedBox}>
                 <View style={styles.totalExpectedLeft}>
-                  <Text style={styles.totalExpectedLabel}>EFECTIVO ESPERADO A ENTREGAR</Text>
-                  <Text style={styles.totalExpectedSub}>(Efectivo ventas + Cobranza - Gastos)</Text>
+                  <Text style={styles.totalExpectedLabel}>EFECTIVO ESPERADO EN CAJA (TIEMPO REAL)</Text>
+                  <Text style={styles.totalExpectedSub}>
+                    Fondo (${fondoInicialNum}) + Ventas (${efectivoVentas}) + Cobranza (${abonosCobranza}) - Gastos (${gastosRuta})
+                  </Text>
                 </View>
                 <Text style={styles.totalExpectedAmount}>
-                  {formatCurrency(currentTrabajador.efectivoEsperado)}
+                  {formatCurrency(esperadoNum)}
                 </Text>
               </View>
 
@@ -331,7 +377,7 @@ export default function CorteScreen() {
                     <Text style={styles.arqueoTitle}>Arqueo Físico en Mano</Text>
                   </View>
                   <TouchableOpacity
-                    onPress={() => handleSetQuickCash(currentTrabajador.efectivoEsperado)}
+                    onPress={() => handleSetQuickCash(esperadoNum)}
                     style={styles.cuadrarExactoBtn}
                   >
                     <Text style={styles.cuadrarExactoText}>Cuadrar exacto</Text>
@@ -938,5 +984,79 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
     fontSize: fontSize.sm,
     fontWeight: '800',
+  },
+  fondoInicialCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fondoInicialTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  fondoInicialTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.neutral[800],
+  },
+  fondoInicialInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: colors.primary[400],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    minWidth: 100,
+  },
+  fondoInicialCurrency: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.primary[700],
+    marginRight: 2,
+  },
+  fondoInicialInput: {
+    fontSize: fontSize.base,
+    fontWeight: '800',
+    color: colors.neutral[900],
+    padding: 0,
+    minWidth: 60,
+  },
+  fondoInicialHelp: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginBottom: spacing.sm,
+  },
+  fondoChipsRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  fondoChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  fondoChipActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  fondoChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.neutral[700],
+  },
+  fondoChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

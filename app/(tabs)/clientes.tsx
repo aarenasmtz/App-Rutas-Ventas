@@ -48,10 +48,17 @@ export default function ClientesScreen() {
   const [search, setSearch] = useState('');
   const [tabAtencion, setTabAtencion] = useState<'Pendientes' | 'Atendidos' | 'Todos'>('Pendientes');
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
-  const [rutasDisponibles, setRutasDisponibles] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
+  const [rutasDisponibles, setRutasDisponibles] = useState<string[]>([
+    'Ruta Lunes',
+    'Ruta Martes',
+    'Ruta Miércoles',
+    'Ruta Jueves',
+    'Ruta Viernes',
+    'Ruta Sábado',
+  ]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Modal ABC Cliente
+  // Modal Cliente
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formNombre, setFormNombre] = useState('');
@@ -59,7 +66,7 @@ export default function ClientesScreen() {
   const [formDireccion, setFormDireccion] = useState('');
   const [formColonia, setFormColonia] = useState('Centro');
   const [formTelefono, setFormTelefono] = useState('');
-  const [formRuta, setFormRuta] = useState('Ruta Centro');
+  const [formRuta, setFormRuta] = useState('Ruta Lunes');
   const [formDias, setFormDias] = useState<DiaVisita[]>(['Lun', 'Mié', 'Vie']);
   const [formLimiteCredito, setFormLimiteCredito] = useState('5000');
   const [formSaldo, setFormSaldo] = useState('0');
@@ -326,7 +333,7 @@ export default function ClientesScreen() {
   return (
     <AppShell>
       <PageHeader
-        title="ABC de Clientes"
+        title="Cartera de Clientes"
         subtitle={`${filtered.length} negocios registrados en León, Guanajuato`}
         right={
           <TouchableOpacity activeOpacity={0.8} onPress={handleOpenCreate} style={styles.createBtnHeader}>

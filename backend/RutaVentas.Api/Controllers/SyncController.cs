@@ -182,7 +182,19 @@ public class SyncController : ControllerBase
                             continue;
                         }
 
-                        var cliente = await _db.Clientes.FirstOrDefaultAsync(c => c.Codigo == ventaDto.ClienteId || c.Id.ToString() == ventaDto.ClienteId);
+                        string cleanCId = (ventaDto.ClienteId ?? "").Trim().ToLower();
+                        string numOnlyCId = cleanCId.StartsWith("c") ? cleanCId.Substring(1) : cleanCId;
+                        var cliente = await _db.Clientes.FirstOrDefaultAsync(c =>
+                            c.Codigo.ToLower() == cleanCId ||
+                            c.Id.ToString() == cleanCId ||
+                            c.Id.ToString() == numOnlyCId ||
+                            c.Nombre.ToLower() == cleanCId);
+
+                        if (cliente == null)
+                        {
+                            cliente = await _db.Clientes.FirstOrDefaultAsync(c => c.Activo) ?? await _db.Clientes.FirstOrDefaultAsync();
+                        }
+
                         if (cliente == null)
                         {
                             response.ConError++;
@@ -234,9 +246,16 @@ public class SyncController : ControllerBase
                         {
                             foreach (var item in ventaDto.Items)
                             {
+                                string cleanPId = (item.ProductoId ?? "").Trim().ToLower();
+                                string numOnlyPId = cleanPId.StartsWith("p") ? cleanPId.Substring(1) : cleanPId;
                                 var prod = await _db.Productos
                                     .Include(p => p.Presentaciones)
-                                    .FirstOrDefaultAsync(p => p.Codigo == item.ProductoId || p.Id.ToString() == item.ProductoId);
+                                    .FirstOrDefaultAsync(p =>
+                                        p.Codigo.ToLower() == cleanPId ||
+                                        p.Id.ToString() == cleanPId ||
+                                        p.Id.ToString() == numOnlyPId ||
+                                        (p.Sku != null && p.Sku.ToLower() == cleanPId) ||
+                                        p.Nombre.ToLower().Contains(cleanPId));
                                 if (prod != null)
                                 {
                                     var pres = prod.Presentaciones?.FirstOrDefault(pr =>

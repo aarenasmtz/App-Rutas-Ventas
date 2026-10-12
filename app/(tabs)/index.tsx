@@ -18,10 +18,13 @@ import {
   LogOut,
   Bell,
   Database,
+  FileText,
+  RotateCcw,
+  Fuel,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { formatCurrency } from '@/utils/helpers';
+import { formatCurrency, getRutaDiaActual, todayDia } from '@/utils/helpers';
 import {
   AppShell,
   DashboardTile,
@@ -46,6 +49,8 @@ export default function HomeScreen() {
     clienteCercano: null as any,
   });
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [clientesHoyCount, setClientesHoyCount] = useState(0);
+  const [clientesVisitadosCount, setClientesVisitadosCount] = useState(0);
 
   // Fecha dinámica real en español
   const fechaHoy = new Date().toLocaleDateString('es-MX', {
@@ -54,19 +59,42 @@ export default function HomeScreen() {
     month: 'long',
   });
   const fechaHoyFormateada = fechaHoy.charAt(0).toUpperCase() + fechaHoy.slice(1);
+  const rutaDelDia = user?.rutaNombre || getRutaDiaActual();
 
   useEffect(() => {
     let isMounted = true;
     const fetchDashboard = async () => {
       try {
-        const live = await DataService.getDashboardResumen();
-        if (isMounted && live) {
-          setResumen((prev) => ({
-            ...prev,
-            ...live,
-            clienteCercano: live.clienteCercano || prev.clienteCercano,
-          }));
-          setIsLiveConnected(true);
+        const [live, clientes] = await Promise.all([
+          DataService.getDashboardResumen(),
+          DataService.getClientes(),
+        ]);
+
+        if (isMounted) {
+          if (live) {
+            setResumen((prev) => ({
+              ...prev,
+              ...live,
+              clienteCercano: live.clienteCercano || prev.clienteCercano,
+            }));
+            setIsLiveConnected(true);
+          }
+
+          if (clientes && clientes.length > 0) {
+            const diaCode = todayDia();
+            const rutaActualNombre = user?.rutaNombre || getRutaDiaActual();
+            const hoyLista = clientes.filter(
+              (c) =>
+                c.activo !== false &&
+                (c.diasVisita?.includes(diaCode) || c.ruta === rutaActualNombre)
+            );
+            const countHoy = hoyLista.length > 0 ? hoyLista.length : clientes.filter(c => c.activo !== false).length;
+            const visitados = hoyLista.filter(
+              (c) => c.estado === 'Venta realizada' || c.estado === 'Visitado'
+            ).length;
+            setClientesHoyCount(countHoy);
+            setClientesVisitadosCount(visitados);
+          }
         }
       } catch {
         // Fallback
@@ -74,7 +102,7 @@ export default function HomeScreen() {
     };
     fetchDashboard();
     return () => { isMounted = false; };
-  }, []);
+  }, [user?.rutaNombre]);
 
   // Siguiente cliente o cercano para venta rápida
   const clienteCercano = resumen.clienteCercano || null;
@@ -95,7 +123,7 @@ export default function HomeScreen() {
             <View>
               <Text style={styles.greeting}>Hola, {user?.nombre || 'Miguel'}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                <Text style={styles.date}>{fechaHoyFormateada} · {user?.rutaNombre || 'Ruta Centro'}</Text>
+                <Text style={styles.date}>{fechaHoyFormateada} · {rutaDelDia}</Text>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -116,7 +144,7 @@ export default function HomeScreen() {
                     fontWeight: '700',
                     color: isLiveConnected ? colors.success[700] : colors.neutral[600]
                   }}>
-                    {isLiveConnected ? 'API .NET 9' : 'Offline'}
+                    {isLiveConnected ? 'En línea' : 'Offline'}
                   </Text>
                 </View>
               </View>
@@ -171,7 +199,7 @@ export default function HomeScreen() {
             <Truck size={15} color={colors.neutral[600]} />
             <View>
               <Text style={styles.kpiMiniLabel}>Ruta avance</Text>
-              <Text style={styles.kpiMiniVal}>{resumen.clientesVisitados} de {resumen.clientesTotalRuta} visitas</Text>
+              <Text style={styles.kpiMiniVal}>{clientesVisitadosCount} de {clientesHoyCount || resumen.clientesTotalRuta || 1} visitas</Text>
             </View>
           </View>
         </View>
@@ -226,7 +254,7 @@ export default function HomeScreen() {
               title="CLIENTES"
               subtitle="Cartera y saldos"
               icon={<Users size={24} color={colors.primary[600]} />}
-              badge="5 hoy"
+              badge={`${clientesHoyCount || 0} hoy`}
               onPress={() => router.push('/(tabs)/clientes')}
             />
 
@@ -241,7 +269,7 @@ export default function HomeScreen() {
             />
           </View>
 
-          {/* 4. RUTA y COBRANZA */}
+          {/* 4. RUTA y VENTAS */}
           <View style={styles.gridRow}>
             <DashboardTile
               title={isAdmin ? 'RUTAS' : 'MI RUTA'}
@@ -251,6 +279,40 @@ export default function HomeScreen() {
             />
 
             <DashboardTile
+              title="VENTAS"
+              subtitle="Historial y tickets"
+              icon={<FileText size={24} color={colors.primary[600]} />}
+              color={colors.primary[600]}
+              bgColor={colors.primary[50]}
+              badge="Detalle"
+              onPress={() => router.push('/(tabs)/mas/ventas' as any)}
+            />
+          </View>
+
+          {/* 5. DEVOLUCIONES y GASTOS */}
+          <View style={styles.gridRow}>
+            <DashboardTile
+              title="DEVOLUCIONES"
+              subtitle="Cambios a clientes"
+              icon={<RotateCcw size={24} color={colors.error[600]} />}
+              color={colors.error[600]}
+              bgColor={colors.error[50]}
+              onPress={() => router.push('/(tabs)/mas/devoluciones' as any)}
+            />
+
+            <DashboardTile
+              title="GASTOS RUTA"
+              subtitle="Gasolina y viáticos"
+              icon={<Fuel size={24} color={colors.warning[600]} />}
+              color={colors.warning[600]}
+              bgColor={colors.warning[50]}
+              onPress={() => router.push('/(tabs)/mas/gastos' as any)}
+            />
+          </View>
+
+          {/* 6. COBRANZA Y CORTES */}
+          <View style={styles.gridRow}>
+            <DashboardTile
               title="COBRANZA"
               subtitle="Abonos y recibos"
               icon={<Wallet size={24} color={colors.warning[600]} />}
@@ -259,6 +321,14 @@ export default function HomeScreen() {
               badge="Cobrar"
               onPress={() => router.push('/(tabs)/mas/cobranza')}
             />
+
+            <DashboardTile
+              title="CORTE CAJA"
+              subtitle="Arqueo en tiempo real"
+              icon={<Scissors size={24} color={colors.primary[700]} />}
+              badge="Arqueo"
+              onPress={() => router.push('/(tabs)/mas/corte')}
+            />
           </View>
 
           {/* Módulos exclusivos para ADMIN (Miguel) */}
@@ -266,32 +336,12 @@ export default function HomeScreen() {
             <>
               <View style={styles.gridRow}>
                 <DashboardTile
-                  title="CORTES"
-                  subtitle="Cortes por trabajador"
-                  icon={<Scissors size={24} color={colors.primary[700]} />}
-                  badge="3 rutas"
-                  onPress={() => router.push('/(tabs)/mas/corte')}
-                />
-
-                <DashboardTile
                   title="REVISIÓN"
-                  subtitle="Auditoría rápida stock"
+                  subtitle="Auditoría stock camioneta"
                   icon={<ClipboardCheck size={24} color={colors.success[700]} />}
                   color={colors.success[700]}
                   bgColor={colors.success[50]}
-                  badge="Pendiente"
                   onPress={() => router.push('/(tabs)/mas/revision')}
-                />
-              </View>
-
-              <View style={styles.gridRow}>
-                <DashboardTile
-                  title="PRODUCTOS"
-                  subtitle="Catálogo y precios"
-                  icon={<Boxes size={24} color={colors.neutral[700]} />}
-                  color={colors.neutral[700]}
-                  bgColor={colors.neutral[100]}
-                  onPress={() => router.push('/(tabs)/mas/productos')}
                 />
 
                 <DashboardTile

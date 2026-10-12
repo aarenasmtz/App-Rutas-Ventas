@@ -326,7 +326,7 @@ export default function ProductosAdminScreen() {
   return (
     <AppShell>
       <PageHeader
-        title="ABC de Productos"
+        title="Catálogo de Productos"
         subtitle={`${filtered.length} de ${productosList.length} referencias`}
         onBack={handleBack}
         right={

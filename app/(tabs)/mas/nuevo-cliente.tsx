@@ -10,11 +10,18 @@ import type { DiaVisita } from '@/types';
 
 export default function NuevoClienteScreen() {
   const router = useRouter();
-  const [rutas, setRutas] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
+  const [rutas, setRutas] = useState<string[]>([
+    'Ruta Lunes',
+    'Ruta Martes',
+    'Ruta Miércoles',
+    'Ruta Jueves',
+    'Ruta Viernes',
+    'Ruta Sábado',
+  ]);
   const [nombre, setNombre] = useState('');
   const [propietario, setPropietario] = useState('');
   const [direccion, setDireccion] = useState('');
-  const [ruta, setRuta] = useState('Ruta Centro');
+  const [ruta, setRuta] = useState('Ruta Lunes');
   const [limiteCredito, setLimiteCredito] = useState('3000');
   const [diasSeleccionados, setDiasSeleccionados] = useState<DiaVisita[]>([]);
   const [nuevaRuta, setNuevaRuta] = useState('');

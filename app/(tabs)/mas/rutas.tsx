@@ -142,7 +142,7 @@ export default function RutasAdminScreen() {
   return (
     <AppShell>
       <PageHeader
-        title="Rutas Asignadas (ABC)"
+        title="Rutas Asignadas"
         subtitle="Administrar y cambiar nombres de las rutas de distribución"
         onBack={() => router.replace('/(tabs)/mas' as any)}
         right={

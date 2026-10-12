@@ -23,6 +23,7 @@ import {
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { ScreenHeader, Card, Badge } from '@/components/shared';
 import { DataService, mockClientes } from '@/services/mockDataService';
+import { getRutaDiaActual } from '@/utils/helpers';
 import { useApp } from '@/context/AppContext';
 import type { Cliente } from '@/types';
 
@@ -273,7 +274,7 @@ export default function MapaScreen() {
     <View style={styles.container}>
       <ScreenHeader
         title="Mapa de Ruta León, Gto"
-        subtitle={`Ruta Centro · ${leonClientes.length} negocios programados`}
+        subtitle={`${getRutaDiaActual()} · ${leonClientes.length} negocios programados`}
         onBack={() => router.back()}
       />
 

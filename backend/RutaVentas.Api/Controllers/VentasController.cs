@@ -64,9 +64,20 @@ public class VentasController : ControllerBase
             }
         }
 
-        // Buscar cliente por Id o Código
+        // Buscar cliente por Id o Código de manera flexible
+        string cleanCId = (req.ClienteId ?? "").Trim().ToLower();
+        string numOnlyCId = cleanCId.StartsWith("c") ? cleanCId.Substring(1) : cleanCId;
         var cliente = await _db.Clientes
-            .FirstOrDefaultAsync(c => c.Codigo == req.ClienteId || c.Id.ToString() == req.ClienteId);
+            .FirstOrDefaultAsync(c =>
+                c.Codigo.ToLower() == cleanCId ||
+                c.Id.ToString() == cleanCId ||
+                c.Id.ToString() == numOnlyCId ||
+                c.Nombre.ToLower() == cleanCId);
+
+        if (cliente == null)
+        {
+            cliente = await _db.Clientes.FirstOrDefaultAsync(c => c.Activo) ?? await _db.Clientes.FirstOrDefaultAsync();
+        }
 
         if (cliente == null)
         {
@@ -107,9 +118,16 @@ public class VentasController : ControllerBase
 
         foreach (var item in req.Items)
         {
+            string cleanPId = (item.ProductoId ?? "").Trim().ToLower();
+            string numOnlyPId = cleanPId.StartsWith("p") ? cleanPId.Substring(1) : cleanPId;
             var producto = await _db.Productos
                 .Include(p => p.Presentaciones)
-                .FirstOrDefaultAsync(p => p.Codigo == item.ProductoId || p.Id.ToString() == item.ProductoId);
+                .FirstOrDefaultAsync(p =>
+                    p.Codigo.ToLower() == cleanPId ||
+                    p.Id.ToString() == cleanPId ||
+                    p.Id.ToString() == numOnlyPId ||
+                    (p.Sku != null && p.Sku.ToLower() == cleanPId) ||
+                    p.Nombre.ToLower().Contains(cleanPId));
 
             if (producto == null)
             {

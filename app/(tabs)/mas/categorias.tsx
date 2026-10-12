@@ -144,7 +144,7 @@ export default function CategoriasAdminScreen() {
   return (
     <AppShell>
       <PageHeader
-        title="ABC de Categorías"
+        title="Categorías de Productos"
         subtitle={`${categorias.length} familias de productos configuradas`}
         onBack={handleBack}
         right={

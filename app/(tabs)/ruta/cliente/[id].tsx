@@ -6,7 +6,7 @@ import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/consta
 import { mockClientes, mockProductos, DataService } from '@/services/mockDataService';
 import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
-import { formatCurrency, getEstadoColor } from '@/utils/helpers';
+import { formatCurrency, getEstadoColor, getRutaDiaActual } from '@/utils/helpers';
 import type { Cliente } from '@/types';
 
 type Tab = 'resumen' | 'sugerido' | 'historial' | 'cuenta';
@@ -252,7 +252,7 @@ function ResumenTab({ cliente }: { cliente: Cliente }) {
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Ruta asignada</Text>
-          <Text style={styles.summaryValue}>{cliente.ruta || 'Ruta Centro'}</Text>
+          <Text style={styles.summaryValue}>{cliente.ruta || getRutaDiaActual()}</Text>
         </View>
       </Card>
 

@@ -538,6 +538,11 @@ class HttpApiService {
     });
   }
 
+  // Obtener Historial de Ventas
+  async getVentas(limit = 50): Promise<any[]> {
+    return this.request<any[]>(`/ventas?limit=${limit}`);
+  }
+
   // Cobranza / Abonos
   async registrarAbono(req: RegistrarAbonoRequestDto): Promise<AbonoRegistradoResponseDto> {
     return this.request<AbonoRegistradoResponseDto>('/cobranza/abonos', {
@@ -686,6 +691,7 @@ class HttpApiService {
     tipo?: string;
     modulo?: string;
     accion: string;
+    usuario?: string;
     usuarioNombre?: string;
     usuarioId?: number;
     dispositivo?: string;

@@ -64,7 +64,14 @@ export default function TrabajadoresScreen() {
   const [formRol, setFormRol] = useState<'Vendedor' | 'Administrador'>('Vendedor');
   const [formPermisos, setFormPermisos] = useState<PermisosEmpleado>(PERMISOS_DEFAULT);
 
-  const [rutasList, setRutasList] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
+  const [rutasList, setRutasList] = useState<string[]>([
+    'Ruta Lunes',
+    'Ruta Martes',
+    'Ruta Miércoles',
+    'Ruta Jueves',
+    'Ruta Viernes',
+    'Ruta Sábado',
+  ]);
 
   const loadEmpleados = async () => {
     setLoading(true);

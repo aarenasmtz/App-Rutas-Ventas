@@ -25,6 +25,9 @@ import {
   Share2,
   CheckCircle2,
   ArrowRight,
+  FileText,
+  RotateCcw,
+  Fuel,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -48,24 +51,31 @@ export default function MasScreen() {
 
   // Menú según rol requerido en el prompt
   const adminMenuItems: MenuItem[] = [
+    { title: 'Detalle de Ventas', subtitle: 'Historial de ventas y tickets generados', icon: FileText, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/ventas' },
+    { title: 'Devoluciones y Cambios', subtitle: 'Cambio de producto dañado/caducado a clientes', icon: RotateCcw, color: colors.error[600], bg: colors.error[50], route: '/(tabs)/mas/devoluciones' },
+    { title: 'Gastos de Ruta', subtitle: 'Registrar gasolina, casetas y viáticos', icon: Fuel, color: colors.warning[600], bg: colors.warning[50], route: '/(tabs)/mas/gastos' },
     { title: 'Surtir Inventario PDF', subtitle: 'Cargar nota de compra diaria y aumentar stock', icon: FileSpreadsheet, color: colors.warning[600], bg: colors.warning[50], route: '/(tabs)/mas/surtido-nota' },
     { title: 'Trabajadores y Permisos', subtitle: 'Configurar 2 vendedores, PIN y permisos', icon: UserCheck, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/trabajadores' },
-    { title: 'Productos (ABC)', subtitle: 'Altas, bajas y catálogo por peso/pieza', icon: Boxes, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/productos' },
-    { title: 'Categorías (ABC)', subtitle: 'Administrar familias y emojis de productos', icon: Tag, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/categorias' },
-    { title: 'Clientes (ABC)', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes' },
-    { title: 'Cortes', subtitle: 'Cortes diarios por trabajador', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
+    { title: 'Catálogo de Productos', subtitle: 'Altas, bajas y catálogo por peso/pieza', icon: Boxes, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/productos' },
+    { title: 'Categorías de Productos', subtitle: 'Administrar familias y emojis de productos', icon: Tag, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/categorias' },
+    { title: 'Cartera de Clientes', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes' },
+    { title: 'Corte de Caja', subtitle: 'Arqueo en tiempo real y efectivo de inicio', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
     { title: 'Cobranza', subtitle: 'Registrar y consultar abonos', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
-    { title: 'Rutas Asignadas (ABC)', subtitle: 'Cambiar nombres y zonas de distribución', icon: MapPin, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/rutas' },
+    { title: 'Rutas Asignadas', subtitle: 'Rutas semanales (Lunes a Sábado)', icon: MapPin, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/rutas' },
     { title: 'Rutas y Mapa', subtitle: 'Secuencia de paradas y mapa León, Gto', icon: MapPin, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/ruta' },
-    { title: 'Revisión', subtitle: 'Auditoría rápida física vs sistema', icon: ClipboardCheck, color: colors.success[700], bg: colors.success[50], route: '/(tabs)/mas/revision' },
-    { title: 'Auditoría', subtitle: 'Bitácora de movimientos y accesos', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },
+    { title: 'Revisión de Inventario', subtitle: 'Auditoría rápida física vs sistema', icon: ClipboardCheck, color: colors.success[700], bg: colors.success[50], route: '/(tabs)/mas/revision' },
+    { title: 'Bitácora de Eventos', subtitle: 'Registro cronológico de todas las actividades', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },
     { title: 'Configuración', subtitle: 'Sincronización y parámetros', icon: Settings, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/sincronizacion' },
   ];
 
   const vendedorMenuItems: MenuItem[] = [
+    { title: 'Detalle de Ventas', subtitle: 'Mis ventas y tickets del día', icon: FileText, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/ventas' },
+    { title: 'Devoluciones y Cambios', subtitle: 'Cambios de mercancía con clientes', icon: RotateCcw, color: colors.error[600], bg: colors.error[50], route: '/(tabs)/mas/devoluciones' },
+    { title: 'Gastos de Ruta', subtitle: 'Registrar gasolina y viáticos', icon: Fuel, color: colors.warning[600], bg: colors.warning[50], route: '/(tabs)/mas/gastos' },
     { title: 'Cobranza', subtitle: 'Registrar abonos de clientes', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
+    { title: 'Corte de Caja', subtitle: 'Arqueo de mi camioneta', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
     { title: 'Mi ruta', subtitle: 'Secuencia y mapa de visitas', icon: MapPin, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/ruta' },
-    { title: 'Perfil', subtitle: 'Datos de la unidad y turno', icon: User, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/sincronizacion' },
+    { title: 'Perfil y Sincronización', subtitle: 'Datos de la unidad y estado de sync', icon: User, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/sincronizacion' },
   ];
 
   const currentMenuItems = isAdmin ? adminMenuItems : vendedorMenuItems;
