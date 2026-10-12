@@ -21,6 +21,7 @@ public class EmpleadoDto
 {
     public string Id { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
+    public string? NombreAlmacen { get; set; }
     public string Rol { get; set; } = string.Empty; // "Administrador" | "Vendedor"
     public string RutaId { get; set; } = string.Empty;
     public string RutaNombre { get; set; } = string.Empty;
@@ -57,6 +58,7 @@ public class ProductoDto
 {
     public string Id { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
+    public string? NombreAlmacen { get; set; } // Almacen alias
     public string? Marca { get; set; }
     public string Categoria { get; set; } = string.Empty;
     public string Unidad { get; set; } = "pieza";
@@ -461,6 +463,9 @@ public class EmpleadoDetalleDto
     public decimal VentasHoy { get; set; }
     public decimal CobranzaHoy { get; set; }
     public int ClientesVisitados { get; set; }
+    public string? Telefono { get; set; }
+    public string? Pin { get; set; }
+    public PermisosEmpleadoDto Permisos { get; set; } = new();
 }
 
 // ==========================================
@@ -485,6 +490,7 @@ public class GuardarClienteRequestDto
 
 public class GuardarProductoRequestDto
 {
+    public string? NombreAlmacen { get; set; } // en GuardarProducto
     public string? Codigo { get; set; }
     public string Nombre { get; set; } = string.Empty;
     public string? Marca { get; set; }
@@ -517,6 +523,50 @@ public class GuardarCategoriaRequestDto
     public string? Descripcion { get; set; }
 }
 
+public class PermisosEmpleadoDto
+{
+    public bool PuedeVender { get; set; } = true;
+    public bool PuedeVerClientes { get; set; } = true;
+    public bool PuedeCrearClientes { get; set; } = true;
+    public bool PuedeVerProductos { get; set; } = true;
+    public bool SoloLecturaInventario { get; set; } = true;
+    public bool PuedeCobrar { get; set; } = true;
+}
 
+public class GuardarEmpleadoRequestDto
+{
+    public string Nombre { get; set; } = string.Empty;
+    public string Usuario { get; set; } = string.Empty;
+    public string? Password { get; set; }
+    public string? Pin { get; set; }
+    public string Rol { get; set; } = "Vendedor";
+    public string? Ruta { get; set; }
+    public string? Telefono { get; set; }
+    public bool Activo { get; set; } = true;
+    public PermisosEmpleadoDto? Permisos { get; set; }
+}
 
+public class SurtidoNotaPdfRequestDto
+{
+    public string FolioNota { get; set; } = string.Empty;
+    public string FechaNota { get; set; } = string.Empty;
+    public string Proveedor { get; set; } = "Almacén Central";
+    public string? EmpleadoId { get; set; }
+    public string? UbicacionDestino { get; set; } = "Camioneta 1";
+    public List<ItemSurtidoNotaDto> Items { get; set; } = new();
+}
+
+public class ItemSurtidoNotaDto
+{
+    public string ProductoAlmacen { get; set; } = string.Empty;
+    public string? ProductoIdApp { get; set; }
+    public int? ProductoId { get; set; }
+    public string Um { get; set; } = "PZA";
+    public decimal CantidadNota { get; set; }
+    public string? Equivalencias { get; set; }
+    public decimal PiezasASurtir { get; set; }
+    public decimal PiezasCalculadas { get; set; }
+    public bool GuardarVinculacion { get; set; } = false;
+    public bool RecordarVinculacion { get; set; } = false;
+}
 

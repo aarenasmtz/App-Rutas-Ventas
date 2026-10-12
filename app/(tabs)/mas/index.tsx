@@ -17,6 +17,8 @@ import {
   RefreshCw,
   Tag,
   Users,
+  FileSpreadsheet,
+  UserCheck,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -38,6 +40,8 @@ export default function MasScreen() {
 
   // Menú según rol requerido en el prompt
   const adminMenuItems: MenuItem[] = [
+    { title: 'Surtir Inventario PDF', subtitle: 'Cargar nota de compra diaria y aumentar stock', icon: FileSpreadsheet, color: colors.warning[600], bg: colors.warning[50], route: '/(tabs)/mas/surtido-nota' },
+    { title: 'Trabajadores y Permisos', subtitle: 'Configurar 2 vendedores, PIN y permisos', icon: UserCheck, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/trabajadores' },
     { title: 'Productos (ABC)', subtitle: 'Altas, bajas y catálogo por peso/pieza', icon: Boxes, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/productos' },
     { title: 'Categorías (ABC)', subtitle: 'Administrar familias y emojis de productos', icon: Tag, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/categorias' },
     { title: 'Clientes (ABC)', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes' },

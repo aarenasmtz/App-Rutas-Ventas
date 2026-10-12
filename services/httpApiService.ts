@@ -4,6 +4,8 @@ import type {
   Cliente,
   CorteTrabajador,
   RevisionItem,
+  Empleado,
+  SurtidoNotaPdfRequest,
 } from '@/types';
 
 // Determinación inteligente de la URL base (soporta variables de entorno de Cloudflare Pages y VPS)
@@ -239,6 +241,7 @@ class HttpApiService {
       return {
         id: p.id,
         nombre: p.nombre,
+        nombreAlmacen: p.nombreAlmacen || '',
         marca: p.marca || '',
         categoria: p.categoria,
         unidad: (p.unidad || (isWeight ? 'kg' : 'pieza')) as any,
@@ -391,6 +394,7 @@ class HttpApiService {
       method: 'POST',
       body: JSON.stringify({
         nombre: prod.nombre,
+        nombreAlmacen: prod.nombreAlmacen,
         marca: prod.marca,
         categoria: prod.categoria || 'Abarrotes',
         unidad: prod.unidad || (prod.precioPorPeso ? 'kg' : 'pieza'),
@@ -407,6 +411,7 @@ class HttpApiService {
     return {
       id: p.id,
       nombre: p.nombre,
+      nombreAlmacen: p.nombreAlmacen || prod.nombreAlmacen || '',
       marca: p.marca || '',
       categoria: p.categoria,
       unidad: p.unidad || (p.precioPorPeso ? 'kg' : 'pieza'),
@@ -433,6 +438,7 @@ class HttpApiService {
       method: 'PUT',
       body: JSON.stringify({
         nombre: prod.nombre,
+        nombreAlmacen: prod.nombreAlmacen,
         marca: prod.marca,
         categoria: prod.categoria,
         unidad: prod.unidad || (prod.precioPorPeso ? 'kg' : 'pieza'),
@@ -449,6 +455,7 @@ class HttpApiService {
     return {
       id: p.id || id,
       nombre: p.nombre || prod.nombre || '',
+      nombreAlmacen: p.nombreAlmacen || prod.nombreAlmacen || '',
       marca: p.marca || prod.marca || '',
       categoria: p.categoria || prod.categoria || '',
       unidad: p.unidad || prod.unidad || (prod.precioPorPeso ? 'kg' : 'pieza'),
@@ -670,9 +677,124 @@ class HttpApiService {
     return this.request<any>('/bitacora/resumen');
   }
 
-  // Empleados (Fase 6)
-  async getEmpleados(): Promise<any[]> {
-    return this.request<any[]>('/empleados');
+  // Surtido de Inventario por Nota de Compra PDF
+  async surtirNotaPdf(request: SurtidoNotaPdfRequest): Promise<any> {
+    return this.request<any>('/inventario/surtido-nota', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  // Empleados y Permisos
+  async getEmpleados(): Promise<Empleado[]> {
+    const list = await this.request<any[]>('/empleados');
+    return list.map((e) => ({
+      id: e.id?.toString() || '',
+      nombre: e.nombre || '',
+      usuario: e.usuario || '',
+      rol: e.rol || 'Vendedor',
+      ruta: e.ruta || '',
+      telefono: e.telefono || '',
+      pin: e.pin || '',
+      estado: e.estado || 'Activo',
+      ventasHoy: e.ventasHoy ?? 0,
+      cobranzaHoy: e.cobranzaHoy ?? 0,
+      clientesVisitados: e.clientesVisitados ?? 0,
+      permisos: e.permisos || {
+        puedeVender: true,
+        puedeVerClientes: true,
+        puedeCrearClientes: true,
+        puedeVerProductos: true,
+        soloLecturaInventario: true,
+        puedeCobrar: true,
+      },
+    }));
+  }
+
+  async getEmpleadoById(id: string): Promise<Empleado> {
+    const e = await this.request<any>(`/empleados/${encodeURIComponent(id)}`);
+    return {
+      id: e.id?.toString() || '',
+      nombre: e.nombre || '',
+      usuario: e.usuario || '',
+      rol: e.rol || 'Vendedor',
+      ruta: e.ruta || '',
+      telefono: e.telefono || '',
+      pin: e.pin || '',
+      estado: e.estado || 'Activo',
+      ventasHoy: e.ventasHoy ?? 0,
+      cobranzaHoy: e.cobranzaHoy ?? 0,
+      clientesVisitados: e.clientesVisitados ?? 0,
+      permisos: e.permisos,
+    };
+  }
+
+  async createEmpleado(req: {
+    nombre: string;
+    usuario: string;
+    password?: string;
+    pin?: string;
+    rol?: string;
+    rutaAsignada?: string;
+    telefono?: string;
+    permisos?: any;
+  }): Promise<Empleado> {
+    const e = await this.request<any>('/empleados', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+    return {
+      id: e.id?.toString() || '',
+      nombre: e.nombre || '',
+      usuario: e.usuario || '',
+      rol: e.rol || 'Vendedor',
+      ruta: e.ruta || '',
+      telefono: e.telefono || '',
+      pin: e.pin || '',
+      estado: e.estado || 'Activo',
+      ventasHoy: e.ventasHoy ?? 0,
+      cobranzaHoy: e.cobranzaHoy ?? 0,
+      clientesVisitados: e.clientesVisitados ?? 0,
+      permisos: e.permisos,
+    };
+  }
+
+  async updateEmpleado(id: string, req: {
+    nombre?: string;
+    usuario?: string;
+    password?: string;
+    pin?: string;
+    rol?: string;
+    rutaAsignada?: string;
+    telefono?: string;
+    activo?: boolean;
+    permisos?: any;
+  }): Promise<Empleado> {
+    const e = await this.request<any>(`/empleados/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
+    });
+    return {
+      id: e.id?.toString() || '',
+      nombre: e.nombre || '',
+      usuario: e.usuario || '',
+      rol: e.rol || 'Vendedor',
+      ruta: e.ruta || '',
+      telefono: e.telefono || '',
+      pin: e.pin || '',
+      estado: e.estado || 'Activo',
+      ventasHoy: e.ventasHoy ?? 0,
+      cobranzaHoy: e.cobranzaHoy ?? 0,
+      clientesVisitados: e.clientesVisitados ?? 0,
+      permisos: e.permisos,
+    };
+  }
+
+  async deleteEmpleado(id: string): Promise<boolean> {
+    await this.request<any>(`/empleados/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return true;
   }
 
   // Perfil JWT (Fase 6)

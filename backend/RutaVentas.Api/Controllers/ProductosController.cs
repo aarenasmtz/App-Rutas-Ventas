@@ -43,6 +43,7 @@ public class ProductosController : ControllerBase
             {
                 Id = p.Codigo,
                 Nombre = p.Nombre,
+                NombreAlmacen = p.NombreAlmacen,
                 Marca = p.Marca,
                 Categoria = p.Categoria,
                 Unidad = p.Unidad,
@@ -142,6 +143,7 @@ public class ProductosController : ControllerBase
         {
             Codigo = codigo,
             Nombre = req.Nombre.Trim(),
+            NombreAlmacen = req.NombreAlmacen?.Trim(),
             Marca = req.Marca?.Trim(),
             Categoria = string.IsNullOrWhiteSpace(req.Categoria) ? "Jamón" : req.Categoria.Trim(),
             Unidad = string.IsNullOrWhiteSpace(req.Unidad) ? "kg" : req.Unidad.Trim(),
@@ -195,6 +197,7 @@ public class ProductosController : ControllerBase
         {
             Id = producto.Codigo,
             Nombre = producto.Nombre,
+            NombreAlmacen = producto.NombreAlmacen,
             Marca = producto.Marca,
             Categoria = producto.Categoria,
             Unidad = producto.Unidad,
@@ -231,6 +234,7 @@ public class ProductosController : ControllerBase
         if (producto == null) return NotFound(new { message = "Producto no encontrado" });
 
         if (!string.IsNullOrWhiteSpace(req.Nombre)) producto.Nombre = req.Nombre.Trim();
+        if (req.NombreAlmacen != null) producto.NombreAlmacen = string.IsNullOrWhiteSpace(req.NombreAlmacen) ? null : req.NombreAlmacen.Trim();
         if (req.Marca != null) producto.Marca = req.Marca.Trim();
         if (!string.IsNullOrWhiteSpace(req.Categoria)) producto.Categoria = req.Categoria.Trim();
         if (!string.IsNullOrWhiteSpace(req.Unidad)) producto.Unidad = req.Unidad.Trim();

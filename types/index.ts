@@ -28,6 +28,7 @@ export interface PresentacionConfig {
 export interface Producto {
   id: string;
   nombre: string;
+  nombreAlmacen?: string;
   marca?: string;
   categoria: Categoria;
   unidad: Unidad;
@@ -124,13 +125,46 @@ export interface MovimientoSincronizacion {
   estado: 'Sincronizado' | 'Pendiente' | 'Error';
 }
 
+export interface PermisosEmpleado {
+  puedeVender: boolean;
+  puedeVerClientes: boolean;
+  puedeCrearClientes: boolean;
+  puedeVerProductos: boolean;
+  soloLecturaInventario: boolean;
+  puedeCobrar: boolean;
+}
+
 export interface Empleado {
   id: string;
   nombre: string;
+  usuario?: string;
   rol: string;
   ruta: string;
+  telefono?: string;
+  pin?: string;
   estado: 'Activo' | 'Inactivo';
   ventasHoy: number;
+  cobranzaHoy?: number;
+  clientesVisitados?: number;
+  permisos?: PermisosEmpleado;
+}
+
+export interface ItemNotaPdf {
+  productoAlmacen: string;
+  um: string;
+  cantidadNota: number;
+  equivalencias: string;
+  productoId?: number;
+  productoNombreApp?: string;
+  piezasCalculadas: number;
+  recordarVinculacion?: boolean;
+}
+
+export interface SurtidoNotaPdfRequest {
+  folioNota?: string;
+  fechaNota?: string;
+  observaciones?: string;
+  items: ItemNotaPdf[];
 }
 
 export interface BitacoraEntry {

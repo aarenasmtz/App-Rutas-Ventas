@@ -29,6 +29,13 @@ public class Usuario
 
     public bool Activo { get; set; } = true;
 
+    public string? Telefono { get; set; }
+
+    [MaxLength(10)]
+    public string? Pin { get; set; }
+
+    public string? PermisosJson { get; set; }
+
     public DateTime FechaCreacion { get; set; } = DateTime.Now;
 }
 
@@ -116,6 +123,9 @@ public class Producto
     [Required]
     [MaxLength(150)]
     public string Nombre { get; set; } = string.Empty;
+
+    [MaxLength(200)]
+    public string? NombreAlmacen { get; set; }
 
     [MaxLength(100)]
     public string? Marca { get; set; }

@@ -673,6 +673,47 @@ export const DataService = {
     return empleados;
   },
 
+  createEmpleado: async (req: any) => {
+    try {
+      return await apiService.createEmpleado(req);
+    } catch {
+      const nuevo = {
+        id: 'e' + Date.now(),
+        nombre: req.nombre,
+        usuario: req.usuario,
+        rol: req.rol || 'Vendedor',
+        ruta: req.rutaAsignada || 'Ruta Centro',
+        telefono: req.telefono || '',
+        estado: 'Activo' as const,
+        ventasHoy: 0,
+        cobranzaHoy: 0,
+        clientesVisitados: 0,
+        permisos: req.permisos,
+      };
+      return nuevo;
+    }
+  },
+
+  updateEmpleado: async (id: string, req: any) => {
+    try {
+      return await apiService.updateEmpleado(id, req);
+    } catch {
+      return { id, ...req };
+    }
+  },
+
+  deleteEmpleado: async (id: string) => {
+    try {
+      return await apiService.deleteEmpleado(id);
+    } catch {
+      return true;
+    }
+  },
+
+  surtirNotaPdf: async (req: any) => {
+    return await apiService.surtirNotaPdf(req);
+  },
+
   loginApi: async (req: { usuario: string; password: string; dispositivoId?: string }) => {
     const res = await apiService.login(req);
     if (res && res.token) {

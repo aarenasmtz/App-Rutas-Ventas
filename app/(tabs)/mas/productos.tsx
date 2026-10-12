@@ -35,6 +35,7 @@ export default function ProductosAdminScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProd, setEditingProd] = useState<Producto | null>(null);
   const [formNombre, setFormNombre] = useState('');
+  const [formNombreAlmacen, setFormNombreAlmacen] = useState('');
   const [formMarca, setFormMarca] = useState('');
   const [formCategoria, setFormCategoria] = useState<Categoria>('Jamón');
   const [formUnidad, setFormUnidad] = useState<Unidad>('kg');
@@ -81,6 +82,7 @@ export default function ProductosAdminScreen() {
   const handleOpenCreate = () => {
     setEditingProd(null);
     setFormNombre('');
+    setFormNombreAlmacen('');
     setFormMarca('');
     setFormCategoria('Jamón');
     setFormUnidad('kg');
@@ -98,6 +100,7 @@ export default function ProductosAdminScreen() {
   const handleOpenEdit = (p: Producto) => {
     setEditingProd(p);
     setFormNombre(p.nombre);
+    setFormNombreAlmacen(p.nombreAlmacen || '');
     setFormMarca(p.marca || '');
     setFormCategoria(p.categoria);
     setFormUnidad(p.unidad);
@@ -236,6 +239,7 @@ export default function ProductosAdminScreen() {
 
     const payload: Partial<Producto> = {
       nombre: formNombre.trim(),
+      nombreAlmacen: formNombreAlmacen.trim() || undefined,
       marca: formMarca.trim(),
       categoria: formCategoria,
       unidad: formManejaMultipres ? formUnidad : (formPorPeso ? 'kg' : 'pieza'),
@@ -417,6 +421,14 @@ export default function ProductosAdminScreen() {
                         ) : null}
                       </View>
                       <Text style={styles.nameText} numberOfLines={2}>{p.nombre}</Text>
+                      {p.nombreAlmacen ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                          <Package size={11} color={colors.neutral[500]} />
+                          <Text style={{ fontSize: 11, color: colors.neutral[600] }}>
+                            Almacén: <Text style={{ fontWeight: '600', color: colors.primary[700] }}>{p.nombreAlmacen}</Text>
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
 
                     <View style={styles.activeToggleRow}>
@@ -511,7 +523,7 @@ export default function ProductosAdminScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
               {/* Nombre */}
-              <Text style={styles.inputLabel}>Nombre del Producto *</Text>
+              <Text style={styles.inputLabel}>1. Nombre en la App (Venta y Catálogo) *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Ej. Queso Castel, Jamón Virginia..."
@@ -519,6 +531,19 @@ export default function ProductosAdminScreen() {
                 onChangeText={setFormNombre}
                 placeholderTextColor={colors.neutral[400]}
               />
+
+              {/* Nombre en Almacén */}
+              <Text style={styles.inputLabel}>2. Nombre en Almacén (Relación con Nota de Compra PDF)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej. Queso Amarillo Castell, Jamon Americano..."
+                value={formNombreAlmacen}
+                onChangeText={setFormNombreAlmacen}
+                placeholderTextColor={colors.neutral[400]}
+              />
+              <Text style={{ fontSize: 11, color: colors.neutral[500], marginTop: -4, marginBottom: 12 }}>
+                Nombre como viene en la nota del almacén para asociar automáticamente el inventario diario al subir el PDF.
+              </Text>
 
               {/* Marca */}
               <Text style={styles.inputLabel}>Marca</Text>

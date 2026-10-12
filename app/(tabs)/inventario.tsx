@@ -128,11 +128,20 @@ export default function InventarioScreen() {
             <View style={styles.adminActions}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => router.push('/(tabs)/ruta')}
-                style={styles.adminBtnPrimary}
+                onPress={() => router.push('/(tabs)/mas/surtido-nota' as any)}
+                style={[styles.adminBtnPrimary, { backgroundColor: colors.secondary[600] }]}
               >
-                <Truck size={16} color={colors.neutral[0]} />
-                <Text style={styles.adminBtnPrimaryText}>Revisar rutas de trabajadores</Text>
+                <FileSpreadsheet size={16} color={colors.neutral[0]} />
+                <Text style={styles.adminBtnPrimaryText}>Surtir Inventario (PDF)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => router.push('/(tabs)/ruta')}
+                style={styles.adminBtnSecondary}
+              >
+                <Truck size={16} color={colors.primary[700]} />
+                <Text style={styles.adminBtnSecondaryText}>Rutas de trabajadores</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
