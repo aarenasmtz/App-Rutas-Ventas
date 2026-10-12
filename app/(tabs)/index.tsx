@@ -77,13 +77,7 @@ export default function HomeScreen() {
   }, []);
 
   // Siguiente cliente o cercano para venta rápida
-  const clienteCercano = resumen.clienteCercano || {
-    id: 'c1',
-    nombre: 'ABTS ARENAS',
-    propietario: 'Aaron Arenas',
-    saldo: 0,
-    distanciaMetros: 50,
-  };
+  const clienteCercano = resumen.clienteCercano || null;
 
   const handleVenderACercano = () => {
     if (clienteCercano?.id) {
@@ -183,25 +177,27 @@ export default function HomeScreen() {
         </View>
 
         {/* Banner de Acción Rápida: Cliente Cercano Detectado */}
-        <View style={[styles.proximityBanner, shadows.card]}>
-          <View style={styles.proxLeft}>
-            <View style={styles.proxPin}>
-              <MapPin size={20} color={colors.primary[600]} />
-            </View>
-            <View style={styles.proxInfo}>
-              <View style={styles.proxTag}>
-                <Text style={styles.proxTagText}>ESTÁS CERCA</Text>
+        {clienteCercano ? (
+          <View style={[styles.proximityBanner, shadows.card]}>
+            <View style={styles.proxLeft}>
+              <View style={styles.proxPin}>
+                <MapPin size={20} color={colors.primary[600]} />
               </View>
-              <Text style={styles.proxClientName}>{clienteCercano.nombre}</Text>
-              <Text style={styles.proxClientOwner}>{clienteCercano.propietario} · Saldo: {formatCurrency(clienteCercano.saldo)}</Text>
+              <View style={styles.proxInfo}>
+                <View style={styles.proxTag}>
+                  <Text style={styles.proxTagText}>ESTÁS CERCA</Text>
+                </View>
+                <Text style={styles.proxClientName}>{clienteCercano.nombre}</Text>
+                <Text style={styles.proxClientOwner}>{clienteCercano.propietario} · Saldo: {formatCurrency(clienteCercano.saldo)}</Text>
+              </View>
             </View>
-          </View>
 
-          <TouchableOpacity activeOpacity={0.85} onPress={handleVenderACercano} style={styles.proxActionBtn}>
-            <Text style={styles.proxActionBtnText}>Vender</Text>
-            <ArrowRight size={16} color={colors.neutral[0]} />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity activeOpacity={0.85} onPress={handleVenderACercano} style={styles.proxActionBtn}>
+              <Text style={styles.proxActionBtnText}>Vender</Text>
+              <ArrowRight size={16} color={colors.neutral[0]} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Sección: Mosaicos Táctiles según Rol */}
         <View style={styles.sectionHeader}>

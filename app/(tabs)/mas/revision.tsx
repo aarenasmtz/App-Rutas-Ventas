@@ -28,16 +28,14 @@ import type { RevisionItem } from '@/types';
 
 export default function RevisionInventarioScreen() {
   const router = useRouter();
-  const [items, setItems] = useState<RevisionItem[]>(mockRevisionItems);
+  const [items, setItems] = useState<RevisionItem[]>([]);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     const fetchItems = async () => {
       try {
         const liveItems = await DataService.getRevisionItems();
-        if (liveItems && liveItems.length > 0) {
-          setItems(liveItems);
-        }
+        setItems(liveItems ?? []);
       } catch {
         // Fallback to initial
       }

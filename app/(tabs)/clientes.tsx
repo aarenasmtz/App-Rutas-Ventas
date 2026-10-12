@@ -63,9 +63,7 @@ export default function ClientesScreen() {
   const loadClientes = async () => {
     try {
       const data = await DataService.getClientes();
-      if (data && data.length > 0) {
-        setClientesList(data);
-      }
+      setClientesList(data ?? []);
     } catch {
       // Fallback
     }

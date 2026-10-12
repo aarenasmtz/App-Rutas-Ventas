@@ -41,15 +41,15 @@ export default function InventarioScreen() {
   const [search, setSearch] = useState('');
   const [filtroStock, setFiltroStock] = useState<FiltroStock>('Todos');
   const [categoriaActiva, setCategoriaActiva] = useState<string>('Todas');
-  const [productosList, setProductosList] = useState<Producto[]>(mockProductos);
+  const [productosList, setProductosList] = useState<Producto[]>([]);
 
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
       try {
         const live = await DataService.getProductos();
-        if (isMounted && live && live.length > 0) {
-          setProductosList(live);
+        if (isMounted) {
+          setProductosList(live ?? []);
         }
       } catch {
         // Fallback

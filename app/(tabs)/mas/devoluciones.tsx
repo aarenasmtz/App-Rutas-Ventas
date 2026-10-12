@@ -16,8 +16,8 @@ export default function DevolucionesScreen() {
   const router = useRouter();
   const { user } = useApp();
   const [step, setStep] = useState<'lista' | 'nueva'>('lista');
-  const [clientesList, setClientesList] = useState<Cliente[]>(mockClientes);
-  const [productosList, setProductosList] = useState<Producto[]>(mockProductos);
+  const [clientesList, setClientesList] = useState<Cliente[]>([]);
+  const [productosList, setProductosList] = useState<Producto[]>([]);
   const [devolucionesList, setDevolucionesList] = useState<any[]>([]);
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [productoId, setProductoId] = useState<string | null>(null);

@@ -12,14 +12,14 @@ type Filtro = 'Todos' | 'Al corriente' | 'Con saldo' | 'Vencidos';
 export default function CreditosScreen() {
   const router = useRouter();
   const [filtro, setFiltro] = useState<Filtro>('Todos');
-  const [clientesList, setClientesList] = useState<Cliente[]>(mockClientes);
+  const [clientesList, setClientesList] = useState<Cliente[]>([]);
 
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
       try {
         const data = await DataService.getClientes();
-        if (isMounted && data && data.length > 0) setClientesList(data);
+        if (isMounted) setClientesList(data ?? []);
       } catch {
         // Fallback
       }

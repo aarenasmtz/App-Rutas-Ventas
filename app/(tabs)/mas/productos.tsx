@@ -21,11 +21,12 @@ import { mockProductos, mockCategorias, DataService } from '@/services/mockDataS
 import { AppShell, PageHeader, SearchBar, MoneyDisplay, StockBadge } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
 import { desglosarInventario } from '@/utils/multipresentacion';
-import type { Producto, Categoria, PresentacionConfig, PresentacionTipo, Unidad } from '@/types';
+import type { Producto, CategoriaItem, Categoria, PresentacionConfig, PresentacionTipo, Unidad } from '@/types';
 
 export default function ProductosAdminScreen() {
   const router = useRouter();
-  const [productosList, setProductosList] = useState<Producto[]>(mockProductos);
+  const [productosList, setProductosList] = useState<Producto[]>([]);
+  const [categoriasList, setCategoriasList] = useState<CategoriaItem[]>([]);
   const [search, setSearch] = useState('');
   const [categoria, setCategoria] = useState('Todas');
   const [marcaSeleccionada, setMarcaSeleccionada] = useState('Todas');
@@ -61,9 +62,16 @@ export default function ProductosAdminScreen() {
 
   const loadProductos = async () => {
     try {
-      const data = await DataService.getProductos();
-      if (data) setProductosList(data);
-    } catch {}
+      const [data, cats] = await Promise.all([
+        DataService.getProductos(),
+        DataService.getCategorias(),
+      ]);
+      setProductosList(data ?? []);
+      setCategoriasList(cats ?? []);
+    } catch {
+      setProductosList([]);
+      setCategoriasList([]);
+    }
   };
 
   useEffect(() => {
@@ -345,7 +353,7 @@ export default function ProductosAdminScreen() {
           >
             <Text style={[styles.chipText, categoria === 'Todas' && styles.chipTextActive]}>Todas</Text>
           </TouchableOpacity>
-          {mockCategorias.map((c) => (
+          {categoriasList.map((c) => (
             <TouchableOpacity
               key={c.id}
               activeOpacity={0.8}
@@ -379,8 +387,8 @@ export default function ProductosAdminScreen() {
           {filtered.length === 0 ? (
             <View style={styles.emptyContainer}>
               <AlertCircle size={44} color={colors.neutral[300]} />
-              <Text style={styles.emptyTitle}>No hay productos encontrados</Text>
-              <Text style={styles.emptySubtitle}>Intenta con otros filtros o términos</Text>
+              <Text style={styles.emptyTitle}>No hay productos registrados</Text>
+              <Text style={styles.emptySubtitle}>Toca el botón "+ Nuevo" para registrar el primer producto</Text>
             </View>
           ) : (
             filtered.map((p) => {
@@ -530,7 +538,7 @@ export default function ProductosAdminScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
-                {mockCategorias.map((c) => (
+                {categoriasList.map((c) => (
                   <TouchableOpacity
                     key={c.id}
                     onPress={() => setFormCategoria(c.nombre as Categoria)}

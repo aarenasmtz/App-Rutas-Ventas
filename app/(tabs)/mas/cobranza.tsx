@@ -37,13 +37,9 @@ export default function CobranzaScreen() {
   const loadClientes = async () => {
     try {
       const todos = await DataService.getClientes();
-      if (todos && todos.length > 0) {
-        setClientesList(todos);
-      } else {
-        setClientesList(mockClientes);
-      }
+      setClientesList(todos ?? []);
     } catch {
-      setClientesList(mockClientes);
+      setClientesList([]);
     }
   };
 

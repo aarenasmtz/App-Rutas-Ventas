@@ -97,9 +97,9 @@ export default function VentaScreen() {
           DataService.getCategorias(),
         ]);
         if (mounted) {
-          if (cls && cls.length > 0) setClientesList(cls);
-          if (prs && prs.length > 0) setProductosList(prs);
-          if (cats && cats.length > 0) setCategoriasList(cats);
+          setClientesList(cls ?? []);
+          setProductosList(prs ?? []);
+          setCategoriasList(cats ?? []);
         }
       } catch (err) {
         console.warn('Error loading live data in VentaScreen:', err);
@@ -111,8 +111,8 @@ export default function VentaScreen() {
     };
   }, []);
 
-  const effectiveClientes = clientesList.length > 0 ? clientesList : mockClientes;
-  const effectiveProductos = productosList.length > 0 ? productosList : mockProductos;
+  const effectiveClientes = clientesList;
+  const effectiveProductos = productosList;
 
   // Lista unificada de categorías
   const categorias = useMemo(() => {

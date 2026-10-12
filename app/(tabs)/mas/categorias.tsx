@@ -30,7 +30,8 @@ const EMOJI_OPTIONS = ['🧀', '🥓', '🌭', '🥩', '🧈', '🥫', '🍗', '
 
 export default function CategoriasAdminScreen() {
   const router = useRouter();
-  const [categorias, setCategorias] = useState<CategoriaItem[]>(mockCategorias);
+  const [categorias, setCategorias] = useState<CategoriaItem[]>([]);
+  const [productosList, setProductosList] = useState<any[]>([]);
   const [search, setSearch] = useState('');
 
   // Modal de Alta / Edición
@@ -42,10 +43,15 @@ export default function CategoriasAdminScreen() {
 
   const loadCategorias = async () => {
     try {
-      const list = await DataService.getCategorias();
-      if (list) setCategorias(list);
+      const [list, prods] = await Promise.all([
+        DataService.getCategorias(),
+        DataService.getProductos(),
+      ]);
+      setCategorias(list ?? []);
+      setProductosList(prods ?? []);
     } catch {
-      // Fallback
+      setCategorias([]);
+      setProductosList([]);
     }
   };
 
@@ -56,11 +62,11 @@ export default function CategoriasAdminScreen() {
   // Conteo de productos por categoría
   const productCountByCat = useMemo(() => {
     const map: Record<string, number> = {};
-    mockProductos.forEach((p) => {
+    productosList.forEach((p) => {
       map[p.categoria] = (map[p.categoria] || 0) + 1;
     });
     return map;
-  }, [mockProductos]);
+  }, [productosList]);
 
   const filtered = useMemo(() => {
     return categorias.filter((c) => {

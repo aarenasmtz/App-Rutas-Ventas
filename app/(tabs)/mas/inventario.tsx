@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { mockProductos } from '@/services/mockDataService';
+import { DataService } from '@/services/mockDataService';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { getStockEstado, getEstadoColor } from '@/utils/helpers';
 import type { Producto } from '@/types';
 
 export default function InventarioScreen() {
   const router = useRouter();
-  const productos = mockProductos;
+  const [productos, setProductos] = useState<Producto[]>([]);
+  useEffect(() => {
+    DataService.getProductos().then((p: Producto[]) => setProductos(p ?? []));
+  }, []);
   const [search, setSearch] = useState('');
 
   const filtered = productos.filter((p: Producto) => p.nombre.toLowerCase().includes(search.toLowerCase()));

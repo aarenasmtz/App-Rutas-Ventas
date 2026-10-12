@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -14,9 +15,28 @@ import {
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { formatCurrency } from '@/utils/helpers';
-import { mockClientes } from '@/services/mockDataService';
+import { DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader, MoneyDisplay } from '@/components/DesignSystem';
-import type { ItemCarrito } from '@/types';
+import type { ItemCarrito, Cliente } from '@/types';
+
+
+const defaultCliente: Cliente = {
+  id: 'general',
+  nombre: 'Venta de Mostrador / General',
+  propietario: 'Cliente General',
+  direccion: 'Venta directa en ruta',
+  ruta: 'Ruta Centro',
+  diasVisita: ['Lun', 'Mié', 'Vie'],
+  saldo: 0,
+  limiteCredito: 0,
+  estado: 'Pendiente',
+  ultimaVisita: '',
+  telefono: '',
+  activo: true,
+  distanciaMock: '0m',
+  historial: [],
+  sugerido: [],
+};
 
 export default function CarritoScreen() {
   const router = useRouter();
@@ -29,7 +49,16 @@ export default function CarritoScreen() {
     clienteActivoId,
   } = useApp();
 
-  const cliente = mockClientes.find((c) => c.id === clienteActivoId) || mockClientes[0];
+  const [rawCliente, setRawCliente] = useState<Cliente | null>(null);
+  const cliente = rawCliente || defaultCliente;
+
+  useEffect(() => {
+    if (clienteActivoId) {
+      DataService.getClienteById(clienteActivoId).then((c: Cliente | undefined) => {
+        if (c) setRawCliente(c);
+      });
+    }
+  }, [clienteActivoId]);
 
   const subtotal = carrito.reduce((s, i) => s + i.cantidad * i.precioLista, 0);
   const total = carrito.reduce((s, i) => s + i.subtotal, 0);

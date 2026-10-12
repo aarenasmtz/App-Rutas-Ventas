@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { DataService } from '@/services/mockDataService';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plus, Trash2, Map, Users, Check, X } from 'lucide-react-native';
@@ -11,7 +12,10 @@ import type { Cliente } from '@/types';
 export default function RutasScreen() {
   const router = useRouter();
   const [rutas, setRutas] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
-  const clientes = mockClientes;
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  useEffect(() => {
+    DataService.getClientes().then((cls) => setClientes(cls ?? []));
+  }, []);
   const [showForm, setShowForm] = useState(false);
   const [nuevaRuta, setNuevaRuta] = useState('');
 

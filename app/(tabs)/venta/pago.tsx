@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -15,16 +15,44 @@ import {
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { mockClientes, DataService } from '@/services/mockDataService';
+import { DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader, MoneyDisplay } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
-import type { MetodoPago, Pago } from '@/types';
+import type { MetodoPago, Pago, Cliente } from '@/types';
+
+
+const defaultCliente: Cliente = {
+  id: 'general',
+  nombre: 'Venta de Mostrador / General',
+  propietario: 'Cliente General',
+  direccion: 'Venta directa en ruta',
+  ruta: 'Ruta Centro',
+  diasVisita: ['Lun', 'Mié', 'Vie'],
+  saldo: 0,
+  limiteCredito: 0,
+  estado: 'Pendiente',
+  ultimaVisita: '',
+  telefono: '',
+  activo: true,
+  distanciaMock: '0m',
+  historial: [],
+  sugerido: [],
+};
 
 export default function PagoScreen() {
   const router = useRouter();
   const { ventaTotal, setPagos, clienteActivoId, user, carrito, setUltimoFolioVenta } = useApp();
 
-  const cliente = mockClientes.find((c) => c.id === clienteActivoId) || mockClientes[0];
+  const [rawCliente, setRawCliente] = useState<Cliente | null>(null);
+  const cliente = rawCliente || defaultCliente;
+
+  useEffect(() => {
+    if (clienteActivoId) {
+      DataService.getClienteById(clienteActivoId).then((c: Cliente | undefined) => {
+        if (c) setRawCliente(c);
+      });
+    }
+  }, [clienteActivoId]);
   const creditoActual = cliente?.saldo || 0;
   const limiteCredito = cliente?.limiteCredito || 5000;
   const creditoDisponible = Math.max(0, limiteCredito - creditoActual);

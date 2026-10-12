@@ -1,3 +1,4 @@
+import type { Cliente } from '@/types';
 import { useState, useEffect } from 'react';
 import {
   View,
@@ -24,12 +25,31 @@ import {
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { mockClientes } from '@/services/mockDataService';
+import { DataService } from '@/services/mockDataService';
 import { AppShell, MoneyDisplay } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
 import { ticketPrinter } from '@/services/ticketPrinterService';
 import { ticketImageService } from '@/services/ticketImageService';
 import TicketModal from '@/components/TicketModal';
+
+
+const defaultCliente: Cliente = {
+  id: 'general',
+  nombre: 'Venta de Mostrador / General',
+  propietario: 'Cliente General',
+  direccion: 'Venta directa en ruta',
+  ruta: 'Ruta Centro',
+  diasVisita: ['Lun', 'Mié', 'Vie'],
+  saldo: 0,
+  limiteCredito: 0,
+  estado: 'Pendiente',
+  ultimaVisita: '',
+  telefono: '',
+  activo: true,
+  distanciaMock: '0m',
+  historial: [],
+  sugerido: [],
+};
 
 export default function ConfirmacionScreen() {
   const router = useRouter();
@@ -42,7 +62,16 @@ export default function ConfirmacionScreen() {
     ultimoFolioVenta,
   } = useApp();
 
-  const cliente = mockClientes.find((c) => c.id === clienteActivoId) || mockClientes[0];
+  const [rawCliente, setRawCliente] = useState<Cliente | null>(null);
+  const cliente = rawCliente || defaultCliente;
+
+  useEffect(() => {
+    if (clienteActivoId) {
+      DataService.getClienteById(clienteActivoId).then((c: Cliente | undefined) => {
+        if (c) setRawCliente(c);
+      });
+    }
+  }, [clienteActivoId]);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [ticketImgUrl, setTicketImgUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);

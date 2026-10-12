@@ -36,17 +36,15 @@ if (Platform.OS !== 'web') {
 export default function MapaScreen() {
   const router = useRouter();
   const { setClienteActivoId } = useApp();
-  const [clientesList, setClientesList] = useState<Cliente[]>(mockClientes);
-  const [selectedClient, setSelectedClient] = useState<Cliente | null>(mockClientes[0]);
+  const [clientesList, setClientesList] = useState<Cliente[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
 
   useEffect(() => {
     const fetchClientes = async () => {
       try {
         const list = await DataService.getClientes();
-        if (list && list.length > 0) {
-          setClientesList(list);
-          setSelectedClient(list[0]);
-        }
+        setClientesList(list ?? []);
+          setSelectedClient(list?.[0] || null);
       } catch {}
     };
     fetchClientes();
