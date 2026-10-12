@@ -30,6 +30,8 @@ export const initialClientes: Cliente[] = [
   {
     id: 'c1', nombre: 'Abarrotes Arenas', propietario: 'Aaron',
     direccion: 'Calle Hidalgo 23, Centro', ruta: 'Ruta Centro',
+    colonia: 'Centro', ciudad: 'León, Gto',
+    latitud: 21.1219, longitud: -101.6825,
     diasVisita: ['Lun', 'Mié', 'Vie'], saldo: 1250, limiteCredito: 5000,
     estado: 'Pendiente', ultimaVisita: '2026-09-11',
     precioEspecial: { p1: 175, p4: 185, p3: 200 },
@@ -50,6 +52,8 @@ export const initialClientes: Cliente[] = [
   {
     id: 'c2', nombre: 'Cremería La Esquina', propietario: 'Marcela',
     direccion: 'Av. Juárez 145, Centro', ruta: 'Ruta Centro',
+    colonia: 'Centro', ciudad: 'León, Gto',
+    latitud: 21.1245, longitud: -101.6850,
     diasVisita: ['Lun', 'Mié', 'Vie'], saldo: 0, limiteCredito: 3000,
     estado: 'Pendiente', ultimaVisita: '2026-09-11',
     historial: [
@@ -64,6 +68,8 @@ export const initialClientes: Cliente[] = [
   {
     id: 'c3', nombre: 'Abarrotes El Chuy', propietario: 'Jesús',
     direccion: 'Calle Morelos 67, Col. Obrera', ruta: 'Ruta Centro',
+    colonia: 'Obrera', ciudad: 'León, Gto',
+    latitud: 21.1350, longitud: -101.6780,
     diasVisita: ['Lun', 'Jue'], saldo: 3200, limiteCredito: 4000,
     estado: 'Pendiente', ultimaVisita: '2026-09-10',
     historial: [
@@ -77,6 +83,8 @@ export const initialClientes: Cliente[] = [
   {
     id: 'c4', nombre: 'Abarrotes La Esperanza', propietario: 'Rosa',
     direccion: 'Calle Aldama 12, Centro', ruta: 'Ruta Centro',
+    colonia: 'Centro', ciudad: 'León, Gto',
+    latitud: 21.1190, longitud: -101.6790,
     diasVisita: ['Lun', 'Mié', 'Vie'], saldo: 450, limiteCredito: 2000,
     estado: 'Visitado', ultimaVisita: '2026-09-15',
     historial: [
@@ -86,7 +94,9 @@ export const initialClientes: Cliente[] = [
   },
   {
     id: 'c5', nombre: 'Abarrotes San Juan', propietario: 'Juan',
-    direccion: 'Calle Zaragoza 89, Centro', ruta: 'Ruta Centro',
+    direccion: 'Calle Zaragoza 89, San Juan de Dios', ruta: 'Ruta Centro',
+    colonia: 'San Juan de Dios', ciudad: 'León, Gto',
+    latitud: 21.1165, longitud: -101.6815,
     diasVisita: ['Lun', 'Mié', 'Vie'], saldo: 0, limiteCredito: 2500,
     estado: 'Venta realizada', ultimaVisita: '2026-09-15',
     historial: [
@@ -99,7 +109,9 @@ export const initialClientes: Cliente[] = [
   },
   {
     id: 'c6', nombre: 'Cremería Don Pedro', propietario: 'Pedro',
-    direccion: 'Av. Insurgentes 230, Norte', ruta: 'Ruta Norte',
+    direccion: 'Av. Insurgentes 230, Echeveste', ruta: 'Ruta Norte',
+    colonia: 'Echeveste', ciudad: 'León, Gto',
+    latitud: 21.1685, longitud: -101.6892,
     diasVisita: ['Mar', 'Jue', 'Sáb'], saldo: 1800, limiteCredito: 5000,
     estado: 'Pendiente', ultimaVisita: '2026-09-12',
     historial: [
@@ -112,7 +124,9 @@ export const initialClientes: Cliente[] = [
   },
   {
     id: 'c7', nombre: 'Abarrotes La Bendición', propietario: 'Lucía',
-    direccion: 'Calle Reforma 56, Sur', ruta: 'Ruta Sur',
+    direccion: 'Calle Reforma 56, León Moderno', ruta: 'Ruta Sur',
+    colonia: 'León Moderno', ciudad: 'León, Gto',
+    latitud: 21.1092, longitud: -101.6695,
     diasVisita: ['Mar', 'Vie'], saldo: 5600, limiteCredito: 5000,
     estado: 'Pendiente', ultimaVisita: '2026-09-12',
     historial: [

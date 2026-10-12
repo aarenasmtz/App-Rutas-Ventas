@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Scissors,
@@ -16,6 +25,12 @@ import {
   X,
   FileSpreadsheet,
   Printer,
+  Fuel,
+  Receipt,
+  Scale,
+  DollarSign,
+  ArrowDownRight,
+  ShieldCheck,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockCortesTrabajadores, DataService } from '@/services/mockDataService';
@@ -36,7 +51,13 @@ export default function CorteScreen() {
   const loadCortes = async () => {
     try {
       const data = await DataService.getCortes();
-      if (data && data.length > 0) setCortesList(data);
+      if (data && data.length > 0) {
+        setCortesList(data);
+        if (!selectedTrabajador) {
+          setSelectedTrabajador(data[0]);
+          setEfectivoContado(data[0].efectivoEsperado.toString());
+        }
+      }
     } catch {
       // Fallback
     }
@@ -46,27 +67,43 @@ export default function CorteScreen() {
     loadCortes();
   }, []);
 
+  useEffect(() => {
+    if (!selectedTrabajador && cortesList.length > 0) {
+      setSelectedTrabajador(cortesList[0]);
+      setEfectivoContado(cortesList[0].efectivoEsperado.toString());
+    }
+  }, [cortesList]);
+
   const handleSelectTrabajador = (t: CorteTrabajador) => {
     setSelectedTrabajador(t);
     setEfectivoContado(t.efectivoEsperado.toString());
   };
 
+  const currentTrabajador = selectedTrabajador || cortesList[0] || null;
+
+  const totalVentasDia = cortesList.reduce((acc, c) => acc + (c.ventasTotales || 0), 0);
+  const totalEfectivoGlobal = cortesList.reduce((acc, c) => acc + (c.efectivoEsperado || 0), 0);
+  const totalCobradoGlobal = cortesList.reduce((acc, c) => acc + (c.abonosCobranza || 0), 0);
+
+  const contadoNum = parseFloat(efectivoContado) || 0;
+  const esperadoNum = currentTrabajador ? currentTrabajador.efectivoEsperado : 0;
+  const diferenciaCalculada = contadoNum - esperadoNum;
+  const isCuadrado = Math.abs(diferenciaCalculada) < 0.01;
+
   const handleCerrarCorte = async () => {
-    if (!selectedTrabajador) return;
-    const contado = parseFloat(efectivoContado) || 0;
+    if (!currentTrabajador) return;
 
     setCerrando(true);
     try {
       await DataService.cerrarCorteCaja({
-        empleadoId: selectedTrabajador.empleadoId,
-        efectivoContado: contado,
+        empleadoId: currentTrabajador.empleadoId,
+        efectivoContado: contadoNum,
       });
       await loadCortes();
       Alert.alert(
         'Corte de Caja Cerrado',
-        `El corte de ${selectedTrabajador.nombre} ha sido cerrado y persistido en la base de datos SQL Server exitosamente.`
+        `El corte de ${currentTrabajador.nombre} ha sido verificado y persistido en la base de datos SQL Server exitosamente.`
       );
-      setSelectedTrabajador(null);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo cerrar el corte de caja');
     } finally {
@@ -74,273 +111,357 @@ export default function CorteScreen() {
     }
   };
 
+  const handleSetQuickCash = (monto: number) => {
+    setEfectivoContado(monto.toString());
+  };
+
+  const handleAddQuickCash = (monto: number) => {
+    const act = parseFloat(efectivoContado) || 0;
+    setEfectivoContado((act + monto).toString());
+  };
+
+  const fechaHoy = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
   return (
     <AppShell>
       <PageHeader
-        title="Cortes Diarios por Ruta"
-        subtitle="Panel de Administración y Cuadre de Caja"
+        title="Corte Diario de Caja"
+        subtitle="Liquidación y Arqueo Financiero por Ruta"
         onBack={() => router.back()}
       />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Cabecera Informativa */}
-        <View style={[styles.summaryHeader, shadows.card]}>
-          <View style={styles.headerIcon}>
-            <Scissors size={24} color={colors.neutral[0]} />
+        {/* HERO CARD FINANCIERO */}
+        <View style={[styles.heroCard, shadows.card]}>
+          <View style={styles.heroTopRow}>
+            <View>
+              <Text style={styles.heroPreTitle}>JORNADA DE HOY</Text>
+              <Text style={styles.heroDate}>{fechaHoy}</Text>
+            </View>
+            <View style={styles.heroLiveBadge}>
+              <View style={styles.heroLiveDot} />
+              <Text style={styles.heroLiveText}>Ruta Activa</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.summaryTitle}>Cierre de Jornada de Hoy</Text>
-            <Text style={styles.summaryDate}>Lunes 15 de septiembre, 2026</Text>
+
+          <View style={styles.heroMetricsGrid}>
+            <View style={styles.heroMetricCol}>
+              <Text style={styles.heroMetricLabel}>Total Ventas (Flota)</Text>
+              <Text style={styles.heroMetricAmount}>{formatCurrency(totalVentasDia)}</Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroMetricCol}>
+              <Text style={styles.heroMetricLabel}>Efectivo a Entregar</Text>
+              <Text style={[styles.heroMetricAmount, { color: '#86efac' }]}>{formatCurrency(totalEfectivoGlobal)}</Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroMetricCol}>
+              <Text style={styles.heroMetricLabel}>Cobranza Recuperada</Text>
+              <Text style={styles.heroMetricAmount}>{formatCurrency(totalCobradoGlobal)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Sección: Cards por trabajador */}
-        <View style={styles.workersSection}>
-          <Text style={styles.sectionHeading}>Selecciona un trabajador para ver detalle:</Text>
+        {/* SELECTOR DE TRABAJADOR / RUTA */}
+        <View style={styles.sectionHeaderWrap}>
+          <Text style={styles.sectionHeading}>Trabajador en Turno:</Text>
+        </View>
 
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.workerChipsRow}>
           {cortesList.map((trabajador) => {
+            const isSelected = currentTrabajador?.empleadoId === trabajador.empleadoId;
             const hasDiff = trabajador.diferenciaCaja !== 0;
 
             return (
-              <View key={trabajador.empleadoId} style={[styles.workerCard, shadows.card]}>
-                {/* Header Trabajador */}
-                <View style={styles.workerTop}>
-                  <View style={styles.workerAvatar}>
-                    <User size={20} color={colors.primary[600]} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.workerName}>{trabajador.nombre}</Text>
-                    <Text style={styles.workerRoute}>{trabajador.ruta}</Text>
-                  </View>
-                  {hasDiff ? (
-                    <View style={styles.diffBadge}>
-                      <Text style={styles.diffBadgeText}>Dif: {formatCurrency(trabajador.diferenciaCaja)}</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.okBadge}>
-                      <Text style={styles.okBadgeText}>Cuadrado ✓</Text>
-                    </View>
-                  )}
+              <TouchableOpacity
+                key={trabajador.empleadoId}
+                activeOpacity={0.82}
+                onPress={() => handleSelectTrabajador(trabajador)}
+                style={[
+                  styles.workerChip,
+                  isSelected && styles.workerChipActive,
+                  shadows.card,
+                ]}
+              >
+                <View style={[styles.workerAvatarSmall, isSelected && { backgroundColor: '#FFFFFF' }]}>
+                  <Text style={[styles.workerAvatarText, isSelected && { color: colors.primary[700] }]}>
+                    {trabajador.nombre.charAt(0)}
+                  </Text>
+                </View>
+                <View style={{ marginRight: spacing.xs }}>
+                  <Text style={[styles.workerChipName, isSelected && styles.workerChipNameActive]}>
+                    {trabajador.nombre}
+                  </Text>
+                  <Text style={[styles.workerChipRoute, isSelected && styles.workerChipRouteActive]}>
+                    {trabajador.ruta}
+                  </Text>
                 </View>
 
-                {/* Métricas clave: Ventas, Cobrado, Crédito */}
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Ventas</Text>
-                    <MoneyDisplay amount={trabajador.ventasTotales} size="sm" color={colors.primary[700]} />
+                {hasDiff ? (
+                  <View style={styles.chipDiffBadge}>
+                    <Text style={styles.chipDiffBadgeText}>Dif</Text>
                   </View>
-
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Cobrado</Text>
-                    <MoneyDisplay amount={trabajador.abonosCobranza} size="sm" color={colors.success[700]} />
+                ) : (
+                  <View style={styles.chipOkBadge}>
+                    <Text style={styles.chipOkBadgeText}>✓</Text>
                   </View>
-
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Crédito</Text>
-                    <MoneyDisplay amount={trabajador.credito} size="sm" color={colors.warning[700]} />
-                  </View>
-                </View>
-
-                {/* Botón Ver corte */}
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => handleSelectTrabajador(trabajador)}
-                  style={styles.btnVerCorte}
-                >
-                  <Text style={styles.btnVerCorteText}>Ver corte detallado</Text>
-                  <ChevronRight size={16} color={colors.primary[600]} />
-                </TouchableOpacity>
-              </View>
+                )}
+              </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
-        {/* Modal de Detalle Completo del Trabajador */}
-        {selectedTrabajador && (
-          <View style={[styles.detailCard, shadows.card]}>
-            <View style={styles.detailHeader}>
-              <View>
-                <Text style={styles.detailTitle}>Detalle: {selectedTrabajador.nombre}</Text>
-                <Text style={styles.detailSub}>{selectedTrabajador.ruta}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setSelectedTrabajador(null)} style={styles.closeBtn}>
-                <X size={20} color={colors.neutral[500]} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Desglose Financiero */}
-            <Text style={styles.subHeading}>Desglose de Efectivo y Cobros:</Text>
-            <View style={styles.tableBlock}>
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Ventas Totales del Día:</Text>
-                <MoneyDisplay amount={selectedTrabajador.ventasTotales} size="sm" />
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>• En Efectivo:</Text>
-                <MoneyDisplay amount={selectedTrabajador.efectivo} size="sm" color={colors.success[600]} />
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>• En Transferencias (SPEI):</Text>
-                <MoneyDisplay amount={selectedTrabajador.transferencias} size="sm" color={colors.primary[600]} />
+        {currentTrabajador && (
+          <View style={styles.mainContent}>
+            {/* ENCABEZADO DE LIQUIDACIÓN DEL TRABAJADOR */}
+            <View style={[styles.liquidationCard, shadows.card]}>
+              <View style={styles.liqTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.liqWorkerName}>{currentTrabajador.nombre}</Text>
+                  <Text style={styles.liqWorkerRoute}>{currentTrabajador.ruta} · Camioneta Asignada</Text>
+                </View>
+                <View style={isCuadrado ? styles.statusBadgeOk : styles.statusBadgeWarn}>
+                  {isCuadrado ? (
+                    <>
+                      <CheckCircle2 size={14} color="#15803d" />
+                      <Text style={styles.statusBadgeTextOk}>Caja Cuadrada</Text>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={14} color="#b45309" />
+                      <Text style={styles.statusBadgeTextWarn}>
+                        {diferenciaCalculada > 0 ? `Sobrante +${formatCurrency(diferenciaCalculada)}` : `Faltante ${formatCurrency(diferenciaCalculada)}`}
+                      </Text>
+                    </>
+                  )}
+                </View>
               </View>
 
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>• En Tarjetas:</Text>
-                <MoneyDisplay amount={selectedTrabajador.tarjetas} size="sm" color={colors.neutral[700]} />
+              {/* GRID DE MÉTODOS DE PAGO Y FLUJO */}
+              <Text style={styles.subTitleText}>Desglose Financiero por Canal:</Text>
+              <View style={styles.breakdownGrid}>
+                {/* 1. Efectivo */}
+                <View style={styles.channelCard}>
+                  <View style={[styles.channelIconCircle, { backgroundColor: '#ecfdf5' }]}>
+                    <Banknote size={18} color="#10b981" />
+                  </View>
+                  <Text style={styles.channelLabel}>Efectivo en Ventas</Text>
+                  <Text style={[styles.channelAmount, { color: '#047857' }]}>
+                    {formatCurrency(currentTrabajador.efectivo)}
+                  </Text>
+                </View>
+
+                {/* 2. SPEI / Transferencia */}
+                <View style={styles.channelCard}>
+                  <View style={[styles.channelIconCircle, { backgroundColor: '#eff6ff' }]}>
+                    <Smartphone size={18} color="#2563eb" />
+                  </View>
+                  <Text style={styles.channelLabel}>Transferencias (SPEI)</Text>
+                  <Text style={[styles.channelAmount, { color: '#1d4ed8' }]}>
+                    {formatCurrency(currentTrabajador.transferencias)}
+                  </Text>
+                </View>
+
+                {/* 3. Tarjetas */}
+                <View style={styles.channelCard}>
+                  <View style={[styles.channelIconCircle, { backgroundColor: '#faf5ff' }]}>
+                    <CreditCard size={18} color="#9333ea" />
+                  </View>
+                  <Text style={styles.channelLabel}>Tarjetas / Terminal</Text>
+                  <Text style={[styles.channelAmount, { color: '#7e22ce' }]}>
+                    {formatCurrency(currentTrabajador.tarjetas)}
+                  </Text>
+                </View>
+
+                {/* 4. Crédito */}
+                <View style={styles.channelCard}>
+                  <View style={[styles.channelIconCircle, { backgroundColor: '#fffbeb' }]}>
+                    <Receipt size={18} color="#f59e0b" />
+                  </View>
+                  <Text style={styles.channelLabel}>Ventas a Crédito</Text>
+                  <Text style={[styles.channelAmount, { color: '#b45309' }]}>
+                    {formatCurrency(currentTrabajador.credito)}
+                  </Text>
+                </View>
+
+                {/* 5. Cobranza recibida */}
+                <View style={styles.channelCard}>
+                  <View style={[styles.channelIconCircle, { backgroundColor: '#f0fdf4' }]}>
+                    <Wallet size={18} color="#16a34a" />
+                  </View>
+                  <Text style={styles.channelLabel}>Cobranza (Abonos)</Text>
+                  <Text style={[styles.channelAmount, { color: '#15803d' }]}>
+                    +{formatCurrency(currentTrabajador.abonosCobranza)}
+                  </Text>
+                </View>
+
+                {/* 6. Gastos */}
+                <View style={styles.channelCard}>
+                  <View style={[styles.channelIconCircle, { backgroundColor: '#fef2f2' }]}>
+                    <Fuel size={18} color="#ef4444" />
+                  </View>
+                  <Text style={styles.channelLabel}>Gastos en Ruta</Text>
+                  <Text style={[styles.channelAmount, { color: '#dc2626' }]}>
+                    -{formatCurrency(currentTrabajador.gastos)}
+                  </Text>
+                </View>
               </View>
 
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>• Ventas a Crédito:</Text>
-                <MoneyDisplay amount={selectedTrabajador.credito} size="sm" color={colors.warning[700]} />
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Abonos recibidos (Cobranza):</Text>
-                <MoneyDisplay amount={selectedTrabajador.abonosCobranza} size="sm" color={colors.success[700]} />
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Gastos en ruta (gasolina/comida):</Text>
-                <Text style={[styles.negText]}>-{formatCurrency(selectedTrabajador.gastos)}</Text>
-              </View>
-
-              <View style={[styles.tableRow, styles.tableHighlight]}>
-                <Text style={styles.highlightLabel}>Efectivo esperado a entregar:</Text>
-                <MoneyDisplay amount={selectedTrabajador.efectivoEsperado} size="md" color={colors.primary[800]} />
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Diferencia en caja:</Text>
-                <Text style={{ fontWeight: 'bold', color: selectedTrabajador.diferenciaCaja === 0 ? colors.success[600] : colors.error[600] }}>
-                  {formatCurrency(selectedTrabajador.diferenciaCaja)}
+              {/* BARRA DE TOTALES Y ENTREGA DE EFECTIVO */}
+              <View style={styles.totalExpectedBox}>
+                <View style={styles.totalExpectedLeft}>
+                  <Text style={styles.totalExpectedLabel}>EFECTIVO ESPERADO A ENTREGAR</Text>
+                  <Text style={styles.totalExpectedSub}>(Efectivo ventas + Cobranza - Gastos)</Text>
+                </View>
+                <Text style={styles.totalExpectedAmount}>
+                  {formatCurrency(currentTrabajador.efectivoEsperado)}
                 </Text>
               </View>
+
+              {/* SECCIÓN DE ARQUEO FÍSICO CONTADO */}
+              <View style={styles.arqueoSection}>
+                <View style={styles.arqueoHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Scale size={16} color={colors.primary[700]} />
+                    <Text style={styles.arqueoTitle}>Arqueo Físico en Mano</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleSetQuickCash(currentTrabajador.efectivoEsperado)}
+                    style={styles.cuadrarExactoBtn}
+                  >
+                    <Text style={styles.cuadrarExactoText}>Cuadrar exacto</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.cashInputRow}>
+                  <Text style={styles.cashCurrencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.cashTextInput}
+                    keyboardType="decimal-pad"
+                    value={efectivoContado}
+                    onChangeText={setEfectivoContado}
+                    placeholder="0.00"
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
+
+                {/* Chips rápidos de denominaciones */}
+                <View style={styles.denominacionesRow}>
+                  <TouchableOpacity style={styles.denomChip} onPress={() => handleAddQuickCash(100)}>
+                    <Text style={styles.denomChipText}>+ $100</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.denomChip} onPress={() => handleAddQuickCash(200)}>
+                    <Text style={styles.denomChipText}>+ $200</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.denomChip} onPress={() => handleAddQuickCash(500)}>
+                    <Text style={styles.denomChipText}>+ $500</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.denomChip} onPress={() => handleAddQuickCash(1000)}>
+                    <Text style={styles.denomChipText}>+ $1,000</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.denomChip, { backgroundColor: '#fee2e2' }]} onPress={() => setEfectivoContado('0')}>
+                    <Text style={[styles.denomChipText, { color: '#dc2626' }]}>Limpiar</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* RESULTADO DEL CUADRE */}
+                <View style={[styles.diffSummaryRow, isCuadrado ? styles.diffSummaryRowOk : styles.diffSummaryRowWarn]}>
+                  <Text style={styles.diffSummaryLabel}>
+                    {isCuadrado ? '✓ Caja perfectamente cuadrada:' : 'Diferencia de arqueo:'}
+                  </Text>
+                  <Text style={[styles.diffSummaryVal, { color: isCuadrado ? '#15803d' : '#b45309' }]}>
+                    {formatCurrency(diferenciaCalculada)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* BALANCE DE MERCANCÍA / PIEZAS */}
+              <View style={styles.merchandiseCard}>
+                <View style={styles.merchTop}>
+                  <Package size={16} color={colors.primary[700]} />
+                  <Text style={styles.merchTitle}>Balance de Mercancía en Camioneta</Text>
+                </View>
+                <View style={styles.merchGrid}>
+                  <View style={styles.merchCol}>
+                    <Text style={styles.merchLabel}>Inventario Inicial</Text>
+                    <Text style={styles.merchVal}>{currentTrabajador.inventarioInicialPiezas} pzas</Text>
+                  </View>
+                  <View style={styles.merchCol}>
+                    <Text style={styles.merchLabel}>Vendidas Hoy</Text>
+                    <Text style={[styles.merchVal, { color: colors.primary[700] }]}>{currentTrabajador.piezasVendidas} pzas</Text>
+                  </View>
+                  <View style={styles.merchCol}>
+                    <Text style={styles.merchLabel}>Remanente Físico</Text>
+                    <Text style={[styles.merchVal, { fontWeight: '800' }]}>{currentTrabajador.inventarioActualPiezas} pzas</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* BOTONES DE ACCIÓN: CERRAR CORTE E IMPRIMIR TICKET */}
+              <View style={styles.actionsBlock}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  disabled={cerrando}
+                  onPress={handleCerrarCorte}
+                  style={[styles.primaryActionBtn, cerrando && { opacity: 0.65 }]}
+                >
+                  {cerrando ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <CheckCircle2 size={18} color="#FFFFFF" />
+                      <Text style={styles.primaryActionBtnText}>✓ Guardar y Cerrar Jornada</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setShowTicketModal(true)}
+                  style={styles.secondaryActionBtn}
+                >
+                  <Printer size={18} color={colors.primary[700]} />
+                  <Text style={styles.secondaryActionBtnText}>Imprimir Ticket de Corte</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-
-            {/* Desglose de Inventario */}
-            <Text style={[styles.subHeading, { marginTop: spacing.md }]}>Balance de Mercancía (Piezas):</Text>
-            <View style={styles.tableBlock}>
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Inventario inicial en camioneta:</Text>
-                <Text style={styles.tableVal}>{selectedTrabajador.inventarioInicialPiezas} piezas</Text>
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Piezas vendidas hoy:</Text>
-                <Text style={[styles.tableVal, { color: colors.primary[700] }]}>{selectedTrabajador.piezasVendidas} piezas</Text>
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Inventario actual remanente:</Text>
-                <Text style={[styles.tableVal, { fontWeight: 'bold' }]}>{selectedTrabajador.inventarioActualPiezas} piezas</Text>
-              </View>
-
-              <View style={styles.tableRow}>
-                <Text style={styles.tableLabel}>Faltantes de mercancía:</Text>
-                <Text style={{ color: colors.success[600], fontWeight: 'bold' }}>0 piezas (Cuadrado)</Text>
-              </View>
-            </View>
-
-            {/* Input de arqueo físico en mano */}
-            <View style={{ marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.neutral[50], borderRadius: radius.md, borderWidth: 1, borderColor: colors.neutral[200] }}>
-              <Text style={{ fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.neutral[800], marginBottom: spacing.xs }}>
-                Efectivo Físico Contado en Mano ($):
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.neutral[0],
-                  borderWidth: 1,
-                  borderColor: colors.neutral[300],
-                  borderRadius: radius.sm,
-                  padding: spacing.sm,
-                  fontSize: fontSize.md,
-                  fontWeight: fontWeight.bold,
-                  color: colors.neutral[900],
-                }}
-                keyboardType="decimal-pad"
-                value={efectivoContado}
-                onChangeText={setEfectivoContado}
-                placeholder="0.00"
-              />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs }}>
-                <Text style={{ fontSize: fontSize.xs, color: colors.neutral[600] }}>Diferencia calculada:</Text>
-                <Text style={{ fontSize: fontSize.xs, fontWeight: fontWeight.bold, color: ((parseFloat(efectivoContado) || 0) - selectedTrabajador.efectivoEsperado) === 0 ? colors.success[600] : colors.error[600] }}>
-                  {formatCurrency((parseFloat(efectivoContado) || 0) - selectedTrabajador.efectivoEsperado)}
-                </Text>
-              </View>
-            </View>
-
-            {/* Botón de cierre o aprobación */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              disabled={cerrando}
-              onPress={handleCerrarCorte}
-              style={[styles.approveBtn, cerrando && { opacity: 0.6 }]}
-            >
-              {cerrando ? (
-                <ActivityIndicator size="small" color={colors.neutral[0]} />
-              ) : (
-                <>
-                  <CheckCircle2 size={18} color={colors.neutral[0]} />
-                  <Text style={styles.approveBtnText}>✓ Cerrar Jornada y Cuadrar Caja</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {/* Botón para imprimir ticket térmico del corte */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setShowTicketModal(true)}
-              style={[styles.approveBtn, { backgroundColor: colors.neutral[0], borderWidth: 1.5, borderColor: colors.primary[500], marginTop: spacing.sm }]}
-            >
-              <Printer size={18} color={colors.primary[600]} />
-              <Text style={[styles.approveBtnText, { color: colors.primary[700] }]}>Imprimir Ticket de Corte</Text>
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
 
       {/* MODAL DE TICKET TÉRMICO DE CORTE */}
-      {selectedTrabajador && (
+      {currentTrabajador && (
         <TicketModal
           visible={showTicketModal}
           onClose={() => setShowTicketModal(false)}
-          title={`Ticket Corte - ${selectedTrabajador.nombre}`}
+          title={`Ticket Corte - ${currentTrabajador.nombre}`}
           ticketText58={ticketPrinter.generateCorteText({
-            fecha: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-            vendedorNombre: selectedTrabajador.nombre,
-            rutaNombre: selectedTrabajador.ruta,
-            ventasTotales: selectedTrabajador.ventasTotales,
-            efectivo: selectedTrabajador.efectivo,
-            transferencias: selectedTrabajador.transferencias,
-            tarjetas: selectedTrabajador.tarjetas,
-            credito: selectedTrabajador.credito,
-            abonosCobranza: selectedTrabajador.abonosCobranza,
-            gastos: selectedTrabajador.gastos,
-            efectivoEsperado: selectedTrabajador.efectivoEsperado,
-            efectivoContado: parseFloat(efectivoContado) || selectedTrabajador.efectivoEsperado,
-            diferenciaCaja: (parseFloat(efectivoContado) || selectedTrabajador.efectivoEsperado) - selectedTrabajador.efectivoEsperado,
-            piezasVendidas: selectedTrabajador.piezasVendidas,
-            inventarioActualPiezas: selectedTrabajador.inventarioActualPiezas,
-          }, 58)}
-          ticketText80={ticketPrinter.generateCorteText({
-            fecha: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-            vendedorNombre: selectedTrabajador.nombre,
-            rutaNombre: selectedTrabajador.ruta,
-            ventasTotales: selectedTrabajador.ventasTotales,
-            efectivo: selectedTrabajador.efectivo,
-            transferencias: selectedTrabajador.transferencias,
-            tarjetas: selectedTrabajador.tarjetas,
-            credito: selectedTrabajador.credito,
-            abonosCobranza: selectedTrabajador.abonosCobranza,
-            gastos: selectedTrabajador.gastos,
-            efectivoEsperado: selectedTrabajador.efectivoEsperado,
-            efectivoContado: parseFloat(efectivoContado) || selectedTrabajador.efectivoEsperado,
-            diferenciaCaja: (parseFloat(efectivoContado) || selectedTrabajador.efectivoEsperado) - selectedTrabajador.efectivoEsperado,
-            piezasVendidas: selectedTrabajador.piezasVendidas,
-            inventarioActualPiezas: selectedTrabajador.inventarioActualPiezas,
+            fecha: new Date().toLocaleDateString('es-MX', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            vendedorNombre: currentTrabajador.nombre,
+            rutaNombre: currentTrabajador.ruta,
+            ventasTotales: currentTrabajador.ventasTotales,
+            efectivo: currentTrabajador.efectivo,
+            transferencias: currentTrabajador.transferencias,
+            tarjetas: currentTrabajador.tarjetas,
+            credito: currentTrabajador.credito,
+            abonosCobranza: currentTrabajador.abonosCobranza,
+            gastos: currentTrabajador.gastos,
+            efectivoEsperado: currentTrabajador.efectivoEsperado,
+            efectivoContado: contadoNum,
+            diferenciaCaja: diferenciaCalculada,
+            piezasVendidas: currentTrabajador.piezasVendidas,
+            inventarioActualPiezas: currentTrabajador.inventarioActualPiezas,
           }, 80)}
         />
       )}
@@ -350,214 +471,472 @@ export default function CorteScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 110,
   },
-  summaryHeader: {
-    backgroundColor: colors.primary[700],
-    marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
-  },
-  summaryDate: {
-    fontSize: fontSize.xs,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  workersSection: {
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.lg,
-    gap: spacing.sm + 2,
-  },
-  sectionHeading: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[600],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  workerCard: {
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.neutral[200],
-  },
-  workerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  workerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary[50],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  workerName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
-  },
-  workerRoute: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
-  },
-  diffBadge: {
-    backgroundColor: colors.error[50],
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-  },
-  diffBadgeText: {
-    fontSize: fontSize.xs - 1,
-    color: colors.error[700],
-    fontWeight: fontWeight.bold,
-  },
-  okBadge: {
-    backgroundColor: colors.success[50],
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-  },
-  okBadgeText: {
-    fontSize: fontSize.xs - 1,
-    color: colors.success[700],
-    fontWeight: fontWeight.bold,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  metricItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  metricLabel: {
-    fontSize: fontSize.xs - 1,
-    color: colors.neutral[400],
-    marginBottom: 2,
-  },
-  btnVerCorte: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: spacing.xs + 2,
-  },
-  btnVerCorteText: {
-    fontSize: fontSize.xs + 1,
-    color: colors.primary[600],
-    fontWeight: fontWeight.bold,
-  },
-  detailCard: {
-    backgroundColor: colors.neutral[0],
+  heroCard: {
+    backgroundColor: '#0f172a',
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
     borderRadius: radius.xxl,
     padding: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: colors.primary[300],
+    borderWidth: 1,
+    borderColor: '#1e293b',
   },
-  detailHeader: {
+  heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
-  detailTitle: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
+  heroPreTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: 1,
   },
-  detailSub: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
+  heroDate: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+    textTransform: 'capitalize',
   },
-  closeBtn: {
-    padding: 4,
-    backgroundColor: colors.neutral[100],
+  heroLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
   },
-  subHeading: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[700],
-    textTransform: 'uppercase',
+  heroLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: '#22c55e',
+  },
+  heroLiveText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4ade80',
+  },
+  heroMetricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#1e293b',
+    borderRadius: radius.xl,
+    padding: spacing.md,
+  },
+  heroMetricCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  heroMetricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  heroMetricAmount: {
+    fontSize: fontSize.sm + 1,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  heroDivider: {
+    width: 1,
+    backgroundColor: '#334155',
+    marginVertical: 4,
+  },
+  sectionHeaderWrap: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-  tableBlock: {
-    backgroundColor: colors.neutral[50],
+  sectionHeading: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    color: colors.neutral[600],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  workerChipsRow: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  workerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.xl,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+    gap: 8,
+  },
+  workerChipActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
+  },
+  workerAvatarSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  workerAvatarText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary[700],
+  },
+  workerChipName: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  workerChipNameActive: {
+    color: '#FFFFFF',
+  },
+  workerChipRoute: {
+    fontSize: 10,
+    color: colors.neutral[500],
+  },
+  workerChipRouteActive: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  chipDiffBadge: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+  },
+  chipDiffBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#b91c1c',
+  },
+  chipOkBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+  },
+  chipOkBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#15803d',
+  },
+  mainContent: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  liquidationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.xxl,
+    padding: spacing.md + 2,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  liqTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+    marginBottom: spacing.md,
+  },
+  liqWorkerName: {
+    fontSize: fontSize.md,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  liqWorkerRoute: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  statusBadgeOk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  statusBadgeTextOk: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  statusBadgeWarn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  statusBadgeTextWarn: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309',
+  },
+  subTitleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.neutral[600],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  breakdownGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.md,
+  },
+  channelCard: {
+    width: '48.5%',
+    backgroundColor: '#f8fafc',
     borderRadius: radius.lg,
     padding: spacing.sm,
-    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
   },
-  tableRow: {
+  channelIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  channelLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.neutral[500],
+  },
+  channelAmount: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  totalExpectedBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: radius.xl,
+    padding: spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  tableLabel: {
-    fontSize: fontSize.xs + 1,
-    color: colors.neutral[600],
+  totalExpectedLeft: {
+    flex: 1,
   },
-  tableVal: {
+  totalExpectedLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#38bdf8',
+    letterSpacing: 0.5,
+  },
+  totalExpectedSub: {
+    fontSize: 9,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  totalExpectedAmount: {
+    fontSize: fontSize.lg,
+    fontWeight: '900',
+    color: '#86efac',
+  },
+  arqueoSection: {
+    backgroundColor: '#f8fafc',
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    marginBottom: spacing.md,
+  },
+  arqueoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  arqueoTitle: {
     fontSize: fontSize.xs + 1,
+    fontWeight: '800',
     color: colors.neutral[800],
   },
-  negText: {
-    fontSize: fontSize.xs + 1,
-    color: colors.error[600],
-    fontWeight: 'bold',
+  cuadrarExactoBtn: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
   },
-  tableHighlight: {
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
-    paddingTop: 6,
-    marginTop: 4,
+  cuadrarExactoText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary[700],
   },
-  highlightLabel: {
-    fontSize: fontSize.xs + 1,
-    fontWeight: fontWeight.bold,
+  cashInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.primary[300],
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  cashCurrencySymbol: {
+    fontSize: fontSize.xl,
+    fontWeight: '800',
+    color: colors.neutral[600],
+    marginRight: 6,
+  },
+  cashTextInput: {
+    flex: 1,
+    fontSize: fontSize.xl,
+    fontWeight: '800',
     color: colors.neutral[900],
+    paddingVertical: spacing.sm,
   },
-  approveBtn: {
+  denominacionesRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginBottom: spacing.sm,
+  },
+  denomChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: radius.md,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  denomChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  diffSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  diffSummaryRowOk: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  diffSummaryRowWarn: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  diffSummaryLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  diffSummaryVal: {
+    fontSize: fontSize.sm,
+    fontWeight: '900',
+  },
+  merchandiseCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    marginBottom: spacing.md,
+  },
+  merchTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  merchTitle: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    color: colors.neutral[800],
+  },
+  merchGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+  },
+  merchCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  merchLabel: {
+    fontSize: 9,
+    color: colors.neutral[500],
+    marginBottom: 2,
+  },
+  merchVal: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: '700',
+    color: colors.neutral[800],
+  },
+  actionsBlock: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  primaryActionBtn: {
     backgroundColor: colors.primary[600],
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
+    gap: 8,
   },
-  approveBtnText: {
-    color: colors.neutral[0],
+  primaryActionBtnText: {
+    color: '#FFFFFF',
     fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
+    fontWeight: '800',
+  },
+  secondaryActionBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: colors.primary[500],
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  secondaryActionBtnText: {
+    color: colors.primary[700],
+    fontSize: fontSize.sm,
+    fontWeight: '800',
   },
 });

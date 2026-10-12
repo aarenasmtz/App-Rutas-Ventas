@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Package,
@@ -14,6 +14,12 @@ import {
   AlertCircle,
   FileSpreadsheet,
   Boxes,
+  X,
+  ChevronRight,
+  Info,
+  DollarSign,
+  Barcode,
+  Check,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -42,6 +48,7 @@ export default function InventarioScreen() {
   const [filtroStock, setFiltroStock] = useState<FiltroStock>('Todos');
   const [categoriaActiva, setCategoriaActiva] = useState<string>('Todas');
   const [productosList, setProductosList] = useState<Producto[]>([]);
+  const [selectedProducto, setSelectedProducto] = useState<Producto | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -241,7 +248,12 @@ export default function InventarioScreen() {
                 : null;
 
               return (
-                <View key={p.id} style={[styles.inventoryCard, shadows.card]}>
+                <TouchableOpacity
+                  key={p.id}
+                  activeOpacity={0.82}
+                  onPress={() => setSelectedProducto(p)}
+                  style={[styles.inventoryCard, shadows.card]}
+                >
                   <View style={{ flex: 1 }}>
                     <View style={styles.cardTopRow}>
                       <View style={styles.invLeft}>
@@ -281,13 +293,232 @@ export default function InventarioScreen() {
                         </Text>
                       </View>
                     )}
+
+                    {/* Indicador de acción para ver detalle */}
+                    <View style={styles.cardTouchHint}>
+                      <Text style={styles.cardTouchHintText}>Toca para ver detalle de piezas y presentaciones</Text>
+                      <ChevronRight size={14} color={colors.primary[600]} />
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
         </View>
       </ScrollView>
+
+      {/* Modal de Detalle de Piezas e Inventario */}
+      {selectedProducto && (
+        <Modal
+          visible={Boolean(selectedProducto)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedProducto(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, shadows.floating]}>
+              {/* Header Modal */}
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    {selectedProducto.marca ? (
+                      <Text style={styles.modalBrandBadge}>{selectedProducto.marca}</Text>
+                    ) : null}
+                    <Text style={styles.modalCatBadge}>{selectedProducto.categoria}</Text>
+                    {selectedProducto.sku ? (
+                      <Text style={styles.modalSkuBadge}>SKU: {selectedProducto.sku}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.modalTitle} numberOfLines={2}>{selectedProducto.nombre}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedProducto(null)}
+                  style={styles.modalCloseBtn}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <X size={20} color={colors.neutral[600]} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+                {/* Banner de Existencia General */}
+                <View style={styles.modalStockBanner}>
+                  <View style={styles.modalStockLeft}>
+                    <Text style={styles.modalStockNumber}>{selectedProducto.existencia}</Text>
+                    <Text style={styles.modalStockUnit}>
+                      {selectedProducto.unidad || 'piezas'} totales
+                    </Text>
+                    <Text style={styles.modalStockLocation}>
+                      📍 {isAdmin ? (ubicacionSeleccionada === 'Bodega' ? 'Bodega Central' : ubicacionSeleccionada) : 'Camioneta en Ruta'}
+                    </Text>
+                  </View>
+                  <View style={styles.modalStockRight}>
+                    <StockBadge stockPiezas={selectedProducto.existencia} />
+                    <Text style={styles.modalUnitPrice}>
+                      {formatCurrency(selectedProducto.precioBase)}
+                    </Text>
+                    <Text style={styles.modalUnitPriceSub}>Precio base venta</Text>
+                  </View>
+                </View>
+
+                {/* Desglose Físico de Piezas */}
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <Boxes size={18} color={colors.primary[700]} />
+                    <Text style={styles.modalSectionTitle}>Desglose Físico en Piezas</Text>
+                  </View>
+                  <Text style={styles.modalSectionDesc}>
+                    Conteo exacto agrupado según el factor de cada empaque:
+                  </Text>
+
+                  {(() => {
+                    const parts = desglosarInventarioParts(
+                      selectedProducto.existencia,
+                      selectedProducto.presentaciones,
+                      selectedProducto.unidad || 'pieza'
+                    );
+
+                    if (parts.length === 0) {
+                      return (
+                        <View style={styles.emptyPartBox}>
+                          <Text style={styles.emptyPartText}>
+                            Producto agotado (0 {selectedProducto.unidad || 'piezas'})
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <View style={styles.partsContainer}>
+                        {parts.map((part, idx) => (
+                          <View key={idx} style={styles.partItemCard}>
+                            <View style={styles.partItemIconWrap}>
+                              {part.factor > 10 ? (
+                                <Package size={18} color={colors.primary[700]} />
+                              ) : (
+                                <Layers size={18} color={colors.primary[600]} />
+                              )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.partItemTitle}>
+                                {part.cantidad} {part.nombre}{part.cantidad === 1 ? '' : (part.nombre.endsWith('r') || part.nombre.endsWith('l') ? 'es' : 's')}
+                              </Text>
+                              <Text style={styles.partItemSubtitle}>
+                                {part.factor > 1
+                                  ? `Factor: 1 ${part.nombre} = ${part.factor} ${selectedProducto.unidad || 'pzas'}`
+                                  : `Piezas sueltas individuales`}
+                              </Text>
+                            </View>
+                            <View style={styles.partItemSubtotal}>
+                              <Text style={styles.partItemPieces}>
+                                {part.cantidad * part.factor}
+                              </Text>
+                              <Text style={styles.partItemPiecesLabel}>piezas</Text>
+                            </View>
+                          </View>
+                        ))}
+
+                        <View style={styles.partsTotalBar}>
+                          <Text style={styles.partsTotalLabel}>Suma total verificada:</Text>
+                          <Text style={styles.partsTotalValue}>
+                            {selectedProducto.existencia} {selectedProducto.unidad || 'piezas'}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
+                </View>
+
+                {/* Presentaciones y Factores de Empaque */}
+                {selectedProducto.presentaciones && selectedProducto.presentaciones.length > 0 && (
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <Package size={18} color={colors.secondary[700]} />
+                      <Text style={styles.modalSectionTitle}>Catálogo de Presentaciones</Text>
+                    </View>
+                    <View style={styles.presTable}>
+                      {selectedProducto.presentaciones.map((pres, idx) => {
+                        const unitEquiv = pres.piezasEquivalentes > 0 ? (pres.precio / pres.piezasEquivalentes) : pres.precio;
+                        return (
+                          <View key={idx} style={styles.presTableRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.presTableName}>{pres.nombre}</Text>
+                              <Text style={styles.presTableEquiv}>
+                                Contiene {pres.piezasEquivalentes} {selectedProducto.unidad || 'piezas'}
+                              </Text>
+                              {pres.codigoBarras ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                  <Barcode size={12} color={colors.neutral[500]} />
+                                  <Text style={styles.presTableBarcode}>{pres.codigoBarras}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                              <Text style={styles.presTablePrice}>{formatCurrency(pres.precio)}</Text>
+                              <Text style={styles.presTableUnitPrice}>
+                                ({formatCurrency(unitEquiv)}/pza)
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {/* Ficha Comercial & Datos */}
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <DollarSign size={18} color={colors.success[700]} />
+                    <Text style={styles.modalSectionTitle}>Valores Comerciales y Costos</Text>
+                  </View>
+                  <View style={styles.pricingGrid}>
+                    <View style={styles.pricingCol}>
+                      <Text style={styles.pricingLabel}>Precio Venta Base</Text>
+                      <Text style={styles.pricingVal}>
+                        {formatCurrency(selectedProducto.precioBase)}
+                      </Text>
+                    </View>
+                    <View style={styles.pricingCol}>
+                      <Text style={styles.pricingLabel}>Costo Compra</Text>
+                      <Text style={styles.pricingVal}>
+                        {selectedProducto.precioCompra
+                          ? formatCurrency(selectedProducto.precioCompra)
+                          : 'No registrado'}
+                      </Text>
+                    </View>
+                    {selectedProducto.precioCompra && selectedProducto.precioCompra > 0 && (
+                      <View style={styles.pricingCol}>
+                        <Text style={styles.pricingLabel}>Margen Estimado</Text>
+                        <Text style={[styles.pricingVal, { color: colors.success[700] }]}>
+                          +{formatCurrency(selectedProducto.precioBase - selectedProducto.precioCompra)} ({(((selectedProducto.precioBase - selectedProducto.precioCompra) / selectedProducto.precioBase) * 100).toFixed(0)}%)
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.pricingCol}>
+                      <Text style={styles.pricingLabel}>Tipo de Venta</Text>
+                      <Text style={styles.pricingVal}>
+                        {selectedProducto.precioPorPeso ? 'Báscula (Kg/Peso)' : 'Conteo por pieza'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+
+              {/* Botón Cerrar */}
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedProducto(null)}
+                  style={styles.modalCloseActionBtn}
+                >
+                  <Text style={styles.modalCloseActionBtnText}>Cerrar Detalle</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </AppShell>
   );
 }
@@ -623,5 +854,308 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: fontSize.sm,
     color: colors.neutral[400],
+  },
+  cardTouchHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs + 2,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  cardTouchHintText: {
+    fontSize: 11,
+    color: colors.primary[600],
+    fontWeight: fontWeight.semibold,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  modalCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xxl,
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  modalBrandBadge: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    textTransform: 'uppercase',
+  },
+  modalCatBadge: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+    color: colors.neutral[600],
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  modalSkuBadge: {
+    fontSize: 10,
+    color: colors.neutral[400],
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+    lineHeight: 22,
+  },
+  modalCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalScroll: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  modalStockBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    marginBottom: spacing.md,
+  },
+  modalStockLeft: {
+    flex: 1,
+  },
+  modalStockNumber: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: colors.primary[700],
+  },
+  modalStockUnit: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[600],
+    textTransform: 'uppercase',
+  },
+  modalStockLocation: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 4,
+  },
+  modalStockRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  modalUnitPrice: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+    marginTop: 4,
+  },
+  modalUnitPriceSub: {
+    fontSize: 10,
+    color: colors.neutral[400],
+  },
+  modalSection: {
+    marginBottom: spacing.md + 4,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  modalSectionTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  modalSectionDesc: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    marginBottom: spacing.sm,
+  },
+  emptyPartBox: {
+    padding: spacing.md,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  emptyPartText: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+  },
+  partsContainer: {
+    gap: spacing.xs + 2,
+  },
+  partItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    gap: spacing.sm,
+  },
+  partItemIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partItemTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  partItemSubtitle: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 1,
+  },
+  partItemSubtotal: {
+    alignItems: 'flex-end',
+  },
+  partItemPieces: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+  },
+  partItemPiecesLabel: {
+    fontSize: 9,
+    color: colors.neutral[400],
+    textTransform: 'uppercase',
+  },
+  partsTotalBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  partsTotalLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary[800],
+  },
+  partsTotalValue: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[800],
+  },
+  presTable: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    overflow: 'hidden',
+  },
+  presTableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  presTableName: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  presTableEquiv: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 1,
+  },
+  presTableBarcode: {
+    fontSize: 10,
+    color: colors.neutral[400],
+    fontFamily: 'monospace',
+  },
+  presTablePrice: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  presTableUnitPrice: {
+    fontSize: 10,
+    color: colors.neutral[500],
+  },
+  pricingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  pricingCol: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  pricingLabel: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    textTransform: 'uppercase',
+    fontWeight: fontWeight.semibold,
+    marginBottom: 2,
+  },
+  pricingVal: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  modalFooter: {
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    backgroundColor: colors.neutral[0],
+  },
+  modalCloseActionBtn: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md - 2,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseActionBtnText: {
+    color: colors.neutral[0],
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
 });

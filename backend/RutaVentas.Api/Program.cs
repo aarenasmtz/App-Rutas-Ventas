@@ -128,4 +128,34 @@ app.MapGet("/api/health", () => Results.Ok(new
     service = "RutaVentas.Api"
 }));
 
+// Ensure columns exist on Clientes in SQL Server
+try
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<RutaVentasDbContext>();
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Clientes') AND name = 'Latitud')
+            ALTER TABLE Clientes ADD Latitud FLOAT NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Clientes') AND name = 'Longitud')
+            ALTER TABLE Clientes ADD Longitud FLOAT NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Clientes') AND name = 'Colonia')
+            ALTER TABLE Clientes ADD Colonia NVARCHAR(100) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Clientes') AND name = 'Ciudad')
+            ALTER TABLE Clientes ADD Ciudad NVARCHAR(100) NULL;
+
+        UPDATE Clientes SET Latitud = 21.1219, Longitud = -101.6825, Colonia = 'Centro', Ciudad = 'León, Gto' WHERE Codigo = 'c1' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1245, Longitud = -101.6850, Colonia = 'Centro', Ciudad = 'León, Gto' WHERE Codigo = 'c2' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1350, Longitud = -101.6780, Colonia = 'Obrera', Ciudad = 'León, Gto' WHERE Codigo = 'c3' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1190, Longitud = -101.6790, Colonia = 'Centro', Ciudad = 'León, Gto' WHERE Codigo = 'c4' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1165, Longitud = -101.6815, Colonia = 'San Juan de Dios', Ciudad = 'León, Gto' WHERE Codigo = 'c5' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1685, Longitud = -101.6892, Colonia = 'Echeveste', Ciudad = 'León, Gto' WHERE Codigo = 'c6' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1092, Longitud = -101.6695, Colonia = 'León Moderno', Ciudad = 'León, Gto' WHERE Codigo = 'c7' AND Latitud IS NULL;
+        UPDATE Clientes SET Latitud = 21.1200 + (Id * 0.003), Longitud = -101.6800 - (Id * 0.0025), Colonia = 'León', Ciudad = 'León, Gto' WHERE Latitud IS NULL;
+    ");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"DB Migration check note: {ex.Message}");
+}
+
 app.Run();

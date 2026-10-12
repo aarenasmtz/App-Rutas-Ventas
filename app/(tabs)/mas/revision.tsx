@@ -51,15 +51,44 @@ export default function RevisionInventarioScreen() {
   const faltantes = items.filter((i) => i.revisado && i.diferencia < 0).length;
   const sobrantes = items.filter((i) => i.revisado && i.diferencia > 0).length;
 
+  const [checkingIndex, setCheckingIndex] = useState<number | null>(null);
+
+  const getHoraActualFormateada = () => {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+
   const toggleRevisado = (index: number) => {
     setItems((prev) => {
       const updated = [...prev];
+      const nextRevisado = !updated[index].revisado;
       updated[index] = {
         ...updated[index],
-        revisado: !updated[index].revisado,
+        revisado: nextRevisado,
+        fechaRevision: nextRevisado ? getHoraActualFormateada() : undefined,
+        revisadoPor: nextRevisado ? 'Miguel' : undefined,
       };
       return updated;
     });
+  };
+
+  const handleConfirmarCuadrado = async (index: number) => {
+    setCheckingIndex(index);
+    // Simulación de respuesta inmediata con feedback visual de guardado
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    setItems((prev) => {
+      const updated = [...prev];
+      const sis = updated[index].sistema;
+      updated[index] = {
+        ...updated[index],
+        fisico: sis,
+        diferencia: 0,
+        revisado: true,
+        fechaRevision: getHoraActualFormateada(),
+        revisadoPor: 'Miguel',
+      };
+      return updated;
+    });
+    setCheckingIndex(null);
   };
 
   const updateFisico = (index: number, newFisico: number) => {
@@ -71,6 +100,8 @@ export default function RevisionInventarioScreen() {
         fisico: newFisico,
         diferencia: newFisico - sistema,
         revisado: true,
+        fechaRevision: getHoraActualFormateada(),
+        revisadoPor: 'Miguel',
       };
       return updated;
     });
@@ -88,23 +119,23 @@ export default function RevisionInventarioScreen() {
   };
 
   const handleFinalizarRevision = async () => {
-    const ajustes = items
-      .filter((i) => i.revisado && i.diferencia !== 0)
-      .map((i) => ({
-        productoId: i.productoId,
-        cantidadSistema: i.sistema,
-        cantidadFisica: i.fisico,
-        diferencia: i.diferencia,
-        motivo: i.comentario || (i.diferencia < 0 ? 'Faltante en ruta' : 'Sobrante en ruta'),
-      }));
+    const todosRevisados = items.filter((i) => i.revisado);
 
-    if (ajustes.length === 0) {
+    if (todosRevisados.length === 0) {
       Alert.alert(
-        'Auditoría Sin Diferencias',
-        `Resumen de auditoría:\n• Revisados: ${revisadosCount}/${totalCount}\n• Correctos: ${correctos}\n\nTodo el inventario físico coincide con el sistema.`
+        'Sin Productos Revisados',
+        'Por favor verifica al menos un producto antes de guardar la auditoría.'
       );
       return;
     }
+
+    const ajustes = todosRevisados.map((i) => ({
+      productoId: i.productoId,
+      cantidadSistema: i.sistema,
+      cantidadFisica: i.fisico,
+      diferencia: i.diferencia,
+      motivo: i.comentario || (i.diferencia === 0 ? 'Físico verificado y cuadrado' : (i.diferencia < 0 ? 'Faltante en ruta' : 'Sobrante en ruta')),
+    }));
 
     setGuardando(true);
     try {
@@ -114,21 +145,28 @@ export default function RevisionInventarioScreen() {
         ajustes,
       });
 
-      // Recargar datos actualizados tanto de revisión como del catálogo de productos
+      // Recargar datos actualizados
       const refreshed = await DataService.getRevisionItems();
       if (refreshed && refreshed.length > 0) {
-        setItems(refreshed);
+        // Preservar timestamps de bitácora local
+        const hora = getHoraActualFormateada();
+        setItems(refreshed.map(r => ({
+          ...r,
+          fechaRevision: r.revisado ? (r.fechaRevision || hora) : undefined,
+          revisadoPor: r.revisado ? (r.revisadoPor || 'Miguel') : undefined,
+        })));
       }
       await DataService.getProductos();
 
-      Alert.alert(
-        'Ajustes de Auditoría Autorizados',
-        `Se han cuadrado y guardado ${ajustes.length} ajustes en la base de datos SQL Server exitosamente. Las existencias han sido actualizadas.`,
-        [
-          { text: 'Permanecer aquí' },
-          { text: 'Volver al Menú Más', onPress: () => router.replace('/(tabs)/mas') },
-        ]
-      );
+      const conDiferencia = ajustes.filter((a) => a.diferencia !== 0).length;
+      const mensaje = conDiferencia > 0
+        ? `Se auditaron ${ajustes.length} productos. Se aplicaron ${conDiferencia} ajustes en existencias en SQL Server.`
+        : `¡Auditoría 100% Cuadrada! Se verificaron ${ajustes.length} productos sin ningún faltante ni sobrante. Bitácora guardada exitosamente.`;
+
+      Alert.alert('Auditoría Guardada', mensaje, [
+        { text: 'Permanecer aquí' },
+        { text: 'Volver al Menú Más', onPress: () => router.replace('/(tabs)/mas') },
+      ]);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo guardar la auditoría');
     } finally {
@@ -265,6 +303,32 @@ export default function RevisionInventarioScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {/* Bitácora de Auditoría en la misma Card */}
+                {item.revisado ? (
+                  <View style={styles.bitacoraBadge}>
+                    <CheckCircle2 size={13} color="#15803d" />
+                    <Text style={styles.bitacoraBadgeText}>
+                      ✓ Auditado hoy a las {item.fechaRevision || '5:00 PM'} por {item.revisadoPor || 'Miguel'} · {item.diferencia === 0 ? 'Cuadrado (0 faltante)' : `Dif: ${item.diferencia > 0 ? `+${item.diferencia}` : item.diferencia} ${item.unidad}`}
+                    </Text>
+                  </View>
+                ) : item.diferencia === 0 ? (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => handleConfirmarCuadrado(index)}
+                    disabled={checkingIndex === index}
+                    style={styles.quickCuadrarBtn}
+                  >
+                    {checkingIndex === index ? (
+                      <ActivityIndicator size="small" color="#16a34a" />
+                    ) : (
+                      <>
+                        <Check size={14} color="#16a34a" strokeWidth={2.5} />
+                        <Text style={styles.quickCuadrarBtnText}>✓ Confirmar Cuadrado (0 Dif)</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
 
                 {/* Campo de comentario/justificación */}
                 <View style={styles.commentWrap}>
@@ -535,5 +599,39 @@ const styles = StyleSheet.create({
     color: colors.neutral[400],
     textAlign: 'center',
     lineHeight: 16,
+  },
+  bitacoraBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+  },
+  bitacoraBadgeText: {
+    fontSize: 11,
+    color: '#15803d',
+    fontWeight: '700',
+  },
+  quickCuadrarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.2,
+    borderColor: '#86efac',
+    borderRadius: radius.md,
+    paddingVertical: 6,
+    marginTop: spacing.xs,
+  },
+  quickCuadrarBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
   },
 });

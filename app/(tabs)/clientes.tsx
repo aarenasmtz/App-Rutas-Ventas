@@ -10,6 +10,7 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -23,6 +24,7 @@ import {
   CreditCard,
   Phone,
   Store,
+  Trash2,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockClientes, DataService } from '@/services/mockDataService';
@@ -47,6 +49,7 @@ export default function ClientesScreen() {
   const [tabAtencion, setTabAtencion] = useState<'Pendientes' | 'Atendidos' | 'Todos'>('Pendientes');
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
   const [rutasDisponibles, setRutasDisponibles] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Modal ABC Cliente
   const [modalVisible, setModalVisible] = useState(false);
@@ -222,66 +225,88 @@ export default function ClientesScreen() {
   };
 
   const handleSaveClient = async () => {
+    if (isSaving) return;
     if (!formNombre.trim()) {
       Alert.alert('Campo requerido', 'Ingresa el nombre del negocio o cliente.');
       return;
     }
 
-    const limCred = parseFloat(formLimiteCredito) || 0;
-    const saldo = parseFloat(formSaldo) || 0;
+    setIsSaving(true);
+    try {
+      const limCred = parseFloat(formLimiteCredito) || 0;
+      const saldo = parseFloat(formSaldo) || 0;
 
-    if (editingCliente) {
-      await DataService.updateCliente(editingCliente.id, {
-        nombre: formNombre.trim(),
-        propietario: formPropietario.trim(),
-        direccion: formDireccion.trim(),
-        colonia: formColonia.trim(),
-        ciudad: 'León, Gto',
-        telefono: formTelefono.trim(),
-        ruta: formRuta,
-        diasVisita: formDias,
-        limiteCredito: limCred,
-        saldo: saldo,
-        latitud: formLatitud ?? undefined,
-        longitud: formLongitud ?? undefined,
-      });
-    } else {
-      await DataService.createCliente({
-        nombre: formNombre.trim(),
-        propietario: formPropietario.trim(),
-        direccion: formDireccion.trim(),
-        colonia: formColonia.trim(),
-        ciudad: 'León, Gto',
-        telefono: formTelefono.trim(),
-        ruta: formRuta,
-        diasVisita: formDias,
-        limiteCredito: limCred,
-        saldo: saldo,
-        latitud: formLatitud ?? undefined,
-        longitud: formLongitud ?? undefined,
-      });
+      if (editingCliente) {
+        await DataService.updateCliente(editingCliente.id, {
+          nombre: formNombre.trim(),
+          propietario: formPropietario.trim(),
+          direccion: formDireccion.trim(),
+          colonia: formColonia.trim(),
+          ciudad: 'León, Gto',
+          telefono: formTelefono.trim(),
+          ruta: formRuta,
+          diasVisita: formDias,
+          limiteCredito: limCred,
+          saldo: saldo,
+          latitud: formLatitud ?? undefined,
+          longitud: formLongitud ?? undefined,
+        });
+      } else {
+        await DataService.createCliente({
+          nombre: formNombre.trim(),
+          propietario: formPropietario.trim(),
+          direccion: formDireccion.trim(),
+          colonia: formColonia.trim(),
+          ciudad: 'León, Gto',
+          telefono: formTelefono.trim(),
+          ruta: formRuta,
+          diasVisita: formDias,
+          limiteCredito: limCred,
+          saldo: saldo,
+          latitud: formLatitud ?? undefined,
+          longitud: formLongitud ?? undefined,
+        });
+      }
+
+      await loadClientes();
+      setModalVisible(false);
+    } catch (err: any) {
+      Alert.alert('Error al guardar', err?.message || 'No se pudo guardar el cliente');
+    } finally {
+      setIsSaving(false);
     }
-
-    await loadClientes();
-    setModalVisible(false);
   };
 
   const handleDeleteClient = (c: Cliente) => {
-    Alert.alert(
-      'Dar de Baja Cliente',
-      `¿Deseas dar de baja a "${c.nombre}"? No aparecerá en la ruta activa.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Dar de baja',
-          style: 'destructive',
-          onPress: async () => {
-            await DataService.deleteCliente(c.id);
-            await loadClientes();
+    const doDelete = async () => {
+      try {
+        await DataService.deleteCliente(c.id);
+        await loadClientes();
+        if (modalVisible) setModalVisible(false);
+      } catch (err: any) {
+        Alert.alert('Error', err?.message || 'No se pudo dar de baja al cliente');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' && window.confirm(`¿Deseas dar de baja a "${c.nombre}"? No aparecerá en la ruta activa.`);
+      if (ok) {
+        doDelete();
+      }
+    } else {
+      Alert.alert(
+        'Dar de Baja Cliente',
+        `¿Deseas dar de baja a "${c.nombre}"? No aparecerá en la ruta activa.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Dar de baja',
+            style: 'destructive',
+            onPress: doDelete,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleVender = (cliente: Cliente) => {
@@ -567,12 +592,38 @@ export default function ClientesScreen() {
               </View>
             </ScrollView>
 
-            <TouchableOpacity activeOpacity={0.85} onPress={handleSaveClient} style={styles.saveBtn}>
-              <CheckCircle2 size={18} color="#FFFFFF" />
-              <Text style={styles.saveBtnText}>
-                {editingCliente ? 'Guardar Cambios' : 'Registrar Cliente'}
-              </Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleSaveClient}
+              disabled={isSaving}
+              style={[styles.saveBtn, isSaving && { opacity: 0.65 }]}
+            >
+              {isSaving ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.saveBtnText}>Guardando cliente...</Text>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} color="#FFFFFF" />
+                  <Text style={styles.saveBtnText}>
+                    {editingCliente ? 'Guardar Cambios' : 'Registrar Cliente'}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
+
+            {editingCliente && (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => handleDeleteClient(editingCliente)}
+                disabled={isSaving}
+                style={styles.deleteModalBtn}
+              >
+                <Trash2 size={16} color={colors.error[600]} />
+                <Text style={styles.deleteModalBtnText}>Dar de baja a este cliente</Text>
+              </TouchableOpacity>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -785,6 +836,23 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#FFFFFF',
     fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  deleteModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.xl,
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[100],
+  },
+  deleteModalBtnText: {
+    color: colors.error[700],
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
   },
 });

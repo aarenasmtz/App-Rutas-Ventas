@@ -54,23 +54,25 @@ export default function MapaScreen() {
     return clientesList.filter((c) => c.activo !== false);
   }, [clientesList]);
 
-  // Abrir GPS en Google Maps para parada individual
+  // Abrir GPS en Google Maps para parada individual con navegación paso a paso
   const handleOpenGps = (cliente: Cliente) => {
-    const lat = cliente.latitud || 21.1221;
-    const lng = cliente.longitud || -101.6828;
-    const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}`);
-    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    Linking.openURL(url);
+    const lat = cliente.latitud;
+    const lng = cliente.longitud;
+    if (lat && lng) {
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+    } else {
+      const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}, ${cliente.colonia || 'León'}, Guanajuato`);
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+    }
   };
 
   // Abrir ruta completa de entrega en León en Google Maps
   const handleOpenFullRouteGps = () => {
     if (leonClientes.length === 0) return;
     const stops = leonClientes.slice(0, 8);
-    const origin = `${stops[0].latitud || 21.1221},${stops[0].longitud || -101.6828}`;
     const destination = `${stops[stops.length - 1].latitud || 21.1090},${stops[stops.length - 1].longitud || -101.6750}`;
-    const waypoints = stops.slice(1, -1).map((s) => `${s.latitud},${s.longitud}`).join('|');
-    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+    const waypoints = stops.slice(0, -1).map((s) => `${s.latitud || 21.1221},${s.longitud || -101.6828}`).join('|');
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
     Linking.openURL(url);
   };
 
@@ -88,17 +90,35 @@ export default function MapaScreen() {
     const centerLat = 21.1221;
     const centerLng = -101.6828;
 
-    const markersData = leonClientes.map((c, i) => ({
-      id: c.id,
-      index: i + 1,
-      nombre: c.nombre.replace(/'/g, "\\'"),
-      propietario: (c.propietario || '').replace(/'/g, "\\'"),
-      direccion: (c.direccion || '').replace(/'/g, "\\'"),
-      lat: c.latitud || (centerLat + (i * 0.005 - 0.01)),
-      lng: c.longitud || (centerLng + (i * 0.004 - 0.008)),
-      saldo: c.saldo || 0,
-      telefono: c.telefono || '',
-    }));
+    const markersData = leonClientes.map((c, i) => {
+      let lat = c.latitud;
+      let lng = c.longitud;
+      if (!lat || !lng) {
+        const col = (c.colonia || '').toLowerCase();
+        if (col.includes('coecillo')) { lat = 21.1275 + (i % 3) * 0.002; lng = -101.6685 + (i % 3) * 0.002; }
+        else if (col.includes('san juan') || col.includes('dios')) { lat = 21.1162 + (i % 3) * 0.002; lng = -101.6811 + (i % 3) * 0.002; }
+        else if (col.includes('moderno')) { lat = 21.1090 + (i % 3) * 0.002; lng = -101.6690 + (i % 3) * 0.002; }
+        else if (col.includes('echeveste')) { lat = 21.1680 + (i % 3) * 0.002; lng = -101.6890 + (i % 3) * 0.002; }
+        else if (col.includes('obrera')) { lat = 21.1350 + (i % 3) * 0.002; lng = -101.6870 + (i % 3) * 0.002; }
+        else {
+          const angle = (i * 137.5 * Math.PI) / 180;
+          const radius = 0.008 + (i % 5) * 0.003;
+          lat = centerLat + Math.sin(angle) * radius;
+          lng = centerLng + Math.cos(angle) * radius;
+        }
+      }
+      return {
+        id: c.id,
+        index: i + 1,
+        nombre: c.nombre.replace(/'/g, "\\'"),
+        propietario: (c.propietario || '').replace(/'/g, "\\'"),
+        direccion: (c.direccion || '').replace(/'/g, "\\'"),
+        lat,
+        lng,
+        saldo: c.saldo || 0,
+        telefono: c.telefono || '',
+      };
+    });
 
     return `
       <!DOCTYPE html>
@@ -225,7 +245,7 @@ export default function MapaScreen() {
               '<div class="popup-name">' + s.nombre + '</div>' +
               '<div class="popup-addr">' + s.direccion + '</div>' +
               (s.saldo > 0 ? '<div class="popup-saldo">Saldo: $' + s.saldo.toLocaleString() + '</div>' : '') +
-              '<a href="https://www.google.com/maps/search/?api=1&query=' + s.lat + ',' + s.lng + '" target="_blank" class="popup-btn">📍 Abrir en GPS</a>' +
+              '<a href="https://www.google.com/maps/dir/?api=1&destination=' + s.lat + ',' + s.lng + '" target="_blank" class="popup-btn">📍 Navegar en GPS</a>' +
               '</div>';
 
             marker.bindPopup(popupHtml);
@@ -239,6 +259,9 @@ export default function MapaScreen() {
               opacity: 0.75,
               dashArray: '8, 8'
             }).addTo(map);
+            map.fitBounds(latlngs, { padding: [40, 40] });
+          } else if (latlngs.length === 1) {
+            map.setView(latlngs[0], 15);
           }
         </script>
       </body>

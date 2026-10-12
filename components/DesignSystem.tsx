@@ -762,11 +762,18 @@ export function ClientCard({
               <Text style={clientStyles.alCorrienteText}>Al corriente</Text>
             </View>
           )}
-          {onEdit && (
-            <TouchableOpacity activeOpacity={0.7} onPress={onEdit} style={clientStyles.topEditBtn}>
-              <Edit2 size={13} color={colors.neutral[400]} />
-            </TouchableOpacity>
-          )}
+          <View style={clientStyles.topActionsRow}>
+            {onEdit && (
+              <TouchableOpacity activeOpacity={0.7} onPress={onEdit} style={clientStyles.topEditBtn} accessibilityLabel="Editar cliente">
+                <Edit2 size={13} color={colors.neutral[500]} />
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity activeOpacity={0.7} onPress={onDelete} style={clientStyles.topDeleteBtn} accessibilityLabel="Dar de baja cliente">
+                <Trash2 size={13} color={colors.error[500]} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -903,7 +910,16 @@ const clientStyles = StyleSheet.create({
     fontWeight: '600',
     color: colors.neutral[500],
   },
+  topActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
   topEditBtn: {
+    padding: 3,
+  },
+  topDeleteBtn: {
     padding: 3,
   },
   actionsRow: {

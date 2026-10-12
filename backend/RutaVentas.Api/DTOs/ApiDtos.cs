@@ -145,6 +145,10 @@ public class ClienteDetalleDto
     public string? DistanciaMock { get; set; }
     public string? UltimaCompra { get; set; }
     public string? UltimoPago { get; set; }
+    public double? Latitud { get; set; }
+    public double? Longitud { get; set; }
+    public string? Colonia { get; set; }
+    public string? Ciudad { get; set; }
     public Dictionary<string, decimal>? PreciosEspeciales { get; set; }
 }
 
@@ -479,6 +483,8 @@ public class GuardarClienteRequestDto
     public string Direccion { get; set; } = string.Empty;
     public string? Colonia { get; set; }
     public string? Ciudad { get; set; }
+    public double? Latitud { get; set; }
+    public double? Longitud { get; set; }
     public string? Telefono { get; set; }
     public string Ruta { get; set; } = "Ruta Centro";
     public List<string> DiasVisita { get; set; } = new() { "Lun", "Mié", "Vie" };

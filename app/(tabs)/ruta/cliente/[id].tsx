@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MapPin, ShoppingCart, Wallet, RotateCcw, Navigation, Phone, Calendar, FileText, Clock } from 'lucide-react-native';
+import { MapPin, ShoppingCart, Wallet, RotateCcw, Navigation, Phone, Calendar, FileText, Clock, ExternalLink } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockClientes, mockProductos, DataService } from '@/services/mockDataService';
 import { useApp } from '@/context/AppContext';
@@ -15,25 +15,70 @@ export default function ClienteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { setClienteActivoId } = useApp();
-  const [cliente, setCliente] = useState<Cliente>(() => {
-    return mockClientes.find((c) => c.id === id) || mockClientes[0];
+  const [loading, setLoading] = useState(true);
+  const [cliente, setCliente] = useState<Cliente | null>(() => {
+    return mockClientes.find((c) => c.id === id) || null;
   });
   const [tab, setTab] = useState<Tab>('resumen');
 
   useEffect(() => {
     const fetchLiveCliente = async () => {
       try {
-        const list = await DataService.getClientes();
-        const found = list.find((c) => c.id === id);
-        if (found) setCliente(found);
+        setLoading(true);
+        const live = await DataService.getClienteById(id);
+        if (live) {
+          setCliente(live);
+        } else {
+          const list = await DataService.getClientes();
+          const found = list.find((c) => c.id === id);
+          if (found) setCliente(found);
+        }
       } catch {
         // Keep fallback
+      } finally {
+        setLoading(false);
       }
     };
     fetchLiveCliente();
   }, [id]);
 
-  const creditoDisponible = cliente.limiteCredito - cliente.saldo;
+  if (loading && !cliente) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={colors.primary[600]} />
+        <Text style={{ marginTop: spacing.md, color: colors.neutral[600] }}>Cargando cliente...</Text>
+      </View>
+    );
+  }
+
+  if (!cliente) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader title="Cliente no encontrado" onBack={() => router.back()} />
+        <View style={[styles.center, { padding: spacing.xl }]}>
+          <Text style={{ fontSize: fontSize.lg, fontWeight: 'bold', color: colors.neutral[800], marginBottom: spacing.sm }}>
+            No se encontró el registro
+          </Text>
+          <Text style={{ color: colors.neutral[500], textAlign: 'center', marginBottom: spacing.lg }}>
+            El cliente solicitado no existe o fue dado de baja.
+          </Text>
+          <TouchableOpacity
+            style={[styles.agregarSugeridosBtn, { backgroundColor: colors.primary[600] }]}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.agregarSugeridosText}>Volver a la lista</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const saldo = cliente.saldo ?? 0;
+  const limiteCredito = cliente.limiteCredito ?? 0;
+  const creditoDisponible = Math.max(0, limiteCredito - saldo);
+  const diasVisitaTexto = Array.isArray(cliente.diasVisita) && cliente.diasVisita.length > 0
+    ? cliente.diasVisita.join(' - ')
+    : 'Lunes a Viernes';
 
   const handleVender = () => {
     setClienteActivoId(cliente.id);
@@ -45,41 +90,68 @@ export default function ClienteDetailScreen() {
     router.push('/(tabs)/mas/cobranza');
   };
 
+  const handleOpenGpsNavegacion = () => {
+    const lat = cliente.latitud;
+    const lng = cliente.longitud;
+    if (lat && lng) {
+      // Abre navegación directa punto por punto a este cliente
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+    } else {
+      const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}, ${cliente.colonia || 'León'}, Guanajuato`);
+      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <ScreenHeader title={cliente.nombre} subtitle={cliente.propietario} onBack={() => router.back()} />
+      <ScreenHeader
+        title={cliente.nombre}
+        subtitle={cliente.propietario || cliente.colonia || 'León, Gto'}
+        onBack={() => router.back()}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{cliente.nombre.charAt(0)}</Text>
+              <Text style={styles.avatarText}>{(cliente.nombre || 'C').charAt(0)}</Text>
             </View>
             <View style={styles.headerInfo}>
               <Text style={styles.clientName}>{cliente.nombre}</Text>
-              <Text style={styles.owner}>Propietario: {cliente.propietario}</Text>
-              {cliente.telefono && (
+              <Text style={styles.owner}>Propietario: {cliente.propietario || 'No especificado'}</Text>
+              {cliente.telefono ? (
                 <View style={styles.addressRow}>
                   <Phone size={13} color={colors.primary[600]} />
                   <Text style={[styles.addressText, { color: colors.primary[700], fontWeight: '600' }]}>{cliente.telefono}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={styles.diasRow}>
                 <Calendar size={13} color={colors.neutral[400]} />
-                <Text style={styles.diasText}>Visita: {cliente.diasVisita.join(' - ')}</Text>
+                <Text style={styles.diasText}>Visita: {diasVisitaTexto}</Text>
               </View>
               <View style={styles.addressRow}>
                 <MapPin size={13} color={colors.neutral[400]} />
-                <Text style={styles.addressText}>{cliente.direccion}</Text>
+                <Text style={styles.addressText}>
+                  {cliente.direccion}
+                  {cliente.colonia ? ` · Col. ${cliente.colonia}` : ''}
+                </Text>
               </View>
+              {cliente.latitud && cliente.longitud && (
+                <View style={[styles.addressRow, { marginTop: 4 }]}>
+                  <Navigation size={12} color={colors.success[600]} />
+                  <Text style={[styles.addressText, { color: colors.success[700], fontSize: 11, fontWeight: '600' }]}>
+                    GPS: {cliente.latitud.toFixed(5)}, {cliente.longitud.toFixed(5)}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
           <View style={styles.balanceRow}>
             <View style={styles.balanceItem}>
               <Text style={styles.balanceLabel}>Saldo actual</Text>
-              <Text style={[styles.balanceValue, { color: cliente.saldo > 0 ? colors.error[600] : colors.success[600] }]}>
-                {formatCurrency(cliente.saldo)}
+              <Text style={[styles.balanceValue, { color: saldo > 0 ? colors.error[600] : colors.success[600] }]}>
+                {formatCurrency(saldo)}
               </Text>
             </View>
             <View style={styles.balanceDivider} />
@@ -90,7 +162,7 @@ export default function ClienteDetailScreen() {
             <View style={styles.balanceDivider} />
             <View style={styles.balanceItem}>
               <Text style={styles.balanceLabel}>Límite crédito</Text>
-              <Text style={styles.balanceValue}>{formatCurrency(cliente.limiteCredito)}</Text>
+              <Text style={styles.balanceValue}>{formatCurrency(limiteCredito)}</Text>
             </View>
           </View>
 
@@ -107,7 +179,7 @@ export default function ClienteDetailScreen() {
           </View>
         </View>
 
-        {/* Acciones principales: Vender, Cobrar, Ubicación, Estado de cuenta */}
+        {/* Acciones principales: Vender, Cobrar, Navegar GPS, Estado de cuenta */}
         <View style={styles.actionsRow}>
           <TouchableOpacity style={styles.actionBtn} onPress={handleVender}>
             <View style={styles.actionIcon}><ShoppingCart size={22} color={colors.neutral[0]} /></View>
@@ -119,14 +191,14 @@ export default function ClienteDetailScreen() {
             <Text style={[styles.actionText, { color: colors.success[700], fontWeight: 'bold' }]}>Cobrar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/ruta/mapa')}>
-            <View style={[styles.actionIcon, { backgroundColor: colors.neutral[700] }]}><Navigation size={22} color={colors.neutral[0]} /></View>
-            <Text style={styles.actionText}>Ubicación</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={handleOpenGpsNavegacion}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.primary[600] }]}><Navigation size={22} color={colors.neutral[0]} /></View>
+            <Text style={[styles.actionText, { color: colors.primary[700], fontWeight: 'bold' }]}>Ir en GPS</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setTab('cuenta')}>
-            <View style={[styles.actionIcon, { backgroundColor: colors.warning[600] }]}><FileText size={22} color={colors.neutral[0]} /></View>
-            <Text style={styles.actionText}>Estado cta</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/ruta/mapa')}>
+            <View style={[styles.actionIcon, { backgroundColor: colors.neutral[700] }]}><MapPin size={22} color={colors.neutral[0]} /></View>
+            <Text style={styles.actionText}>Ver Mapa</Text>
           </TouchableOpacity>
         </View>
 
@@ -156,41 +228,47 @@ export default function ClienteDetailScreen() {
 }
 
 function ResumenTab({ cliente }: { cliente: Cliente }) {
+  const diasTexto = Array.isArray(cliente.diasVisita) && cliente.diasVisita.length > 0
+    ? cliente.diasVisita.join(' - ')
+    : 'Lunes a Viernes';
+  const historial = Array.isArray(cliente.historial) ? cliente.historial : [];
+  const totalVentasHistorial = historial.reduce((s: number, h) => s + (h.total || 0), 0);
+
   return (
     <View style={styles.tabInner}>
       <Card style={styles.summaryCard}>
         <Text style={styles.cardTitle}>Estado del cliente</Text>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Estado de visita</Text>
-          <Badge label={cliente.estado} color={getEstadoColor(cliente.estado)} />
+          <Badge label={cliente.estado || 'Pendiente'} color={getEstadoColor(cliente.estado || 'Pendiente')} />
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Última visita</Text>
-          <Text style={styles.summaryValue}>{cliente.ultimaVisita}</Text>
+          <Text style={styles.summaryValue}>{cliente.ultimaVisita || 'Hoy'}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Días de visita</Text>
-          <Text style={styles.summaryValue}>{cliente.diasVisita.join(' - ')}</Text>
+          <Text style={styles.summaryValue}>{diasTexto}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Ruta asignada</Text>
-          <Text style={styles.summaryValue}>{cliente.ruta}</Text>
+          <Text style={styles.summaryValue}>{cliente.ruta || 'Ruta Centro'}</Text>
         </View>
       </Card>
 
       <Card style={styles.summaryCard}>
         <Text style={styles.cardTitle}>Resumen financiero</Text>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Total ventas (últimas 5)</Text>
-          <Text style={styles.summaryValue}>{formatCurrency(cliente.historial.reduce((s: number, h) => s + h.total, 0))}</Text>
+          <Text style={styles.summaryLabel}>Total ventas registradas</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(totalVentasHistorial)}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Ventas al crédito</Text>
-          <Text style={styles.summaryValue}>{cliente.historial.filter((h) => h.estado === 'Crédito').length}</Text>
+          <Text style={styles.summaryValue}>{historial.filter((h) => h.estado === 'Crédito').length}</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Ventas pagadas</Text>
-          <Text style={[styles.summaryValue, { color: colors.success[600] }]}>{cliente.historial.filter((h) => h.estado === 'Pagado').length}</Text>
+          <Text style={[styles.summaryValue, { color: colors.success[600] }]}>{historial.filter((h) => h.estado === 'Pagado').length}</Text>
         </View>
       </Card>
     </View>
@@ -198,24 +276,26 @@ function ResumenTab({ cliente }: { cliente: Cliente }) {
 }
 
 function SugeridoTab({ cliente }: { cliente: Cliente }) {
-  if (cliente.sugerido.length === 0) {
+  const sugeridos = Array.isArray(cliente.sugerido) ? cliente.sugerido : [];
+
+  if (sugeridos.length === 0) {
     return (
       <Card style={styles.emptyTab}>
-        <Text style={styles.emptyText}>No hay productos sugeridos para este cliente.</Text>
+        <Text style={styles.emptyText}>No hay productos sugeridos configurados para este cliente.</Text>
       </Card>
     );
   }
   return (
     <View style={styles.tabInner}>
       <Text style={styles.sugeridoTitle}>Sugerido para hoy</Text>
-      {cliente.sugerido.map((s) => {
+      {sugeridos.map((s) => {
         const producto = mockProductos.find((p) => p.id === s.productoId);
         if (!producto) return null;
         return (
           <Card key={s.productoId} style={styles.sugeridoCard}>
             <View style={styles.sugeridoLeft}>
               <View style={styles.sugeridoIcon}>
-                <Text style={styles.sugeridoIconText}>{producto.categoria.charAt(0)}</Text>
+                <Text style={styles.sugeridoIconText}>{(producto.categoria || 'G').charAt(0)}</Text>
               </View>
               <View>
                 <Text style={styles.sugeridoName}>{producto.nombre}</Text>
@@ -223,7 +303,7 @@ function SugeridoTab({ cliente }: { cliente: Cliente }) {
                 <Text style={styles.sugeridoQty}>{s.cantidad} {producto.unidad}</Text>
               </View>
             </View>
-            <Text style={styles.sugeridoPrice}>{formatCurrency(producto.precioBase * s.cantidad)}</Text>
+            <Text style={styles.sugeridoPrice}>{formatCurrency((producto.precioBase || 0) * s.cantidad)}</Text>
           </Card>
         );
       })}
@@ -235,27 +315,29 @@ function SugeridoTab({ cliente }: { cliente: Cliente }) {
 }
 
 function HistorialTab({ cliente }: { cliente: Cliente }) {
-  if (cliente.historial.length === 0) {
+  const historial = Array.isArray(cliente.historial) ? cliente.historial : [];
+
+  if (historial.length === 0) {
     return (
       <Card style={styles.emptyTab}>
-        <Text style={styles.emptyText}>Sin historial de ventas.</Text>
+        <Text style={styles.emptyText}>Sin historial de ventas registradas.</Text>
       </Card>
     );
   }
   return (
     <View style={styles.tabInner}>
-      {cliente.historial.map((h) => (
+      {historial.map((h) => (
         <Card key={h.id} style={styles.historialCard}>
           <View style={styles.historialTop}>
             <Text style={styles.historialDate}>{h.fecha}</Text>
             <Badge label={h.estado} color={getEstadoColor(h.estado)} />
           </View>
           <View style={styles.historialItems}>
-            {h.items.map((item, i) => (
+            {(h.items || []).map((item, i) => (
               <Text key={i} style={styles.historialItem}>• {item.cantidad} {item.unidad} {item.productoNombre}</Text>
             ))}
           </View>
-          <Text style={styles.historialTotal}>Total: {formatCurrency(h.total)}</Text>
+          <Text style={styles.historialTotal}>Total: {formatCurrency(h.total || 0)}</Text>
         </Card>
       ))}
     </View>

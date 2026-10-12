@@ -86,6 +86,10 @@ public class ClientesController : ControllerBase
                 DistanciaMock = c.DistanciaMock,
                 UltimaCompra = c.UltimaCompra,
                 UltimoPago = c.UltimoPago,
+                Latitud = c.Latitud,
+                Longitud = c.Longitud,
+                Colonia = c.Colonia,
+                Ciudad = c.Ciudad,
                 PreciosEspeciales = preciosEspeciales
             };
         }).ToList();
@@ -131,6 +135,10 @@ public class ClientesController : ControllerBase
             DistanciaMock = c.DistanciaMock,
             UltimaCompra = c.UltimaCompra,
             UltimoPago = c.UltimoPago,
+            Latitud = c.Latitud,
+            Longitud = c.Longitud,
+            Colonia = c.Colonia,
+            Ciudad = c.Ciudad,
             PreciosEspeciales = preciosEspeciales
         };
 
@@ -154,6 +162,10 @@ public class ClientesController : ControllerBase
             Nombre = req.Nombre.Trim(),
             Propietario = req.Propietario.Trim(),
             Direccion = req.Direccion.Trim(),
+            Colonia = req.Colonia?.Trim(),
+            Ciudad = string.IsNullOrWhiteSpace(req.Ciudad) ? "León, Gto" : req.Ciudad.Trim(),
+            Latitud = req.Latitud,
+            Longitud = req.Longitud,
             Telefono = req.Telefono?.Trim(),
             Ruta = string.IsNullOrWhiteSpace(req.Ruta) ? "Ruta Centro" : req.Ruta,
             Saldo = req.Saldo,
@@ -195,6 +207,10 @@ public class ClientesController : ControllerBase
         if (!string.IsNullOrWhiteSpace(req.Nombre)) cliente.Nombre = req.Nombre.Trim();
         if (!string.IsNullOrWhiteSpace(req.Propietario)) cliente.Propietario = req.Propietario.Trim();
         if (!string.IsNullOrWhiteSpace(req.Direccion)) cliente.Direccion = req.Direccion.Trim();
+        if (req.Colonia != null) cliente.Colonia = req.Colonia.Trim();
+        if (req.Ciudad != null) cliente.Ciudad = req.Ciudad.Trim();
+        if (req.Latitud.HasValue) cliente.Latitud = req.Latitud.Value;
+        if (req.Longitud.HasValue) cliente.Longitud = req.Longitud.Value;
         if (req.Telefono != null) cliente.Telefono = req.Telefono.Trim();
         if (!string.IsNullOrWhiteSpace(req.Ruta)) cliente.Ruta = req.Ruta;
         if (req.DiasVisita != null && req.DiasVisita.Any())

@@ -225,6 +225,8 @@ export interface RevisionItem {
   diferencia: number;
   revisado: boolean;
   comentario: string;
+  fechaRevision?: string;
+  revisadoPor?: string;
 }
 
 export interface CorteTrabajador {

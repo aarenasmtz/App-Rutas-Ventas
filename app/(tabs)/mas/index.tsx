@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Boxes,
@@ -19,6 +20,11 @@ import {
   Users,
   FileSpreadsheet,
   UserCheck,
+  Smartphone,
+  X,
+  Share2,
+  CheckCircle2,
+  ArrowRight,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -37,6 +43,8 @@ export default function MasScreen() {
   const router = useRouter();
   const { user, switchRole, logout, online, toggleOnline } = useApp();
   const isAdmin = user?.rol === 'Administrador';
+  const [showShortcutModal, setShowShortcutModal] = useState(false);
+  const [platformTab, setPlatformTab] = useState<'ios' | 'android'>('ios');
 
   // Menú según rol requerido en el prompt
   const adminMenuItems: MenuItem[] = [
@@ -123,6 +131,23 @@ export default function MasScreen() {
           })}
         </View>
 
+        {/* Acceso Directo PWA Móvil (iPhone y Android) */}
+        <View style={styles.menuSection}>
+          <Text style={styles.sectionHeading}>Instalación en Celular:</Text>
+          <TouchableOpacity activeOpacity={0.82} onPress={() => setShowShortcutModal(true)}>
+            <View style={[styles.menuCard, styles.shortcutBanner, shadows.card]}>
+              <View style={[styles.menuIcon, { backgroundColor: '#eff6ff' }]}>
+                <Smartphone size={24} color={colors.primary[600]} />
+              </View>
+              <View style={styles.menuInfo}>
+                <Text style={[styles.menuTitle, { color: colors.primary[800] }]}>📲 Crear Acceso Directo</Text>
+                <Text style={styles.menuSubtitle}>Cómo agregar el ícono a la pantalla de tu iPhone o Android</Text>
+              </View>
+              <ChevronRight size={20} color={colors.primary[600]} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Ajustes de Red / Demo */}
         <View style={styles.systemSection}>
           <Text style={styles.sectionHeading}>Herramientas de Red:</Text>
@@ -153,6 +178,128 @@ export default function MasScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal Guía de Acceso Directo Móvil */}
+      <Modal visible={showShortcutModal} transparent animationType="slide" onRequestClose={() => setShowShortcutModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowShortcutModal(false)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Smartphone size={22} color={colors.primary[600]} />
+                <Text style={styles.modalTitle}>Acceso Directo en tu Celular</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowShortcutModal(false)} style={styles.closeBtn}>
+                <X size={20} color={colors.neutral[500]} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Selector de Plataforma */}
+            <View style={styles.platformTabs}>
+              <TouchableOpacity
+                onPress={() => setPlatformTab('ios')}
+                style={[styles.platformTab, platformTab === 'ios' && styles.platformTabActive]}
+              >
+                <Text style={[styles.platformTabText, platformTab === 'ios' && styles.platformTabTextActive]}>
+                  🍎 iPhone (Safari)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setPlatformTab('android')}
+                style={[styles.platformTab, platformTab === 'android' && styles.platformTabActive]}
+              >
+                <Text style={[styles.platformTabText, platformTab === 'android' && styles.platformTabTextActive]}>
+                  🤖 Android (Chrome)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: spacing.sm }}>
+              {platformTab === 'ios' ? (
+                <View style={styles.guideBlock}>
+                  <Text style={styles.guideIntro}>
+                    En iPhone puedes usar la app a pantalla completa sin barra de navegación:
+                  </Text>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>1</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Abre esta página en Safari</Text>
+                      <Text style={styles.stepDesc}>Asegúrate de estar en el navegador Safari oficial de tu iPhone.</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>2</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Toca el botón Compartir</Text>
+                      <Text style={styles.stepDesc}>Es el ícono cuadrado con una flecha hacia arriba [ ↑ ] en la barra inferior.</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>3</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Selecciona "Agregar a inicio"</Text>
+                      <Text style={styles.stepDesc}>Desliza hacia abajo en el menú y toca "Agregar a la pantalla de inicio" (o Add to Home Screen).</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>4</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Toca "Agregar" arriba a la derecha</Text>
+                      <Text style={styles.stepDesc}>¡Listo! Tendrás el ícono de RutaVentas en tu pantalla de inicio y se abrirá como app instalada.</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.guideBlock}>
+                  <Text style={styles.guideIntro}>
+                    En Android puedes instalar el icono en tu pantalla principal en 2 toques:
+                  </Text>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>1</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Abre esta página en Google Chrome</Text>
+                      <Text style={styles.stepDesc}>Asegúrate de estar navegando desde Chrome en tu teléfono.</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>2</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Toca los 3 puntos ( ⋮ )</Text>
+                      <Text style={styles.stepDesc}>Están ubicados en la esquina superior derecha del navegador.</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>3</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Toca "Instalar aplicación" o "Agregar a la pantalla principal"</Text>
+                      <Text style={styles.stepDesc}>Aparecerá una ventana emergente para confirmar.</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepRow}>
+                    <View style={styles.stepNum}><Text style={styles.stepNumText}>4</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stepTitle}>Toca "Instalar"</Text>
+                      <Text style={styles.stepDesc}>¡Listo! Tendrás la app en tus aplicaciones como app nativa.</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalBtnEntendido} onPress={() => setShowShortcutModal(false)}>
+              <CheckCircle2 size={18} color="#FFFFFF" />
+              <Text style={styles.modalBtnEntendidoText}>Entendido</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </AppShell>
   );
 }
@@ -248,5 +395,117 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingHorizontal: spacing.md,
     gap: spacing.xs + 2,
+  },
+  shortcutBanner: {
+    borderColor: '#bfdbfe',
+    backgroundColor: '#f8faff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: spacing.lg,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  modalTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  platformTabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: 3,
+    gap: 4,
+  },
+  platformTab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: radius.md,
+  },
+  platformTabActive: {
+    backgroundColor: '#FFFFFF',
+    ...shadows.card,
+  },
+  platformTabText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.neutral[500],
+  },
+  platformTabTextActive: {
+    color: colors.primary[700],
+    fontWeight: fontWeight.bold,
+  },
+  guideBlock: {
+    paddingVertical: spacing.xs,
+    gap: spacing.md,
+  },
+  guideIntro: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    marginBottom: spacing.xs,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  stepNum: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+  },
+  stepTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  stepDesc: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  modalBtnEntendido: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+  },
+  modalBtnEntendidoText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
 });

@@ -106,6 +106,16 @@ public class Cliente
     [MaxLength(100)]
     public string? UltimoPago { get; set; }
 
+    public double? Latitud { get; set; }
+
+    public double? Longitud { get; set; }
+
+    [MaxLength(100)]
+    public string? Colonia { get; set; }
+
+    [MaxLength(100)]
+    public string? Ciudad { get; set; }
+
     public bool Activo { get; set; } = true;
 
     public DateTime FechaCreacion { get; set; } = DateTime.Now;
