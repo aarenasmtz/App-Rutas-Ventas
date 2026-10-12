@@ -714,6 +714,33 @@ export const DataService = {
     return await apiService.surtirNotaPdf(req);
   },
 
+  // Rutas (ABC)
+  getRutas: async (activa?: boolean) => {
+    try {
+      const live = await apiService.getRutas(activa);
+      if (live && live.length > 0) return live;
+    } catch {
+      // Fallback
+    }
+    return [
+      { id: 1, nombre: 'Ruta Centro', descripcion: 'Zona Centro, San Juan de Dios, Madero', activa: true, totalClientes: 0, vendedorAsignado: 'Miguel' },
+      { id: 2, nombre: 'Ruta Norte', descripcion: 'Echeveste, Delta, Coecillo Norte', activa: true, totalClientes: 0, vendedorAsignado: 'Juan Pérez' },
+      { id: 3, nombre: 'Ruta Sur', descripcion: 'León Moderno, San Jerónimo, Sur', activa: true, totalClientes: 0, vendedorAsignado: 'Pedro Ramírez' },
+    ];
+  },
+
+  createRuta: async (req: { nombre: string; descripcion?: string; activa?: boolean }) => {
+    return await apiService.createRuta(req);
+  },
+
+  updateRuta: async (id: number, req: { nombre?: string; descripcion?: string; activa?: boolean }) => {
+    return await apiService.updateRuta(id, req);
+  },
+
+  deleteRuta: async (id: number) => {
+    return await apiService.deleteRuta(id);
+  },
+
   loginApi: async (req: { usuario: string; password: string; dispositivoId?: string }) => {
     const res = await apiService.login(req);
     if (res && res.token) {

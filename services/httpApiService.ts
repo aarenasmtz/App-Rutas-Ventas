@@ -6,12 +6,13 @@ import type {
   RevisionItem,
   Empleado,
   SurtidoNotaPdfRequest,
+  RutaItem,
 } from '@/types';
 
 // Determinación inteligente de la URL base (soporta variables de entorno de Cloudflare Pages y VPS)
 export const CLOUD_API_URL = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) 
   ? process.env.EXPO_PUBLIC_API_URL 
-  : 'https://boutique-revenues-premium-considered.trycloudflare.com/api/v1';
+  : 'https://statutory-edges-exploration-camps.trycloudflare.com/api/v1';
 
 export const getDefaultApiBaseUrl = (): string => {
   return CLOUD_API_URL;
@@ -317,12 +318,16 @@ class HttpApiService {
         nombre: cliente.nombre,
         propietario: cliente.propietario,
         direccion: cliente.direccion,
+        colonia: cliente.colonia,
+        ciudad: cliente.ciudad,
         telefono: cliente.telefono,
         ruta: cliente.ruta || 'Ruta Centro',
         saldo: cliente.saldo ?? 0,
         limiteCredito: cliente.limiteCredito ?? 5000,
         diasVisita: cliente.diasVisita || ['Lun', 'Mié', 'Vie'],
         distanciaMock: cliente.distanciaMock || '500m',
+        latitud: cliente.latitud,
+        longitud: cliente.longitud,
       }),
     });
     return {
@@ -330,6 +335,10 @@ class HttpApiService {
       nombre: c.nombre,
       propietario: c.propietario,
       direccion: c.direccion,
+      colonia: c.colonia || cliente.colonia,
+      ciudad: c.ciudad || cliente.ciudad || 'León, Gto',
+      latitud: c.latitud ?? cliente.latitud,
+      longitud: c.longitud ?? cliente.longitud,
       ruta: c.ruta,
       diasVisita: c.diasVisita || ['Lun', 'Mié', 'Vie'],
       saldo: c.saldo,
@@ -350,12 +359,16 @@ class HttpApiService {
         nombre: cliente.nombre,
         propietario: cliente.propietario,
         direccion: cliente.direccion,
+        colonia: cliente.colonia,
+        ciudad: cliente.ciudad,
         telefono: cliente.telefono,
         ruta: cliente.ruta,
         saldo: cliente.saldo,
         limiteCredito: cliente.limiteCredito,
         diasVisita: cliente.diasVisita,
         distanciaMock: cliente.distanciaMock,
+        latitud: cliente.latitud,
+        longitud: cliente.longitud,
       }),
     });
     return {
@@ -363,6 +376,10 @@ class HttpApiService {
       nombre: c.nombre,
       propietario: c.propietario,
       direccion: c.direccion,
+      colonia: c.colonia || cliente.colonia,
+      ciudad: c.ciudad || cliente.ciudad || 'León, Gto',
+      latitud: c.latitud ?? cliente.latitud,
+      longitud: c.longitud ?? cliente.longitud,
       ruta: c.ruta,
       diasVisita: c.diasVisita || ['Lun', 'Mié', 'Vie'],
       saldo: c.saldo,
@@ -792,6 +809,33 @@ class HttpApiService {
 
   async deleteEmpleado(id: string): Promise<boolean> {
     await this.request<any>(`/empleados/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return true;
+  }
+
+  // Rutas (ABC)
+  async getRutas(activa?: boolean): Promise<RutaItem[]> {
+    const qs = activa !== undefined ? `?activa=${activa}` : '';
+    return this.request<RutaItem[]>(`/rutas${qs}`);
+  }
+
+  async createRuta(req: { nombre: string; descripcion?: string; activa?: boolean }): Promise<RutaItem> {
+    return this.request<RutaItem>('/rutas', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async updateRuta(id: number, req: { nombre?: string; descripcion?: string; activa?: boolean }): Promise<RutaItem> {
+    return this.request<RutaItem>(`/rutas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async deleteRuta(id: number): Promise<boolean> {
+    await this.request<any>(`/rutas/${id}`, {
       method: 'DELETE',
     });
     return true;

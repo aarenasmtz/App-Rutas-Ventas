@@ -46,6 +46,15 @@ export interface Producto {
   presentaciones?: PresentacionConfig[];
 }
 
+export interface RutaItem {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  activa: boolean;
+  totalClientes?: number;
+  vendedorAsignado?: string;
+}
+
 export type DiaVisita = 'Lun' | 'Mar' | 'Mié' | 'Jue' | 'Vie' | 'Sáb' | 'Dom';
 
 export type EstadoCliente =

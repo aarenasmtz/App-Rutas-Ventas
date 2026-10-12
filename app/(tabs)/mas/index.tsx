@@ -47,6 +47,7 @@ export default function MasScreen() {
     { title: 'Clientes (ABC)', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes' },
     { title: 'Cortes', subtitle: 'Cortes diarios por trabajador', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
     { title: 'Cobranza', subtitle: 'Registrar y consultar abonos', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
+    { title: 'Rutas Asignadas (ABC)', subtitle: 'Cambiar nombres y zonas de distribución', icon: MapPin, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/rutas' },
     { title: 'Rutas y Mapa', subtitle: 'Secuencia de paradas y mapa León, Gto', icon: MapPin, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/ruta' },
     { title: 'Revisión', subtitle: 'Auditoría rápida física vs sistema', icon: ClipboardCheck, color: colors.success[700], bg: colors.success[50], route: '/(tabs)/mas/revision' },
     { title: 'Auditoría', subtitle: 'Bitácora de movimientos y accesos', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },

@@ -64,11 +64,19 @@ export default function TrabajadoresScreen() {
   const [formRol, setFormRol] = useState<'Vendedor' | 'Administrador'>('Vendedor');
   const [formPermisos, setFormPermisos] = useState<PermisosEmpleado>(PERMISOS_DEFAULT);
 
+  const [rutasList, setRutasList] = useState<string[]>(['Ruta Centro', 'Ruta Norte', 'Ruta Sur']);
+
   const loadEmpleados = async () => {
     setLoading(true);
     try {
-      const data = await DataService.getEmpleados();
+      const [data, rutas] = await Promise.all([
+        DataService.getEmpleados(),
+        DataService.getRutas(),
+      ]);
       setEmpleados(data ?? []);
+      if (rutas && rutas.length > 0) {
+        setRutasList(rutas.map((r: any) => r.nombre));
+      }
     } catch {
       setEmpleados([]);
     } finally {
@@ -194,7 +202,7 @@ export default function TrabajadoresScreen() {
       <PageHeader
         title="Trabajadores y Accesos"
         subtitle="Configuración de los 2 vendedores y permisos de ruta"
-        onBack={() => router.back()}
+        onBack={() => router.replace('/(tabs)/mas' as any)}
         right={
           <TouchableOpacity onPress={handleOpenCreate} style={styles.addHeaderBtn}>
             <Plus size={16} color={colors.neutral[0]} />
@@ -415,7 +423,7 @@ export default function TrabajadoresScreen() {
               {/* Ruta Asignada */}
               <Text style={styles.inputLabel}>Ruta Asignada</Text>
               <View style={styles.rutasRow}>
-                {['Ruta Centro', 'Ruta Norte', 'Ruta Sur'].map((r) => (
+                {rutasList.map((r) => (
                   <TouchableOpacity
                     key={r}
                     onPress={() => setFormRuta(r)}

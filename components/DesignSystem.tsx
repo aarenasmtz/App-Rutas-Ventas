@@ -85,11 +85,11 @@ export function PageHeader({
 
   const handleBackPress = () => {
     if (onBack) {
-      if (router.canGoBack()) {
-        onBack();
-      } else {
-        router.replace('/(tabs)/mas');
-      }
+      onBack();
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/mas');
     }
   };
 
