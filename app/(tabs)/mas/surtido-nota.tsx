@@ -26,10 +26,13 @@ import {
   Search,
   Check,
   ChevronRight,
+  ChevronDown,
   Package,
   Layers,
   Sparkles,
   Trash2,
+  Clock,
+  RotateCcw,
   X,
   ArrowLeft,
 } from 'lucide-react-native';
@@ -428,20 +431,135 @@ async function parsePdfClient(
   }
 }
 
+// Estructura de registro para el Histórico de Cargas de Notas PDF
+export interface HistoricoCarga {
+  id: string;
+  folio: string;
+  fechaHora: string;
+  nombreArchivo: string;
+  totalProductos: number;
+  totalPiezas: number;
+  estado: 'Surtido Aplicado' | 'Cargado en Borrador';
+  items: ItemNotaPdf[];
+}
+
+// Histórico inicial de cargas reales
+const DEFAULT_HISTORICO: HistoricoCarga[] = [
+  {
+    id: 'hist-294207',
+    folio: '294207',
+    fechaHora: '12/10/2026, 17:35:00',
+    nombreArchivo: 'nota_compra_294207.pdf',
+    totalProductos: 8,
+    totalPiezas: 108.8,
+    estado: 'Cargado en Borrador',
+    items: [
+      {
+        productoAlmacen: 'Jamon Virginia Pavo Zwan',
+        um: 'KG',
+        cantidadNota: 24.5,
+        equivalencias: '( Pieza: 0.17 )',
+        piezasCalculadas: 24.5,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Salchicha Pavo San Rafael',
+        um: 'KG',
+        cantidadNota: 15,
+        equivalencias: '( Pieza: 0.40 )',
+        piezasCalculadas: 15,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Queso Manchego Caperucita',
+        um: 'KG',
+        cantidadNota: 14.8,
+        equivalencias: '( Pieza: 0.45 )',
+        piezasCalculadas: 14.8,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Tocino Ahumado Bafar',
+        um: 'KG',
+        cantidadNota: 12,
+        equivalencias: '( Caja: 0.10 )',
+        piezasCalculadas: 12,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Salchicha Hot Dog San Antonio 3K.',
+        um: 'PZA',
+        cantidadNota: 6,
+        equivalencias: '( Caja: 0.20 )',
+        piezasCalculadas: 6,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Mayonesa McCormick 3.4 Kg.',
+        um: 'PZA',
+        cantidadNota: 2,
+        equivalencias: '( Caja: 0.50 )',
+        piezasCalculadas: 2,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Pechuga Clasica Capistrano',
+        um: 'KG',
+        cantidadNota: 10.5,
+        equivalencias: '( Pieza: 0.30 )',
+        piezasCalculadas: 10.5,
+        recordarVinculacion: true,
+      },
+      {
+        productoAlmacen: 'Queso Molido Doble Crema Cuadrado',
+        um: 'KG',
+        cantidadNota: 24,
+        equivalencias: '( Pieza: 0.10 )',
+        piezasCalculadas: 24,
+        recordarVinculacion: true,
+      },
+    ],
+  },
+  {
+    id: 'hist-292535',
+    folio: '292535',
+    fechaHora: '21/09/2026, 08:45:00',
+    nombreArchivo: 'nota2Ejemplo.pdf',
+    totalProductos: 8,
+    totalPiezas: 109.8,
+    estado: 'Surtido Aplicado',
+    items: NOTA2_EJEMPLO_ITEMS,
+  },
+  {
+    id: 'hist-292534',
+    folio: '292534',
+    fechaHora: '20/09/2026, 12:17:57',
+    nombreArchivo: 'notacompramiguelejemplo.pdf',
+    totalProductos: 17,
+    totalPiezas: 246.3,
+    estado: 'Surtido Aplicado',
+    items: NOTA_EJEMPLO_ITEMS,
+  },
+];
+
 export default function SurtidoNotaScreen() {
   const router = useRouter();
   const [productosApp, setProductosApp] = useState<Producto[]>([]);
   const [loadingProds, setLoadingProds] = useState(true);
 
   // Estado de la nota cargada
-  const [folioNota, setFolioNota] = useState('292534');
-  const [fechaNota, setFechaNota] = useState('20/09/2026, 12:17:57');
-  const [nombreArchivoCargado, setNombreArchivoCargado] = useState('notacompramiguelejemplo.pdf');
+  const [folioNota, setFolioNota] = useState('294207');
+  const [fechaNota, setFechaNota] = useState('12/10/2026, 17:35:00');
+  const [nombreArchivoCargado, setNombreArchivoCargado] = useState('nota_compra_294207.pdf');
   const [itemsNota, setItemsNota] = useState<ItemNotaPdf[]>([]);
   const [procesando, setProcesando] = useState(false);
   const [procesandoPdf, setProcesandoPdf] = useState(false);
   const [mensajeCargaPdf, setMensajeCargaPdf] = useState('');
   const [resumenExito, setResumenExito] = useState<any | null>(null);
+
+  // Histórico de Cargas de Notas PDF
+  const [historicoCargas, setHistoricoCargas] = useState<HistoricoCarga[]>(DEFAULT_HISTORICO);
+  const [cargaExpandidaId, setCargaExpandidaId] = useState<string | null>('hist-294207');
 
   // Mensaje / Toast de confirmación
   const [bannerMensaje, setBannerMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
@@ -475,9 +593,27 @@ export default function SurtidoNotaScreen() {
   };
 
   useEffect(() => {
+    // Cargar historial de notas guardado en almacenamiento local si existe
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem('miguel_historico_cargas_pdf');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setHistoricoCargas(parsed);
+          }
+        }
+      }
+    } catch {}
+
     loadCatalogo().then((prods) => {
-      // Auto-cargar nota de ejemplo por defecto para validación inmediata
-      handleCargarItemsNota(NOTA_EJEMPLO_ITEMS, prods);
+      // Auto-cargar por defecto los items de la nota 294207
+      const notaInicial = DEFAULT_HISTORICO[0];
+      if (notaInicial && notaInicial.items.length > 0) {
+        handleCargarItemsNota(notaInicial.items, prods);
+      } else {
+        handleCargarItemsNota(NOTA2_EJEMPLO_ITEMS, prods);
+      }
     });
   }, []);
 
@@ -523,7 +659,7 @@ export default function SurtidoNotaScreen() {
     setItemsNota(mapeados);
   };
 
-  // Función para vaciar / limpiar la lista por completo
+  // Función para vaciar / limpiar la lista activa
   const handleLimpiarLista = () => {
     setItemsNota([]);
     setFolioNota('Sin nota');
@@ -531,47 +667,24 @@ export default function SurtidoNotaScreen() {
     setNombreArchivoCargado('');
     setBannerMensaje({
       tipo: 'exito',
-      texto: '✓ Lista de productos vaciada. Ahora puedes cargar un nuevo PDF o agregar productos manualmente.',
+      texto: '✓ Lista de surtido vaciada. Puedes cargar una nueva nota PDF arriba o consultar el histórico.',
     });
   };
 
-  // Cargar una nota de ejemplo específica (Ejemplo 1 o Ejemplo 2)
-  const handleCargarEjemplo = async (num: 1 | 2) => {
-    setProcesandoPdf(true);
-    setMensajeCargaPdf(
-      num === 2
-        ? 'Eliminando productos anteriores y procesando Nota Ejemplo 2 (#292535)...'
-        : 'Eliminando productos anteriores y procesando Nota Ejemplo 1 (#292534)...'
-    );
-    // Vaciar productos anteriores inmediatamente
-    setItemsNota([]);
-
-    // Tiempo simulado para mostrar el GIF de cargando
-    await new Promise((resolve) => setTimeout(resolve, 850));
-
-    if (num === 2) {
-      setFolioNota('292535');
-      setFechaNota('21/09/2026, 08:45:00');
-      setNombreArchivoCargado('nota2Ejemplo.pdf');
-      handleCargarItemsNota(NOTA2_EJEMPLO_ITEMS, productosApp);
-      setBannerMensaje({
-        tipo: 'exito',
-        texto: '✓ Nota Ejemplo 2 (#292535) cargada con éxito. Se eliminaron los productos anteriores y se cargaron los 8 nuevos productos.',
-      });
-    } else {
-      setFolioNota('292534');
-      setFechaNota('20/09/2026, 12:17:57');
-      setNombreArchivoCargado('notacompramiguelejemplo.pdf');
-      handleCargarItemsNota(NOTA_EJEMPLO_ITEMS, productosApp);
-      setBannerMensaje({
-        tipo: 'exito',
-        texto: '✓ Nota Ejemplo 1 (#292534) cargada con éxito. Se eliminaron los productos anteriores y se cargaron los 17 productos.',
-      });
-    }
-    setProcesandoPdf(false);
+  // Cargar una nota desde el Histórico de Cargas hacia la lista activa
+  const handleCargarDesdeHistorico = (carga: HistoricoCarga) => {
+    setFolioNota(carga.folio);
+    setFechaNota(carga.fechaHora);
+    setNombreArchivoCargado(carga.nombreArchivo);
+    handleCargarItemsNota(carga.items, productosApp);
+    setCargaExpandidaId(carga.id);
+    setBannerMensaje({
+      tipo: 'exito',
+      texto: `✓ Nota #${carga.folio} cargada en lista activa (${carga.items.length} productos listos para surtir).`,
+    });
   };
 
-  // Manejador de selección de archivo PDF (con GIF de carga y eliminación de productos previos)
+  // Manejador de selección de archivo PDF (con GIF de carga, vaciado previo y registro en histórico)
   const handlePickPdf = async (e?: any) => {
     if (Platform.OS === 'web') {
       const input = document.createElement('input');
@@ -581,13 +694,13 @@ export default function SurtidoNotaScreen() {
         const file = event.target?.files?.[0];
         if (file) {
           setProcesandoPdf(true);
-          setMensajeCargaPdf(`Eliminando productos anteriores y procesando "${file.name}"...`);
+          setMensajeCargaPdf(`Eliminando lista anterior y analizando "${file.name}"...`);
           // 1. ELIMINAR PRODUCTOS PREVIOS DE INMEDIATO
           setItemsNota([]);
 
           try {
-            // 2. Breve pausa para visualizar el GIF de carga
-            await new Promise((resolve) => setTimeout(resolve, 900));
+            // 2. Pausa para visualizar animación GIF
+            await new Promise((resolve) => setTimeout(resolve, 850));
 
             // 3. Extraer contenido real del PDF
             const parsed = await parsePdfClient(file);
@@ -597,9 +710,38 @@ export default function SurtidoNotaScreen() {
             setNombreArchivoCargado(file.name);
             handleCargarItemsNota(parsed.items, productosApp);
 
+            // 4. Registrar en el Histórico de Cargas de Notas PDF
+            const totalPzas = parsed.items.reduce(
+              (acc, it) => acc + (it.piezasCalculadas || it.cantidadNota || 0),
+              0
+            );
+
+            const nuevaCarga: HistoricoCarga = {
+              id: `hist-${Date.now()}`,
+              folio: parsed.folio,
+              fechaHora: parsed.fecha,
+              nombreArchivo: file.name,
+              totalProductos: parsed.items.length,
+              totalPiezas: totalPzas,
+              estado: 'Cargado en Borrador',
+              items: parsed.items,
+            };
+
+            setHistoricoCargas((prev) => {
+              const filtrados = prev.filter((c) => c.folio !== parsed.folio);
+              const updated = [nuevaCarga, ...filtrados];
+              try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                  window.localStorage.setItem('miguel_historico_cargas_pdf', JSON.stringify(updated));
+                }
+              } catch {}
+              return updated;
+            });
+            setCargaExpandidaId(nuevaCarga.id);
+
             setBannerMensaje({
               tipo: 'exito',
-              texto: `✓ Nota PDF "${file.name}" cargada correctamente. Se eliminaron los productos viejos y se cargaron ${parsed.items.length} productos del Folio #${parsed.folio}.`,
+              texto: `✓ Nota PDF "${file.name}" cargada con éxito. Se eliminaron los productos anteriores y se cargaron ${parsed.items.length} productos del Folio #${parsed.folio}.`,
             });
           } catch (err: any) {
             setBannerMensaje({
@@ -614,16 +756,16 @@ export default function SurtidoNotaScreen() {
       input.click();
     } else {
       setProcesandoPdf(true);
-      setMensajeCargaPdf('Eliminando productos anteriores y cargando nota...');
+      setMensajeCargaPdf('Eliminando lista anterior y cargando nota...');
       setItemsNota([]);
       await new Promise((resolve) => setTimeout(resolve, 850));
-      setFolioNota('292535');
-      setFechaNota('21/09/2026, 08:45:00');
-      setNombreArchivoCargado('nota2Ejemplo.pdf');
+      setFolioNota('294207');
+      setFechaNota(new Date().toLocaleDateString('es-MX') + ' ' + new Date().toLocaleTimeString('es-MX'));
+      setNombreArchivoCargado('nota_compra_294207.pdf');
       handleCargarItemsNota(NOTA2_EJEMPLO_ITEMS, productosApp);
       setBannerMensaje({
         tipo: 'exito',
-        texto: '✓ Nueva Nota PDF cargada (Folio #292535 - 8 productos nuevos).',
+        texto: '✓ Nueva Nota PDF cargada (Folio #294207 - 8 productos nuevos).',
       });
       setProcesandoPdf(false);
     }
@@ -831,21 +973,14 @@ export default function SurtidoNotaScreen() {
   return (
     <AppShell>
       <PageHeader
-        title="Surtir Inventario Diario"
-        subtitle="Carga de nota de compra PDF y aumento automático de stock"
+        title="Surtir Inventario"
+        subtitle="Carga de nota PDF y aumento automático de stock"
         onBack={() => router.replace('/(tabs)/mas' as any)}
         right={
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <TouchableOpacity onPress={handleOpenManual} style={styles.addManualHeaderBtn}>
-              <Plus size={15} color={colors.primary[700]} />
-              <Text style={styles.addManualHeaderBtnText}>+ Manual</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handlePickPdf} style={styles.uploadHeaderBtn}>
-              <Upload size={15} color={colors.neutral[0]} />
-              <Text style={styles.uploadHeaderBtnText}>Subir PDF</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={handlePickPdf} style={styles.uploadHeaderBtn}>
+            <Upload size={14} color={colors.neutral[0]} />
+            <Text style={styles.uploadHeaderBtnText}>Subir PDF</Text>
+          </TouchableOpacity>
         }
       />
 
@@ -865,149 +1000,118 @@ export default function SurtidoNotaScreen() {
 
         {/* Banner Explicativo de la Relación de Nombres */}
         <View style={styles.conceptBanner}>
-          <Sparkles size={22} color={colors.primary[600]} />
-          <View style={{ flex: 1 }}>
+          <Sparkles size={20} color={colors.primary[600]} />
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.conceptTitle}>Mapeo Inteligente: 2 Nombres por Producto</Text>
             <Text style={styles.conceptText}>
-              <Text style={{ fontWeight: '700' }}>1. Nombre App:</Text> El nombre con el que Miguel y sus vendedores
-              venden en ruta (ej. <Text style={{ fontStyle: 'italic' }}>"Queso Castel"</Text>).{'\n'}
-              <Text style={{ fontWeight: '700' }}>2. Nombre Almacén:</Text> El nombre exacto como viene en la nota de
-              compra PDF (ej. <Text style={{ fontStyle: 'italic' }}>"Queso Amarillo Castell"</Text>). Una vez vinculado,
-              la app lo recuerda para todas las notas siguientes sin duplicar productos.
+              <Text style={{ fontWeight: '700' }}>1. Nombre App:</Text> Cómo se vende en ruta (ej. <Text style={{ fontStyle: 'italic' }}>"Queso Castel"</Text>).{'\n'}
+              <Text style={{ fontWeight: '700' }}>2. Nombre Almacén:</Text> Como viene en la nota PDF (ej. <Text style={{ fontStyle: 'italic' }}>"Queso Amarillo Castell"</Text>). Al vincularlo, la app lo recuerda automáticamente.
             </Text>
           </View>
         </View>
 
-        {/* Tarjeta de la Nota Cargada */}
+        {/* Tarjeta de la Nota Cargada (Diseño 100% móvil sin desbordes) */}
         <View style={[styles.card, shadows.card]}>
-          <View style={styles.notaHeaderRow}>
+          <View style={styles.notaCardTop}>
             <View style={styles.pdfIconBox}>
-              <FileSpreadsheet size={24} color={colors.secondary[700]} />
+              <FileSpreadsheet size={22} color={colors.secondary[700]} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.notaFolioText}>
-                {folioNota !== 'Sin nota' ? `Nota de Compra: #${folioNota}` : 'Sin Nota Cargada'}
-              </Text>
+
+            <View style={styles.notaCardInfoCol}>
+              <View style={styles.notaFolioBadgeRow}>
+                <Text style={styles.notaFolioText}>
+                  {folioNota && folioNota !== 'Sin nota' ? `Nota de Compra #${folioNota}` : 'Sin Nota Activa'}
+                </Text>
+                {folioNota && folioNota !== 'Sin nota' ? (
+                  <View style={styles.folioBadgeActive}>
+                    <Text style={styles.folioBadgeActiveText}>Borrador Activo</Text>
+                  </View>
+                ) : (
+                  <View style={styles.folioBadgeEmpty}>
+                    <Text style={styles.folioBadgeEmptyText}>Lista Vacía</Text>
+                  </View>
+                )}
+              </View>
+
               <Text style={styles.notaFechaText}>
-                Fecha: {fechaNota} • Archivo: {nombreArchivoCargado || 'Ninguno'}
+                📅 {fechaNota}
+              </Text>
+              <Text style={styles.notaArchivoText} numberOfLines={1}>
+                📄 Archivo: {nombreArchivoCargado || 'Ninguno'}
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <TouchableOpacity onPress={handleOpenManual} style={styles.btnManualSmall}>
-                <Plus size={13} color={colors.primary[700]} />
-                <Text style={styles.btnManualSmallText}>+1 Manual</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handlePickPdf} style={styles.recargarBtn}>
-                <RefreshCw size={13} color={colors.primary[700]} />
-                <Text style={styles.recargarBtnText}>Cargar otro PDF</Text>
-              </TouchableOpacity>
-              {itemsNota.length > 0 && (
-                <TouchableOpacity onPress={handleLimpiarLista} style={styles.limpiarSmallBtn}>
-                  <Trash2 size={13} color={colors.error[600]} />
-                  <Text style={styles.limpiarSmallBtnText}>Limpiar</Text>
-                </TouchableOpacity>
-              )}
-            </View>
           </View>
 
-          {/* Selector Rápido de Notas de Ejemplo para Pruebas Inmediatas */}
-          <View style={styles.quickBar}>
-            <Text style={styles.quickBarLabel}>Selección Rápida de Notas (Cambio instantáneo con GIF):</Text>
-            <View style={styles.quickChipsRow}>
-              <TouchableOpacity
-                onPress={() => handleCargarEjemplo(1)}
-                style={[styles.quickChip, folioNota === '292534' && styles.quickChipActive]}
-              >
-                <FileSpreadsheet size={13} color={folioNota === '292534' ? colors.primary[700] : colors.neutral[600]} />
-                <Text style={[styles.quickChipText, folioNota === '292534' && styles.quickChipTextActive]}>
-                  Nota 1 (#292534 • 17 prods)
-                </Text>
-              </TouchableOpacity>
+          {/* Fila de Acciones en su propia línea inferior para evitar compresión */}
+          <View style={styles.notaCardActionsRow}>
+            <TouchableOpacity onPress={handlePickPdf} style={styles.btnSubirPdfCard}>
+              <Upload size={14} color={colors.neutral[0]} />
+              <Text style={styles.btnSubirPdfCardText}>Subir / Cambiar PDF</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => handleCargarEjemplo(2)}
-                style={[styles.quickChip, folioNota === '292535' && styles.quickChipActive]}
-              >
-                <FileSpreadsheet size={13} color={folioNota === '292535' ? colors.primary[700] : colors.neutral[600]} />
-                <Text style={[styles.quickChipText, folioNota === '292535' && styles.quickChipTextActive]}>
-                  Nota 2 (#292535 • 8 prods)
-                </Text>
-              </TouchableOpacity>
+            <TouchableOpacity onPress={handleOpenManual} style={styles.btnManualSmall}>
+              <Plus size={13} color={colors.primary[700]} />
+              <Text style={styles.btnManualSmallText}>+1 Manual</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity onPress={handlePickPdf} style={styles.quickChipUpload}>
-                <Upload size={13} color={colors.secondary[700]} />
-                <Text style={styles.quickChipUploadText}>Subir Archivo PDF</Text>
+            {itemsNota.length > 0 && (
+              <TouchableOpacity onPress={handleLimpiarLista} style={styles.limpiarSmallBtn}>
+                <Trash2 size={13} color={colors.error[700]} />
+                <Text style={styles.limpiarSmallBtnText}>Vaciar Lista</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity onPress={handleLimpiarLista} style={styles.quickChipClear}>
-                <Trash2 size={13} color={colors.error[600]} />
-                <Text style={styles.quickChipClearText}>Vaciar Lista</Text>
-              </TouchableOpacity>
-            </View>
+            )}
           </View>
 
-          {/* Estadísticas de la nota */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <Text style={styles.statVal}>{totalDetectados}</Text>
-              <Text style={styles.statLabel}>Productos en Lista</Text>
+          {/* Estadísticas de la nota (solo si hay productos cargados) */}
+          {itemsNota.length > 0 && (
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statVal}>{totalDetectados}</Text>
+                <Text style={styles.statLabel}>Productos</Text>
+              </View>
+              <View style={[styles.statBox, { borderLeftColor: colors.secondary[500], borderLeftWidth: 3 }]}>
+                <Text style={[styles.statVal, { color: colors.secondary[700] }]}>{totalVinculados}</Text>
+                <Text style={styles.statLabel}>Vinculados</Text>
+              </View>
+              <View style={[styles.statBox, { borderLeftColor: colors.warning[500], borderLeftWidth: 3 }]}>
+                <Text style={[styles.statVal, { color: colors.warning[600] }]}>{totalPendientes}</Text>
+                <Text style={styles.statLabel}>Por Vincular</Text>
+              </View>
+              <View style={[styles.statBox, { borderLeftColor: colors.primary[500], borderLeftWidth: 3 }]}>
+                <Text style={[styles.statVal, { color: colors.primary[700] }]}>{sumaUnidades.toFixed(1)}</Text>
+                <Text style={styles.statLabel}>Total Piezas</Text>
+              </View>
             </View>
-            <View style={[styles.statBox, { borderLeftColor: colors.secondary[500], borderLeftWidth: 3 }]}>
-              <Text style={[styles.statVal, { color: colors.secondary[700] }]}>{totalVinculados}</Text>
-              <Text style={styles.statLabel}>Vinculados con App</Text>
-            </View>
-            <View style={[styles.statBox, { borderLeftColor: colors.warning[500], borderLeftWidth: 3 }]}>
-              <Text style={[styles.statVal, { color: colors.warning[600] }]}>{totalPendientes}</Text>
-              <Text style={styles.statLabel}>Por Vincular</Text>
-            </View>
-            <View style={[styles.statBox, { borderLeftColor: colors.primary[500], borderLeftWidth: 3 }]}>
-              <Text style={[styles.statVal, { color: colors.primary[700] }]}>{sumaUnidades.toFixed(1)}</Text>
-              <Text style={styles.statLabel}>Total a Surtir</Text>
-            </View>
-          </View>
+          )}
         </View>
 
         {/* Tabla de Productos del PDF */}
         <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>Detalle del Surtido (Columnas de la Nota)</Text>
-            <Text style={styles.sectionSub}>Revisa las cantidades y vincula los productos que falten</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.sectionTitle}>
+              {itemsNota.length > 0 ? `Detalle del Surtido Actual (${itemsNota.length} prods)` : 'Detalle del Surtido'}
+            </Text>
+            <Text style={styles.sectionSub}>
+              {itemsNota.length > 0 ? 'Verifica cantidades y vincula los productos que falten' : 'Carga una nota PDF para ver sus productos'}
+            </Text>
           </View>
           {itemsNota.length > 0 && (
             <TouchableOpacity onPress={handleLimpiarLista} style={styles.vaciarHeaderBtn}>
-              <Trash2 size={13} color={colors.error[600]} />
-              <Text style={styles.vaciarHeaderBtnText}>Vaciar lista</Text>
+              <Trash2 size={13} color={colors.error[700]} />
+              <Text style={styles.vaciarHeaderBtnText}>Vaciar</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Estado Vacío si se limpió la lista */}
+        {/* Estado Vacío informativo (sin botones invasivos) */}
         {itemsNota.length === 0 && (
-          <View style={[styles.emptyCard, shadows.card]}>
-            <View style={styles.emptyIconCircle}>
-              <Boxes size={36} color={colors.neutral[400]} />
-            </View>
-            <Text style={styles.emptyTitle}>No hay productos en la lista</Text>
-            <Text style={styles.emptySubtitle}>
-              Los productos anteriores fueron eliminados. Carga un archivo PDF o elige una nota de ejemplo para surtir inventario.
-            </Text>
-            <View style={styles.emptyButtonsGrid}>
-              <TouchableOpacity onPress={() => handleCargarEjemplo(2)} style={styles.emptyBtnPrimary}>
-                <FileSpreadsheet size={15} color={colors.neutral[0]} />
-                <Text style={styles.emptyBtnPrimaryText}>Cargar Nota 2 (#292535 • 8 prods)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleCargarEjemplo(1)} style={styles.emptyBtnSecondary}>
-                <FileSpreadsheet size={15} color={colors.primary[700]} />
-                <Text style={styles.emptyBtnSecondaryText}>Cargar Nota 1 (#292534 • 17 prods)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handlePickPdf} style={styles.emptyBtnSecondary}>
-                <Upload size={15} color={colors.secondary[700]} />
-                <Text style={styles.emptyBtnSecondaryText}>Subir Archivo PDF</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleOpenManual} style={styles.emptyBtnOutline}>
-                <Plus size={15} color={colors.neutral[700]} />
-                <Text style={styles.emptyBtnOutlineText}>Agregar 1 Manualmente</Text>
-              </TouchableOpacity>
+          <View style={[styles.emptyNoticeBox, shadows.card]}>
+            <Boxes size={28} color={colors.neutral[500]} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.emptyNoticeTitle}>Lista actual sin productos activos</Text>
+              <Text style={styles.emptyNoticeSubtitle}>
+                Los productos anteriores fueron retirados. Sube una nota PDF arriba para iniciar un nuevo surtido o consulta el detalle del histórico abajo.
+              </Text>
             </View>
           </View>
         )}
@@ -1139,6 +1243,148 @@ export default function SurtidoNotaScreen() {
           <Text style={styles.bottomHintText}>
             Al confirmar, se incrementarán las existencias del catálogo y se registrará el movimiento de surtido de almacén.
           </Text>
+        </View>
+
+        {/* ============================================================== */}
+        {/* SECCIÓN: TABLA DE HISTÓRICO DE CARGAS DE NOTAS PDF */}
+        {/* ============================================================== */}
+        <View style={styles.historicoSection}>
+          <View style={styles.historicoHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <View style={styles.historicoIconCircle}>
+                <Clock size={18} color={colors.primary[700]} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.historicoSectionTitle}>Histórico de Cargas de Notas PDF</Text>
+                <Text style={styles.historicoSectionSubtitle}>
+                  Registro de cargas y detalle de productos de cada nota
+                </Text>
+              </View>
+            </View>
+            <View style={styles.historicoBadgeCount}>
+              <Text style={styles.historicoBadgeCountText}>{historicoCargas.length} notas</Text>
+            </View>
+          </View>
+
+          {/* Tarjetas / Filas del Histórico */}
+          {historicoCargas.map((carga) => {
+            const isExpanded = cargaExpandidaId === carga.id;
+            const esActiva = folioNota === carga.folio && itemsNota.length > 0;
+
+            return (
+              <View key={carga.id} style={[styles.historicoCard, shadows.card]}>
+                {/* Cabecera del registro */}
+                <TouchableOpacity
+                  onPress={() => setCargaExpandidaId(isExpanded ? null : carga.id)}
+                  style={styles.historicoCardHeader}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                      <Text style={styles.historicoFolioText}>Folio #{carga.folio}</Text>
+                      <View
+                        style={[
+                          styles.historicoBadge,
+                          carga.estado === 'Surtido Aplicado' ? styles.badgeSurtido : styles.badgeBorrador,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.historicoBadgeText,
+                            carga.estado === 'Surtido Aplicado' ? styles.badgeTextSurtido : styles.badgeTextBorrador,
+                          ]}
+                        >
+                          {carga.estado}
+                        </Text>
+                      </View>
+                      {esActiva && (
+                        <View style={styles.badgeActivaEnLista}>
+                          <Text style={styles.badgeTextActiva}>Activa en lista</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={styles.historicoMetaText}>
+                      📅 {carga.fechaHora}
+                    </Text>
+                    <Text style={styles.historicoArchivoText} numberOfLines={1}>
+                      📄 {carga.nombreArchivo}
+                    </Text>
+                    <Text style={styles.historicoTotalesText}>
+                      📦 {carga.totalProductos} productos • ⚖️ {carga.totalPiezas.toFixed(1)} unidades/kg
+                    </Text>
+                  </View>
+
+                  <View style={styles.historicoChevronBox}>
+                    <Text style={styles.historicoChevronLabel}>{isExpanded ? 'Ocultar' : 'Ver Detalle'}</Text>
+                    {isExpanded ? (
+                      <ChevronDown size={18} color={colors.primary[700]} />
+                    ) : (
+                      <ChevronRight size={18} color={colors.primary[700]} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {/* TABLA DE DETALLE DE PRODUCTOS DE ESTA CARGA */}
+                {isExpanded && (
+                  <View style={styles.historicoDetalleContainer}>
+                    <View style={styles.historicoDetalleTopBar}>
+                      <Text style={styles.historicoDetalleTitle}>
+                        Detalle de Productos Cargados ({carga.items.length}):
+                      </Text>
+                      {!esActiva && (
+                        <TouchableOpacity
+                          onPress={() => handleCargarDesdeHistorico(carga)}
+                          style={styles.btnCargarALista}
+                        >
+                          <RotateCcw size={12} color={colors.primary[700]} />
+                          <Text style={styles.btnCargarAListaText}>Cargar a lista activa</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Tabla de Productos */}
+                    <View style={styles.tablaHistorico}>
+                      <View style={styles.thRow}>
+                        <Text style={[styles.thCell, { width: 24 }]}>#</Text>
+                        <Text style={[styles.thCell, { flex: 3.5 }]}>Producto Almacén</Text>
+                        <Text style={[styles.thCell, { width: 36, textAlign: 'center' }]}>UM</Text>
+                        <Text style={[styles.thCell, { width: 48, textAlign: 'right' }]}>Cant.</Text>
+                        <Text style={[styles.thCell, { flex: 2.5, textAlign: 'right' }]}>Equiv.</Text>
+                      </View>
+
+                      {carga.items.map((it, idx) => (
+                        <View key={idx} style={[styles.trRow, idx % 2 === 1 && styles.trZebra]}>
+                          <Text style={[styles.tdCell, { width: 24, color: colors.neutral[400] }]}>
+                            {idx + 1}
+                          </Text>
+                          <View style={{ flex: 3.5, paddingRight: 4 }}>
+                            <Text style={styles.tdNombreProducto} numberOfLines={2}>
+                              {it.productoAlmacen}
+                            </Text>
+                            {it.productoNombreApp && (
+                              <Text style={styles.tdNombreApp} numberOfLines={1}>
+                                App: {it.productoNombreApp}
+                              </Text>
+                            )}
+                          </View>
+                          <Text style={[styles.tdCell, { width: 36, textAlign: 'center', color: colors.neutral[600] }]}>
+                            {it.um}
+                          </Text>
+                          <Text style={[styles.tdCell, { width: 48, textAlign: 'right', fontWeight: '700', color: colors.primary[800] }]}>
+                            {it.cantidadNota}
+                          </Text>
+                          <Text style={[styles.tdCell, { flex: 2.5, textAlign: 'right', fontSize: 10, color: colors.neutral[500] }]} numberOfLines={2}>
+                            {it.equivalencias || '—'}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -1491,11 +1737,46 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  notaHeaderRow: {
+  notaCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    width: '100%',
+  },
+  notaCardInfoCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  notaFolioBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: spacing.md,
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 3,
+  },
+  folioBadgeActive: {
+    backgroundColor: colors.secondary[50],
+    borderWidth: 1,
+    borderColor: colors.secondary[300],
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  folioBadgeActiveText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.secondary[800],
+  },
+  folioBadgeEmpty: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  folioBadgeEmptyText: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+    color: colors.neutral[600],
   },
   pdfIconBox: {
     width: 44,
@@ -1511,16 +1792,46 @@ const styles = StyleSheet.create({
     color: colors.neutral[900],
   },
   notaFechaText: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
+    fontSize: 11,
+    color: colors.neutral[600],
     marginTop: 2,
+  },
+  notaArchivoText: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 1,
+  },
+  notaCardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    width: '100%',
+  },
+  btnSubirPdfCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.secondary[600],
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+  },
+  btnSubirPdfCardText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[0],
   },
   btnManualSmall: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 7,
     borderRadius: radius.md,
     backgroundColor: colors.primary[50],
     borderWidth: 1,
@@ -1530,20 +1841,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: fontWeight.bold,
     color: colors.primary[700],
-  },
-  recargarBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
-  },
-  recargarBtnText: {
-    fontSize: 11,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[700],
   },
   statsRow: {
     flexDirection: 'row',
@@ -2116,91 +2413,236 @@ const styles = StyleSheet.create({
     color: colors.error[700],
     fontWeight: fontWeight.semibold,
   },
-  // Estado Vacío
-  emptyCard: {
+  // Estado Vacío Informativo (Sin botones invasivos)
+  emptyNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: colors.neutral[0],
     borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginVertical: spacing.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.neutral[200],
   },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.neutral[100],
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptyTitle: {
-    fontSize: fontSize.md,
+  emptyNoticeTitle: {
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
+    marginBottom: 2,
+  },
+  emptyNoticeSubtitle: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    lineHeight: 16,
+  },
+  // Sección del Histórico de Cargas de Notas PDF
+  historicoSection: {
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  historicoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
-  emptySubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: spacing.lg,
-    maxWidth: 320,
-  },
-  emptyButtonsGrid: {
-    width: '100%',
-    gap: 8,
-  },
-  emptyBtnPrimary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary[600],
-    paddingVertical: 11,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-  },
-  emptyBtnPrimaryText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
-  },
-  emptyBtnSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+  historicoIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.primary[50],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  historicoSectionTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  historicoSectionSubtitle: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginBottom: spacing.sm,
+  },
+  historicoBadgeCount: {
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.primary[200],
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
   },
-  emptyBtnSecondaryText: {
-    fontSize: fontSize.xs,
+  historicoBadgeCountText: {
+    fontSize: 10,
     fontWeight: fontWeight.bold,
     color: colors.primary[800],
   },
-  emptyBtnOutline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.neutral[50],
+  historicoCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.neutral[200],
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
   },
-  emptyBtnOutlineText: {
-    fontSize: fontSize.xs,
+  historicoCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+  },
+  historicoFolioText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  historicoBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  badgeSurtido: {
+    backgroundColor: colors.secondary[50],
+    borderWidth: 1,
+    borderColor: colors.secondary[200],
+  },
+  badgeBorrador: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  historicoBadgeText: {
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+  },
+  badgeTextSurtido: {
+    color: colors.secondary[800],
+  },
+  badgeTextBorrador: {
+    color: colors.primary[800],
+  },
+  badgeActivaEnLista: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  badgeTextActiva: {
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+    color: '#1d4ed8',
+  },
+  historicoMetaText: {
+    fontSize: 11,
+    color: colors.neutral[600],
+    marginTop: 2,
+  },
+  historicoArchivoText: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 1,
+  },
+  historicoTotalesText: {
+    fontSize: 11,
     fontWeight: fontWeight.semibold,
     color: colors.neutral[700],
+    marginTop: 3,
+  },
+  historicoChevronBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.neutral[50],
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  historicoChevronLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[700],
+  },
+  historicoDetalleContainer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    backgroundColor: colors.neutral[50],
+    padding: 10,
+  },
+  historicoDetalleTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  historicoDetalleTitle: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[700],
+  },
+  btnCargarALista: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  btnCargarAListaText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.primary[800],
+  },
+  tablaHistorico: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  thRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[100],
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  thCell: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[600],
+  },
+  trRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  trZebra: {
+    backgroundColor: '#fafafa',
+  },
+  tdCell: {
+    fontSize: 10,
+  },
+  tdNombreProducto: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  tdNombreApp: {
+    fontSize: 9,
+    color: colors.secondary[800],
   },
 });
 
