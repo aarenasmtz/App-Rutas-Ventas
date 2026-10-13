@@ -12,7 +12,7 @@ import type {
 // Determinación inteligente de la URL base (soporta variables de entorno de Cloudflare Pages y VPS)
 export const CLOUD_API_URL = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) 
   ? process.env.EXPO_PUBLIC_API_URL 
-  : 'https://statutory-edges-exploration-camps.trycloudflare.com/api/v1';
+  : 'https://naples-solutions-chorus-composition.trycloudflare.com/api/v1';
 
 export const getDefaultApiBaseUrl = (): string => {
   return CLOUD_API_URL;

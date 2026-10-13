@@ -213,6 +213,27 @@ public class InventarioController : ControllerBase
                         p.Nombre.ToLower() == nomAlm);
                 }
 
+                // Si aún no existe en el catálogo de la app, darlo de alta automáticamente como producto nuevo
+                if (prod == null && !string.IsNullOrWhiteSpace(item.ProductoAlmacen))
+                {
+                    var isKg = item.Um.Equals("KG", StringComparison.OrdinalIgnoreCase) || item.Um.Equals("KGS", StringComparison.OrdinalIgnoreCase);
+                    var newCodigo = "PROD-" + Guid.NewGuid().ToString("N")[..8].ToUpper();
+                    prod = new Data.Entities.Producto
+                    {
+                        Codigo = newCodigo,
+                        Nombre = item.ProductoAlmacen.Trim(),
+                        NombreAlmacen = item.ProductoAlmacen.Trim(),
+                        Categoria = isKg ? "Salchichonería" : "Abarrotes",
+                        Unidad = isKg ? "kg" : "pieza",
+                        PrecioBase = 50.0m,
+                        PrecioCompra = 40.0m,
+                        Existencia = 0,
+                        Activo = true
+                    };
+                    _db.Productos.Add(prod);
+                    await _db.SaveChangesAsync(); // Genera prod.Id
+                }
+
                 if (prod != null)
                 {
                     int incremento = (int)Math.Max(1, Math.Round(piezas));
@@ -226,13 +247,19 @@ public class InventarioController : ControllerBase
                         prod.NombreAlmacen = item.ProductoAlmacen.Trim();
                     }
 
+                    var motivoText = $"Surtido nota #{req.FolioNota} ({req.FechaNota}) - {item.ProductoAlmacen} ({item.CantidadNota} {item.Um})";
+                    if (motivoText.Length > 195)
+                    {
+                        motivoText = motivoText[..195];
+                    }
+
                     _db.InventarioMovimientos.Add(new InventarioMovimiento
                     {
                         ProductoId = prod.Id,
                         TipoMovimiento = "SurtidoAlmacenPDF",
                         Ubicacion = ubicacion,
                         Piezas = incremento,
-                        Motivo = $"Surtido nota #{req.FolioNota} ({req.FechaNota}) - {item.ProductoAlmacen} ({item.CantidadNota} {item.Um})",
+                        Motivo = motivoText,
                         FechaHora = DateTime.Now
                     });
                 }
