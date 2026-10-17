@@ -19,11 +19,15 @@ function getProductosIniciales(): Producto[] {
       const saved = window.localStorage.getItem('miguel_mock_productos');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Filtrar cualquier producto antiguo de prueba/semilla hardcodeado (p1..p18)
+          const validos = parsed.filter((p: any) => !String(p.id).match(/^p\d+$/));
+          return validos;
+        }
       }
     }
   } catch {}
-  return [...initialProductos];
+  return [];
 }
 
 function getClientesIniciales(): Cliente[] {
@@ -32,17 +36,16 @@ function getClientesIniciales(): Cliente[] {
       const saved = window.localStorage.getItem('miguel_mock_clientes');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          // Filtrar cualquier cliente antiguo de prueba/semilla hardcodeado (c1..c10)
+          const validos = parsed.filter((c: any) => !String(c.id).match(/^c\d+$/));
+          return validos;
+        }
       }
     }
   } catch {}
-  return [...initialClientes];
+  return [];
 }
-
-// ==========================================
-// 1. PRODUCTOS CON PRESENTACIONES Y CONVERSIONES
-// ==========================================
-export const mockProductos: Producto[] = getProductosIniciales();
 
 export function saveProductosToStorage() {
   try {
@@ -54,10 +57,6 @@ export function saveProductosToStorage() {
   }
 }
 
-export let mockCategorias: CategoriaItem[] = [];
-
-export let mockClientes: Cliente[] = getClientesIniciales();
-
 export function saveClientesToStorage() {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -67,6 +66,17 @@ export function saveClientesToStorage() {
     console.error('Error saving clientes to storage:', e);
   }
 }
+
+// ==========================================
+// 1. PRODUCTOS CON PRESENTACIONES Y CONVERSIONES
+// ==========================================
+export const mockProductos: Producto[] = getProductosIniciales();
+saveProductosToStorage();
+
+export let mockCategorias: CategoriaItem[] = [];
+
+export let mockClientes: Cliente[] = getClientesIniciales();
+saveClientesToStorage();
 
 function getVentasIniciales(): any[] {
   try {
