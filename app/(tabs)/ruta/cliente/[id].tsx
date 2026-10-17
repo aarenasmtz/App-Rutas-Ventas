@@ -94,8 +94,8 @@ export default function ClienteDetailScreen() {
     const lat = cliente.latitud;
     const lng = cliente.longitud;
     if (lat && lng) {
-      // Abre navegación directa punto por punto a este cliente
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+      // Abre navegación directa con destino en las coordenadas exactas de la tienda
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
     } else {
       const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}, ${cliente.colonia || 'León'}, Guanajuato`);
       Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
@@ -196,7 +196,10 @@ export default function ClienteDetailScreen() {
             <Text style={[styles.actionText, { color: colors.primary[700], fontWeight: 'bold' }]}>Ir en GPS</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(tabs)/ruta/mapa')}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => router.push({ pathname: '/(tabs)/ruta/mapa', params: { clienteId: String(cliente.id) } })}
+          >
             <View style={[styles.actionIcon, { backgroundColor: colors.neutral[700] }]}><MapPin size={22} color={colors.neutral[0]} /></View>
             <Text style={styles.actionText}>Ver Mapa</Text>
           </TouchableOpacity>

@@ -184,28 +184,11 @@ export const initialBitacoraErrores: BitacoraError[] = [
   { id: 'be3', fecha: '2026-09-12 11:30', usuario: 'Miguel', dispositivo: 'iPhone 14', error: 'GPS no disponible en vista de ruta', estado: 'Ignorado' },
 ];
 
-export const initialGastos: Gasto[] = [
-  { id: 'g1', concepto: 'Gasolina', importe: 400, metodo: 'Efectivo', observaciones: 'Tanque lleno', fecha: '2026-09-15' },
-  { id: 'g2', concepto: 'Comida', importe: 85, metodo: 'Efectivo', observaciones: 'Almuerzo', fecha: '2026-09-15' },
-  { id: 'g3', concepto: 'Estacionamiento', importe: 30, metodo: 'Efectivo', observaciones: 'Centro', fecha: '2026-09-15' },
-  { id: 'g4', concepto: 'Mantenimiento', importe: 250, metodo: 'Transferencia', observaciones: 'Cambio de aceite', fecha: '2026-09-12' },
-  { id: 'g5', concepto: 'Gasolina', importe: 380, metodo: 'Efectivo', observaciones: 'Tanque lleno', fecha: '2026-09-10' },
-];
+export const initialGastos: Gasto[] = [];
 
-export const initialMovimientosSync: MovimientoSincronizacion[] = [
-  { id: 's1', tipo: 'Venta', cliente: 'Abarrotes San Juan', fecha: '09:15', estado: 'Sincronizado' },
-  { id: 's2', tipo: 'Cobranza', cliente: 'Cremería La Esquina', fecha: '09:42', estado: 'Sincronizado' },
-  { id: 's3', tipo: 'Venta', cliente: 'Abarrotes La Esperanza', fecha: '10:05', estado: 'Sincronizado' },
-  { id: 's4', tipo: 'Devolución', cliente: 'Abarrotes El Chuy', fecha: '10:30', estado: 'Sincronizado' },
-  { id: 's5', tipo: 'Gasto', cliente: '—', fecha: '08:10', estado: 'Sincronizado' },
-  { id: 's6', tipo: 'Carga inicial', cliente: '—', fecha: '08:32', estado: 'Sincronizado' },
-];
+export const initialMovimientosSync: MovimientoSincronizacion[] = [];
 
-export const initialDevoluciones: Devolucion[] = [
-  { id: 'd1', cliente: 'Abarrotes El Chuy', producto: 'Chorizo Rojo', cantidad: 1, unidad: 'kg', motivo: 'Producto dañado', destino: 'Merma', fecha: '2026-09-15' },
-  { id: 'd2', cliente: 'Abarrotes La Esperanza', producto: 'Salchicha de Pavo', cantidad: 0.5, unidad: 'kg', motivo: 'Caducidad', destino: 'Merma', fecha: '2026-09-14' },
-  { id: 'd3', cliente: 'Cremería La Esquina', producto: 'Queso Chihuahua', cantidad: 1, unidad: 'kg', motivo: 'Cambio', destino: 'Cambio', fecha: '2026-09-13' },
-];
+export const initialDevoluciones: Devolucion[] = [];
 
 export const categorias: Categoria[] = ['Jamón', 'Salchicha', 'Chorizo', 'Quesos', 'Carnes frías', 'Abarrotes'];
 export const categoriasConTodas: string[] = ['Todas', ...categorias];

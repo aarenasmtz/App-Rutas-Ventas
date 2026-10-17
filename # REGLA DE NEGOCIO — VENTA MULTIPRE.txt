@@ -1,0 +1,65 @@
+# REGLA DE NEGOCIO — VENTA MULTIPRESENTACIÓN CASTEL
+
+**Proyecto:** ABTS Arenas — PDV y distribución de productos.
+
+Implementar venta por distintas presentaciones para un mismo producto, utilizando un inventario único y conversiones automáticas.
+
+## Ejemplo real: Queso Castel
+
+El producto se comercializa en tres presentaciones:
+
+| Presentación | Equivalencia | Precio |
+|---|---|---|
+| Paquete | 1 paquete | $8 MXN |
+| Exhibidor | 10 paquetes | $80 MXN |
+| Caja | 6 exhibidores = 60 paquetes | $480 MXN |
+
+**IMPORTANTE:** Las equivalencias anteriores reemplazan las proporcionadas previamente. El paquete es la unidad base de inventario para Queso Castel. No habilitar venta por pieza para este producto.
+
+## Requerimientos
+
+1. En el catálogo de productos, agregar una opción "Maneja múltiples presentaciones".
+2. Permitir configurar las presentaciones y equivalencias de forma dinámica por producto.
+3. Guardar precios independientes por presentación.
+4. Mantener un único inventario por producto y ubicación, expresado en unidades base.
+5. Al recibir una caja de Castel, incrementar automáticamente el inventario en 60 paquetes.
+6. Al vender una caja, descontar 60 paquetes.
+7. Al vender un exhibidor, descontar 10 paquetes.
+8. Al vender un paquete, descontar 1 paquete.
+9. Permitir ventas mixtas de un mismo producto, combinando cajas, exhibidores y paquetes.
+10. Calcular automáticamente el importe total según la presentación y cantidad.
+11. Respetar precios especiales por cliente cuando existan.
+12. Permitir visualizar el inventario en cajas completas, exhibidores completos y paquetes sobrantes.
+13. Aplicar la misma conversión en compras, devoluciones, ajustes, traspasos de bodega a camioneta y ventas en ruta.
+14. Validar inventario disponible antes de confirmar las ventas.
+15. Registrar movimientos transaccionales e impedir descuentos duplicados.
+16. Preservar la presentación, equivalencia y precio efectivamente utilizados en las ventas históricas.
+
+## Ejemplo de validación
+
+Inventario inicial: 5 cajas = 300 paquetes.
+
+Venta:
+- 1 caja = 60 paquetes = $480.
+- 2 exhibidores = 20 paquetes = $160.
+- 3 paquetes = 3 paquetes = $24.
+
+Resultado:
+- Total vendido: 83 paquetes.
+- Total a cobrar: $664 MXN.
+- Inventario final: 217 paquetes.
+- Equivalencia restante: 3 cajas, 3 exhibidores y 7 paquetes.
+
+## Implementación técnica
+
+Inspeccionar previamente el frontend, backend, base de datos y los módulos existentes de ventas, inventario, pedidos, compras, distribución y cortes.
+
+Respetar la arquitectura y tecnologías utilizadas en el proyecto.
+
+No crear productos duplicados para cada presentación.
+
+Utilizar tablas relacionadas para definir las conversiones y precios, y servicios compartidos para centralizar las reglas de negocio.
+
+Incorporar pruebas automatizadas de conversiones, ventas mixtas, disponibilidad, devoluciones y transferencias.
+
+No realizar operaciones destructivas ni alterar datos productivos.

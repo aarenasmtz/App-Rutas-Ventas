@@ -8,7 +8,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   MapPin,
   Navigation,
@@ -36,6 +36,7 @@ if (Platform.OS !== 'web') {
 
 export default function MapaScreen() {
   const router = useRouter();
+  const { clienteId } = useLocalSearchParams<{ clienteId?: string }>();
   const { setClienteActivoId } = useApp();
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
@@ -44,12 +45,20 @@ export default function MapaScreen() {
     const fetchClientes = async () => {
       try {
         const list = await DataService.getClientes();
-        setClientesList(list ?? []);
-          setSelectedClient(list?.[0] || null);
+        const active = list ?? [];
+        setClientesList(active);
+        if (clienteId) {
+          const match = active.find((c) => String(c.id) === String(clienteId));
+          if (match) {
+            setSelectedClient(match);
+            return;
+          }
+        }
+        setSelectedClient(active[0] || null);
       } catch {}
     };
     fetchClientes();
-  }, []);
+  }, [clienteId]);
 
   const leonClientes = useMemo(() => {
     return clientesList.filter((c) => c.activo !== false);
@@ -60,7 +69,7 @@ export default function MapaScreen() {
     const lat = cliente.latitud;
     const lng = cliente.longitud;
     if (lat && lng) {
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
     } else {
       const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}, ${cliente.colonia || 'León'}, Guanajuato`);
       Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
@@ -88,26 +97,33 @@ export default function MapaScreen() {
 
   // Generar HTML interactivo con Leaflet y OpenStreetMap centrado en León, Guanajuato
   const leafletMapHtml = useMemo(() => {
-    const centerLat = 21.1221;
-    const centerLng = -101.6828;
+    const defaultCenterLat = 21.1221;
+    const defaultCenterLng = -101.6828;
+
+    const focused = (clienteId && leonClientes.find((c) => String(c.id) === String(clienteId))) || selectedClient;
+    const centerLat = focused?.latitud || defaultCenterLat;
+    const centerLng = focused?.longitud || defaultCenterLng;
+    const initialZoom = (focused?.latitud && focused?.longitud) ? 16.5 : 13.5;
 
     const markersData = leonClientes.map((c, i) => {
       let lat = c.latitud;
       let lng = c.longitud;
-      if (!lat || !lng) {
+      const isTarget = focused ? String(c.id) === String(focused.id) : false;
+
+      // Respetar estrictamente coordenadas reales si existen
+      if (lat === undefined || lat === null || lng === undefined || lng === null) {
         const col = (c.colonia || '').toLowerCase();
-        if (col.includes('coecillo')) { lat = 21.1275 + (i % 3) * 0.002; lng = -101.6685 + (i % 3) * 0.002; }
-        else if (col.includes('san juan') || col.includes('dios')) { lat = 21.1162 + (i % 3) * 0.002; lng = -101.6811 + (i % 3) * 0.002; }
-        else if (col.includes('moderno')) { lat = 21.1090 + (i % 3) * 0.002; lng = -101.6690 + (i % 3) * 0.002; }
-        else if (col.includes('echeveste')) { lat = 21.1680 + (i % 3) * 0.002; lng = -101.6890 + (i % 3) * 0.002; }
-        else if (col.includes('obrera')) { lat = 21.1350 + (i % 3) * 0.002; lng = -101.6870 + (i % 3) * 0.002; }
+        if (col.includes('coecillo')) { lat = 21.1275; lng = -101.6685; }
+        else if (col.includes('san juan') || col.includes('dios')) { lat = 21.1162; lng = -101.6811; }
+        else if (col.includes('moderno')) { lat = 21.1090; lng = -101.6690; }
+        else if (col.includes('echeveste')) { lat = 21.1680; lng = -101.6890; }
+        else if (col.includes('obrera')) { lat = 21.1350; lng = -101.6870; }
         else {
-          const angle = (i * 137.5 * Math.PI) / 180;
-          const radius = 0.008 + (i % 5) * 0.003;
-          lat = centerLat + Math.sin(angle) * radius;
-          lng = centerLng + Math.cos(angle) * radius;
+          lat = defaultCenterLat + ((i % 5) - 2) * 0.006;
+          lng = defaultCenterLng + ((i % 4) - 1.5) * 0.006;
         }
       }
+
       return {
         id: c.id,
         index: i + 1,
@@ -118,6 +134,7 @@ export default function MapaScreen() {
         lng,
         saldo: c.saldo || 0,
         telefono: c.telefono || '',
+        isTarget,
       };
     });
 
@@ -219,7 +236,7 @@ export default function MapaScreen() {
           var map = L.map('map', {
             zoomControl: true,
             attributionControl: false
-          }).setView([${centerLat}, ${centerLng}], 13.5);
+          }).setView([${centerLat}, ${centerLng}], ${initialZoom});
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19
@@ -227,33 +244,40 @@ export default function MapaScreen() {
 
           var stops = ${JSON.stringify(markersData)};
           var latlngs = [];
+          var targetMarker = null;
 
           stops.forEach(function(s, index) {
             latlngs.push([s.lat, s.lng]);
-            var isFirst = index === 0;
+            var isTarget = s.isTarget;
 
             var icon = L.divIcon({
               className: 'custom-pin-wrap',
-              html: '<div class="custom-pin ' + (isFirst ? 'first' : '') + '">' + s.index + '</div>',
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
+              html: '<div class="custom-pin ' + (isTarget ? 'first' : '') + '">' + s.index + '</div>',
+              iconSize: isTarget ? [40, 40] : [32, 32],
+              iconAnchor: isTarget ? [20, 20] : [16, 16]
             });
 
             var marker = L.marker([s.lat, s.lng], { icon: icon }).addTo(map);
 
             var popupHtml = '<div class="popup-content">' +
-              '<span class="popup-badge">Parada #' + s.index + '</span>' +
+              '<span class="popup-badge">Parada #' + s.index + (isTarget ? ' · Ubicación Tienda' : '') + '</span>' +
               '<div class="popup-name">' + s.nombre + '</div>' +
               '<div class="popup-addr">' + s.direccion + '</div>' +
               (s.saldo > 0 ? '<div class="popup-saldo">Saldo: $' + s.saldo.toLocaleString() + '</div>' : '') +
-              '<a href="https://www.google.com/maps/dir/?api=1&destination=' + s.lat + ',' + s.lng + '" target="_blank" class="popup-btn">📍 Navegar en GPS</a>' +
+              '<a href="https://www.google.com/maps/dir/?api=1&destination=' + s.lat + ',' + s.lng + '&travelmode=driving" target="_blank" class="popup-btn">📍 Navegar en GPS</a>' +
               '</div>';
 
             marker.bindPopup(popupHtml);
+            if (isTarget) {
+              targetMarker = marker;
+            }
           });
 
-          // Polilínea trazada de ruta entre clientes de León
-          if (latlngs.length > 1) {
+          if (targetMarker) {
+            setTimeout(function() {
+              try { targetMarker.openPopup(); } catch(e) {}
+            }, 300);
+          } else if (latlngs.length > 1) {
             L.polyline(latlngs, {
               color: '#2563eb',
               weight: 4,
@@ -262,7 +286,7 @@ export default function MapaScreen() {
             }).addTo(map);
             map.fitBounds(latlngs, { padding: [40, 40] });
           } else if (latlngs.length === 1) {
-            map.setView(latlngs[0], 15);
+            map.setView(latlngs[0], 16);
           }
         </script>
       </body>

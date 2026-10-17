@@ -25,6 +25,7 @@ import {
   Phone,
   Store,
   Trash2,
+  Navigation,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockClientes, DataService } from '@/services/mockDataService';
@@ -92,6 +93,56 @@ export default function ClientesScreen() {
     }
   };
 
+  // Capturar coordenadas precisas directamente del GPS del celular en tiempo real
+  const handleCapturarGpsActual = () => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      setGeocodificando(true);
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = parseFloat(position.coords.latitude.toFixed(6));
+          const lon = parseFloat(position.coords.longitude.toFixed(6));
+          setFormLatitud(lat);
+          setFormLongitud(lon);
+          setUbicacionConfirmada(`📍 GPS Celular en Vivo: ${lat}, ${lon}`);
+
+          // Intentar geocodificación inversa para auto-completar dirección
+          try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.address) {
+                const road = data.address.road || '';
+                const houseNumber = data.address.house_number || '';
+                const suburb = data.address.suburb || data.address.neighbourhood || '';
+                if (road && (!formDireccion || formDireccion === 'León, Guanajuato')) {
+                  setFormDireccion(`${road} ${houseNumber}`.trim());
+                }
+                if (suburb && (!formColonia || formColonia === 'Centro')) {
+                  setFormColonia(suburb);
+                }
+              }
+            }
+          } catch {}
+
+          setGeocodificando(false);
+          Alert.alert('GPS Capturado con Éxito', `Coordenadas del celular de Miguel registradas:\nLatitud: ${lat}\nLongitud: ${lon}`);
+        },
+        (error) => {
+          setGeocodificando(false);
+          let msg = 'No se pudo obtener la posición GPS del dispositivo.';
+          if (error.code === 1) msg = 'Permiso de ubicación denegado. Permite el acceso a ubicación en tu celular o navegador.';
+          else if (error.code === 2) msg = 'Señal de GPS no disponible en este momento.';
+          else if (error.code === 3) msg = 'Tiempo de espera de GPS agotado.';
+          Alert.alert('Error de GPS Celular', msg);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    } else {
+      Alert.alert('GPS no compatible', 'El navegador de este celular no soporta geolocalización.');
+    }
+  };
+
   const handleGeolocalizarDireccion = async () => {
     if (!formDireccion.trim()) {
       Alert.alert('Dirección requerida', 'Ingresa la calle y número para ubicar en el mapa.');
@@ -105,11 +156,11 @@ export default function ClientesScreen() {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
+          const lat = parseFloat(parseFloat(data[0].lat).toFixed(6));
+          const lon = parseFloat(parseFloat(data[0].lon).toFixed(6));
           setFormLatitud(lat);
           setFormLongitud(lon);
-          setUbicacionConfirmada(`GPS Detectado: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+          setUbicacionConfirmada(`GPS Detectado: ${lat}, ${lon}`);
           setGeocodificando(false);
           return;
         }
@@ -118,25 +169,11 @@ export default function ClientesScreen() {
       // Fallback
     }
 
-    // Coordenadas precisas por colonia de León, Gto
-    const col = (formColonia || '').toLowerCase();
-    let baseLat = 21.1221;
-    let baseLon = -101.6828;
-    if (col.includes('coecillo')) { baseLat = 21.1275; baseLon = -101.6685; }
-    else if (col.includes('san juan') || col.includes('dios')) { baseLat = 21.1162; baseLon = -101.6811; }
-    else if (col.includes('moderno')) { baseLat = 21.1090; baseLon = -101.6690; }
-    else if (col.includes('echeveste') || col.includes('norte')) { baseLat = 21.1680; baseLon = -101.6890; }
-    else if (col.includes('campestre')) { baseLat = 21.1540; baseLon = -101.7010; }
-    else if (col.includes('delta')) { baseLat = 21.0850; baseLon = -101.6240; }
-
-    const num = parseInt(formDireccion.replace(/\D/g, '').slice(0, 3), 10) || 50;
-    const offset = (num % 50) * 0.0001;
-    const finalLat = parseFloat((baseLat + offset).toFixed(6));
-    const finalLon = parseFloat((baseLon - offset).toFixed(6));
-    setFormLatitud(finalLat);
-    setFormLongitud(finalLon);
-    setUbicacionConfirmada(`GPS Referenciado: ${finalLat.toFixed(5)}, ${finalLon.toFixed(5)} (León, Gto)`);
     setGeocodificando(false);
+    Alert.alert(
+      'Dirección no ubicada con exactitud',
+      'No se encontró la coordenada exacta para esta calle. Te sugerimos pulsar "📡 Capturar GPS actual del Celular" mientras estás en el local del cliente para registrar su posición exacta.'
+    );
   };
 
   useEffect(() => {
@@ -490,35 +527,93 @@ export default function ClientesScreen() {
                 placeholderTextColor={colors.neutral[400]}
               />
 
-              {/* Botón de Geolocalización Maps */}
-              <TouchableOpacity
-                onPress={handleGeolocalizarDireccion}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  backgroundColor: colors.primary[50],
-                  borderWidth: 1,
-                  borderColor: colors.primary[200],
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: radius.md,
-                  marginTop: 6,
-                  marginBottom: 8,
-                  alignSelf: 'flex-start',
-                }}
-              >
-                {geocodificando ? (
-                  <ActivityIndicator size="small" color={colors.primary[700]} />
-                ) : (
-                  <>
-                    <MapPin size={16} color={colors.primary[700]} />
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary[800] }}>
-                      📍 Ubicar en Mapa (GPS)
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* Opciones de Ubicación y GPS */}
+              <Text style={[styles.inputLabel, { marginTop: 4 }]}>Ubicación y Coordenadas GPS</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4, marginBottom: 10 }}>
+                <TouchableOpacity
+                  onPress={handleCapturarGpsActual}
+                  disabled={geocodificando}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: colors.success[50],
+                    borderWidth: 1.5,
+                    borderColor: colors.success[600],
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    borderRadius: radius.md,
+                  }}
+                >
+                  {geocodificando ? (
+                    <ActivityIndicator size="small" color={colors.success[700]} />
+                  ) : (
+                    <>
+                      <Navigation size={16} color={colors.success[700]} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.success[700] }}>
+                        📡 Capturar GPS actual del Celular
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleGeolocalizarDireccion}
+                  disabled={geocodificando}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: colors.primary[50],
+                    borderWidth: 1,
+                    borderColor: colors.primary[300],
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    borderRadius: radius.md,
+                  }}
+                >
+                  <MapPin size={16} color={colors.primary[700]} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary[800] }}>
+                    🔍 Buscar dirección
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Entradas manuales de Coordenadas */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.neutral[600], marginBottom: 4 }}>
+                    Latitud GPS
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { paddingVertical: 6, fontSize: 12 }]}
+                    placeholder="21.123456"
+                    keyboardType="numeric"
+                    value={formLatitud !== null && formLatitud !== undefined ? String(formLatitud) : ''}
+                    onChangeText={(v) => {
+                      const num = parseFloat(v);
+                      setFormLatitud(isNaN(num) ? null : num);
+                    }}
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.neutral[600], marginBottom: 4 }}>
+                    Longitud GPS
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { paddingVertical: 6, fontSize: 12 }]}
+                    placeholder="-101.678901"
+                    keyboardType="numeric"
+                    value={formLongitud !== null && formLongitud !== undefined ? String(formLongitud) : ''}
+                    onChangeText={(v) => {
+                      const num = parseFloat(v);
+                      setFormLongitud(isNaN(num) ? null : num);
+                    }}
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
+              </View>
 
               {ubicacionConfirmada && (
                 <View

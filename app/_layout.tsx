@@ -6,8 +6,9 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } f
 import { SplashScreen } from 'expo-router';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AppProvider, useApp } from '@/context/AppContext';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { colors } from '@/constants/theme';
+import Head from 'expo-router/head';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -47,6 +48,16 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          reg.update().catch(() => {});
+        }).catch(() => {});
+      });
+    }
+  }, []);
+
   if (!fontsLoaded && !fontError) {
     return (
       <View style={styles.loading}>
@@ -57,6 +68,18 @@ export default function RootLayout() {
 
   return (
     <AppProvider>
+      <Head>
+        <title>RutaVentas - Distribución Miguel</title>
+        <meta name="description" content="Sistema de Ventas en Ruta, Cobranza, Inventario y GPS para Miguel" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <meta name="theme-color" content="#1e3a8a" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="RutaVentas" />
+      </Head>
       <AppContent />
       <StatusBar style="dark" />
     </AppProvider>

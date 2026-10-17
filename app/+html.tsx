@@ -21,11 +21,28 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#1e3a8a" />
         <meta name="mobile-web-app-capable" content="yes" />
 
+        {/* Favicons y Touch Icons Oficiales */}
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
         {/* iOS Safari Home Screen Tags */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RutaVentas" />
-        <link rel="apple-touch-icon" href="/favicon.ico" />
+
+        {/* Service Worker PWA */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').catch(function() {});
+                });
+              }
+            `,
+          }}
+        />
 
         <ScrollViewStyleReset />
       </head>

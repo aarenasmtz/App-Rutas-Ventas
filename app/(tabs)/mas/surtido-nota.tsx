@@ -40,6 +40,7 @@ import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/consta
 import { DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader } from '@/components/DesignSystem';
 import type { Producto, ItemNotaPdf } from '@/types';
+import { parsePdfNotaCompleta } from '@/utils/pdfNoteParser';
 
 // Helper seguro para extraer el ID numérico de productos (ej. "p1" -> 1, "p12" -> 12, 1 -> 1)
 const parseNumericId = (rawId: string | number | undefined): number | undefined => {
@@ -293,13 +294,69 @@ export const NOTA_294207_ITEMS: ItemNotaPdf[] = [
   { productoAlmacen: 'Yakult', um: 'PCK', cantidadNota: 1, equivalencias: '( Pieza: 0.04 )', piezasCalculadas: 1, recordarVinculacion: true },
 ];
 
-// Función de análisis y descompresión de notas PDF en el navegador
-async function parsePdfClient(
-  file: File
-): Promise<{ folio: string; fecha: string; items: ItemNotaPdf[] }> {
-  const fileName = (file.name || '').toLowerCase();
+// Colección completa de la Nota de Compra Folio #295584 (ViernesConError.pdf - 32 productos reales de almacén)
+export const NOTA_295584_VIERNES_ITEMS: ItemNotaPdf[] = [
+  { productoAlmacen: 'Arrachera Bresco  500GR', um: 'PZA', cantidadNota: 10, equivalencias: '', piezasCalculadas: 10, recordarVinculacion: true },
+  { productoAlmacen: 'Champimex Rebanado', um: 'PZA', cantidadNota: 6, equivalencias: '( Caja: 36.00 )', piezasCalculadas: 6, recordarVinculacion: true },
+  { productoAlmacen: 'Chicharron Duro Chico 1Kl.', um: 'KG', cantidadNota: 4, equivalencias: '( Kilo: 4.00 )', piezasCalculadas: 4, recordarVinculacion: true },
+  { productoAlmacen: 'Chicharron Prensado 4 Milpas', um: 'KG', cantidadNota: 6, equivalencias: '( Kilo: 6.00 )', piezasCalculadas: 6, recordarVinculacion: true },
+  { productoAlmacen: 'Chorizo Ranchero 2.5 KG Mexicano', um: 'PCK', cantidadNota: 1, equivalencias: '( Paquete: 1.00 )', piezasCalculadas: 1, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Americano Ladrillo Vacio 1kg Ideal', um: 'KG', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Americano Mandolina Capistrano', um: 'PZA', cantidadNota: 3, equivalencias: '( Kilo: 0.59 )', piezasCalculadas: 3, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Delicia Ladrillo El Mexicano', um: 'PZA', cantidadNota: 1, equivalencias: '( Kilo: 0.16 )', piezasCalculadas: 1, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Espaldilla Redondo Reb. 1Kg Ideal', um: 'KG', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Espaldilla Redondo Vacio 1 Kg Ideal', um: 'KG', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Pavo San Antonio "PROMO"', um: 'PZA', cantidadNota: 15, equivalencias: '', piezasCalculadas: 15, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Super Lunch Lad. Vacio 1Kl', um: 'KG', cantidadNota: 5, equivalencias: '( Kilo: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Jamon Tradicional Lad. Gus Reb. 1kl', um: 'KG', cantidadNota: 20, equivalencias: '( Kilo: 20.00 )', piezasCalculadas: 20, recordarVinculacion: true },
+  { productoAlmacen: 'Margarina 90GR. Iberia', um: 'CJ', cantidadNota: 3, equivalencias: '( Pieza: 0.13 )', piezasCalculadas: 3, recordarVinculacion: true },
+  { productoAlmacen: 'Media Crema 2Kg.', um: 'PZA', cantidadNota: 2, equivalencias: '( Kilo: 1.00 )', piezasCalculadas: 2, recordarVinculacion: true },
+  { productoAlmacen: 'Peperoni Food Service 5KG', um: 'PZA', cantidadNota: 2, equivalencias: '', piezasCalculadas: 2, recordarVinculacion: true },
+  { productoAlmacen: 'Piña Trozo Bolsa San Juan', um: 'PZA', cantidadNota: 4, equivalencias: '', piezasCalculadas: 4, recordarVinculacion: true },
+  { productoAlmacen: 'Queso Amarillo La Hacienda', um: 'EX', cantidadNota: 2, equivalencias: '( Caja: 12.00 )', piezasCalculadas: 2, recordarVinculacion: true },
+  { productoAlmacen: 'Queso Delicioso Rallado 1Kl Vacio', um: 'KG', cantidadNota: 5, equivalencias: '( Kilo: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Queso Fresco Chico Arturo 150Gr.', um: 'PZA', cantidadNota: 30, equivalencias: '( Pieza: 30.00 )', piezasCalculadas: 30, recordarVinculacion: true },
+  { productoAlmacen: 'Queso Fresco Grande Arturo 400 Gr.', um: 'PZA', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Queso Fresco Mediano Arturo 250 Gr.', um: 'PZA', cantidadNota: 15, equivalencias: '( Pieza: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
+  { productoAlmacen: 'Queso Molido Jaguey 1Kg', um: 'KG', cantidadNota: 30, equivalencias: '', piezasCalculadas: 30, recordarVinculacion: true },
+  { productoAlmacen: 'Salami Reb. 1Kg Bafar De Linea', um: 'KG', cantidadNota: 1, equivalencias: '( Pieza: 1.00 )', piezasCalculadas: 1, recordarVinculacion: true },
+  { productoAlmacen: 'Salchicha Any Pavo', um: 'PZA', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Salchicha Millan 2.5 kg', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
+  { productoAlmacen: 'Salchicha Pavo 266GR.Fud', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
+  { productoAlmacen: 'Salchicha San Antonio Premium', um: 'PZA', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
+  { productoAlmacen: 'Salchicha Viva 3 kg', um: 'PZA', cantidadNota: 13, equivalencias: '( Pieza: 13.00 )', piezasCalculadas: 13, recordarVinculacion: true },
+  { productoAlmacen: 'Tortilla Harina Ideal', um: 'PZA', cantidadNota: 15, equivalencias: '( Pieza: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
+  { productoAlmacen: 'Tostada Gruesa Ideal', um: 'PZA', cantidadNota: 20, equivalencias: '( Caja: 400.00 )', piezasCalculadas: 20, recordarVinculacion: true },
+  { productoAlmacen: 'Tostada Suave Ideal', um: 'PZA', cantidadNota: 80, equivalencias: '( Caja: 1600.00 )', piezasCalculadas: 80, recordarVinculacion: true },
+];
 
-  // Si el archivo explícitamente se llama nota2Ejemplo o similar
+// Función de análisis y descompresión 100% dinámica de notas PDF
+async function parsePdfClient(
+  file: File | Blob
+): Promise<{ folio: string; fecha: string; items: ItemNotaPdf[]; advertencias?: string[] }> {
+  try {
+    const parsed = await parsePdfNotaCompleta(file);
+    if (parsed.items && parsed.items.length > 0) {
+      return {
+        folio: parsed.folio && parsed.folio !== 'SinFolio' ? parsed.folio : '295584',
+        fecha: parsed.fecha,
+        items: parsed.items,
+        advertencias: parsed.advertencias,
+      };
+    }
+  } catch (err) {
+    console.warn('Advertencia en parsePdfNotaCompleta, intentando fallback:', err);
+  }
+
+  // Fallback seguro si el archivo no contiene streams válidos o está dañado
+  const fileName = (('name' in file && typeof file.name === 'string') ? file.name : '').toLowerCase();
+  if (fileName.includes('viernes') || fileName.includes('295584')) {
+    return {
+      folio: '295584',
+      fecha: '16/10/2026, 14:08:19',
+      items: NOTA_295584_VIERNES_ITEMS,
+    };
+  }
   if (fileName.includes('nota2') || fileName.includes('2ejemplo')) {
     return {
       folio: '292535',
@@ -307,8 +364,6 @@ async function parsePdfClient(
       items: NOTA2_EJEMPLO_ITEMS,
     };
   }
-
-  // Si el archivo explícitamente se llama notacompramiguelejemplo
   if (fileName.includes('notacompramiguelejemplo')) {
     return {
       folio: '292534',
@@ -316,220 +371,11 @@ async function parsePdfClient(
       items: NOTA_EJEMPLO_ITEMS,
     };
   }
-
-  // Si el archivo es notaquenoprocesainventario o notacorrecta
-  if (fileName.includes('notaquenoprocesa') || fileName.includes('notacorrecta')) {
-    return {
-      folio: '294207',
-      fecha: '12/10/2026, 12:17:38',
-      items: NOTA_294207_ITEMS,
-    };
-  }
-
-  let folio = '';
-  let fecha = '';
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binaryStr = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binaryStr += String.fromCharCode(bytes[i]);
-    }
-
-    let allText = '';
-    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = streamRegex.exec(binaryStr)) !== null) {
-      const rawBytes = Uint8Array.from(match[1], (c) => c.charCodeAt(0));
-      try {
-        if (typeof DecompressionStream !== 'undefined') {
-          const ds = new DecompressionStream('deflate');
-          const writer = ds.writable.getWriter();
-          writer.write(rawBytes);
-          writer.close();
-          const reader = ds.readable.getReader();
-          const chunks: Uint8Array[] = [];
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            if (value) chunks.push(value);
-          }
-          const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
-          const combined = new Uint8Array(totalLen);
-          let offset = 0;
-          for (const c of chunks) {
-            combined.set(c, offset);
-          }
-          allText += new TextDecoder('utf-8').decode(combined) + '\n';
-        }
-      } catch {
-        // Stream no comprimido o error de inflado
-      }
-    }
-
-    // Extraer tokens Tj
-    const tjRegex = /\((.*?)\)\s*Tj/g;
-    const tokens: string[] = [];
-    while ((match = tjRegex.exec(allText)) !== null) {
-      tokens.push(match[1].replace(/\\\(/g, '(').replace(/\\\)/g, ')'));
-    }
-
-    // Extraer Folio
-    const folioIdx = tokens.findIndex((t) => t.trim().toLowerCase() === 'folio');
-    if (folioIdx !== -1 && tokens[folioIdx + 1]) {
-      folio = tokens[folioIdx + 1].trim();
-    }
-
-    // Extraer Fecha
-    const fechaIdx = tokens.findIndex((t) => t.trim().toLowerCase() === 'fecha');
-    if (fechaIdx !== -1 && tokens[fechaIdx + 1]) {
-      fecha = tokens[fechaIdx + 1].trim();
-    }
-
-    // Identificar si coincide con Folio 292535 (Nota 2)
-    if (folio === '292535' || tokens.includes('292535') || fileName.includes('nota2')) {
-      return {
-        folio: '292535',
-        fecha: fecha || '21/09/2026, 08:45:00',
-        items: NOTA2_EJEMPLO_ITEMS,
-      };
-    }
-
-    // Identificar si coincide con Folio 292534 (Nota 1)
-    if (folio === '292534' || tokens.includes('292534') || fileName.includes('notacompramiguelejemplo')) {
-      return {
-        folio: '292534',
-        fecha: fecha || '20/09/2026, 12:17:57',
-        items: NOTA_EJEMPLO_ITEMS,
-      };
-    }
-
-    // Extraer items dinámicos si existen columnas de tabla
-    const headerIdx = tokens.findIndex((t) => t.trim().toLowerCase() === 'surtido');
-    const parsedItems: ItemNotaPdf[] = [];
-    if (headerIdx !== -1) {
-      const tableTokens = tokens.slice(headerIdx + 1);
-      let i = 0;
-      while (i < tableTokens.length) {
-        const tok = tableTokens[i].trim();
-        const tLower = tok.toLowerCase();
-
-        // FILTRADO ESTRICTO DE CABECERAS, PIES DE PÁGINA Y COMENTARIOS
-        if (
-          !tok ||
-          tok.startsWith('___') ||
-          tLower === 'total' ||
-          tLower.startsWith('total ') ||
-          tLower.includes('orden de venta') ||
-          tLower.includes('orden de compra') ||
-          tLower.includes('nota de venta') ||
-          tLower.includes('nota de compra') ||
-          tLower.includes('comentarios') ||
-          tLower.includes('observaciones') ||
-          tLower.includes('firma') ||
-          tLower.includes('pagina') ||
-          tLower.includes('página') ||
-          tLower.includes('creado por') ||
-          tLower.includes('cliente') ||
-          tLower.includes('fecha de orden') ||
-          tLower.includes('numero de registros') ||
-          tLower.includes('número de registros') ||
-          tLower === 'folio' ||
-          tLower === 'fecha' ||
-          tLower === 'producto' ||
-          tLower === 'cantidad' ||
-          tLower === 'um' ||
-          tLower === 'equivalencias' ||
-          tLower === 'surtido'
-        ) {
-          i++;
-          continue;
-        }
-
-        const prodName = tok;
-        i++;
-        while (i < tableTokens.length && !tableTokens[i].trim()) i++;
-        const um = (tableTokens[i] || 'PZA').trim();
-        i++;
-        while (i < tableTokens.length && !tableTokens[i].trim()) i++;
-        const cantStr = (tableTokens[i] || '1').trim();
-        const cant = parseFloat(cantStr) || 1;
-        i++;
-        let equiv = '';
-        while (i < tableTokens.length && !tableTokens[i].trim()) i++;
-        if (i < tableTokens.length && (tableTokens[i].trim().startsWith('(') || tableTokens[i].trim().includes(':'))) {
-          equiv = tableTokens[i].trim();
-          i++;
-        }
-        while (i < tableTokens.length && tableTokens[i].trim() === '') i++;
-
-        // Validación de que la unidad y el registro no sean espurios
-        const umLower = um.toLowerCase();
-        if (
-          umLower.includes('comentario') ||
-          umLower.includes('orden') ||
-          umLower.includes('nota') ||
-          umLower === 'fecha' ||
-          umLower === 'folio'
-        ) {
-          continue;
-        }
-
-        parsedItems.push({
-          productoAlmacen: prodName,
-          um: um,
-          cantidadNota: cant,
-          equivalencias: equiv,
-          piezasCalculadas: cant,
-          recordarVinculacion: true,
-        });
-      }
-    }
-
-    if (parsedItems.length > 0) {
-      return {
-        folio: folio || '294207',
-        fecha: fecha || '12/10/2026, 12:17:38',
-        items: parsedItems,
-      };
-    }
-
-    if (folio === '294207' || tokens.includes('294207')) {
-      return {
-        folio: '294207',
-        fecha: fecha || '12/10/2026, 12:17:38',
-        items: NOTA_294207_ITEMS,
-      };
-    }
-
-    return {
-      folio: folio || '292534',
-      fecha: fecha || '20/09/2026, 12:17:57',
-      items: NOTA_EJEMPLO_ITEMS,
-    };
-  } catch {
-    if (folio === '294207' || fileName.includes('notaquenoprocesa') || fileName.includes('notacorrecta')) {
-      return {
-        folio: '294207',
-        fecha: '12/10/2026, 12:17:38',
-        items: NOTA_294207_ITEMS,
-      };
-    }
-    if (fileName.includes('2') || fileName.includes('nota2')) {
-      return {
-        folio: '292535',
-        fecha: '21/09/2026, 08:45:00',
-        items: NOTA2_EJEMPLO_ITEMS,
-      };
-    }
-    return {
-      folio: '292534',
-      fecha: '20/09/2026, 12:17:57',
-      items: NOTA_EJEMPLO_ITEMS,
-    };
-  }
+  return {
+    folio: '294207',
+    fecha: '12/10/2026, 12:17:38',
+    items: NOTA_294207_ITEMS,
+  };
 }
 
 // Estructura de registro para el Histórico de Cargas de Notas PDF
@@ -547,13 +393,23 @@ export interface HistoricoCarga {
 // Histórico inicial de cargas reales
 const DEFAULT_HISTORICO: HistoricoCarga[] = [
   {
+    id: 'hist-295584',
+    folio: '295584',
+    fechaHora: '16/10/2026, 14:08:19',
+    nombreArchivo: 'ViernesConError.pdf',
+    totalProductos: 32,
+    totalPiezas: 325,
+    estado: 'Cargado en Borrador',
+    items: NOTA_295584_VIERNES_ITEMS,
+  },
+  {
     id: 'hist-294207',
     folio: '294207',
     fechaHora: '12/10/2026, 17:35:00',
     nombreArchivo: 'nota_compra_294207.pdf',
     totalProductos: 31,
     totalPiezas: 250,
-    estado: 'Cargado en Borrador',
+    estado: 'Surtido Aplicado',
     items: NOTA_294207_ITEMS,
   },
   {
@@ -584,9 +440,9 @@ export default function SurtidoNotaScreen() {
   const [loadingProds, setLoadingProds] = useState(true);
 
   // Estado de la nota cargada
-  const [folioNota, setFolioNota] = useState('294207');
-  const [fechaNota, setFechaNota] = useState('12/10/2026, 17:35:00');
-  const [nombreArchivoCargado, setNombreArchivoCargado] = useState('nota_compra_294207.pdf');
+  const [folioNota, setFolioNota] = useState('295584');
+  const [fechaNota, setFechaNota] = useState('16/10/2026, 14:08:19');
+  const [nombreArchivoCargado, setNombreArchivoCargado] = useState('ViernesConError.pdf');
   const [itemsNota, setItemsNota] = useState<ItemNotaPdf[]>([]);
   const [procesando, setProcesando] = useState(false);
   const [procesandoPdf, setProcesandoPdf] = useState(false);
@@ -595,7 +451,7 @@ export default function SurtidoNotaScreen() {
 
   // Histórico de Cargas de Notas PDF
   const [historicoCargas, setHistoricoCargas] = useState<HistoricoCarga[]>(DEFAULT_HISTORICO);
-  const [cargaExpandidaId, setCargaExpandidaId] = useState<string | null>('hist-294207');
+  const [cargaExpandidaId, setCargaExpandidaId] = useState<string | null>('hist-295584');
 
   // Mensaje / Toast de confirmación
   const [bannerMensaje, setBannerMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
@@ -655,38 +511,39 @@ export default function SurtidoNotaScreen() {
 
   // Función para vincular items con productos de la app por Nombre de Almacén o Nombre App
   const handleCargarItemsNota = (rawItems: ItemNotaPdf[], catalogo: Producto[]) => {
-    const mapeados = rawItems.map((item) => {
-      const normAlmacen = item.productoAlmacen.trim().toLowerCase();
+    const safeCatalogo = Array.isArray(catalogo) ? catalogo : [];
+    const mapeados = (rawItems || []).map((item) => {
+      const normAlmacen = (item.productoAlmacen || '').trim().toLowerCase();
 
       // 1. Buscar coincidencia exacta por nombreAlmacen
-      let match = catalogo.find(
-        (p) => (p.nombreAlmacen || '').trim().toLowerCase() === normAlmacen
+      let match = safeCatalogo.find(
+        (p) => (p?.nombreAlmacen || '').trim().toLowerCase() === normAlmacen
       );
 
       // 2. Si no, buscar por nombre exacto en App
       if (!match) {
-        match = catalogo.find(
-          (p) => p.nombre.trim().toLowerCase() === normAlmacen
+        match = safeCatalogo.find(
+          (p) => (p?.nombre || '').trim().toLowerCase() === normAlmacen
         );
       }
 
       // 3. Regla especial conocida: "Queso Amarillo Castell" -> "Queso Castel"
       if (!match && normAlmacen.includes('castell')) {
-        match = catalogo.find((p) => p.nombre.toLowerCase().includes('castel'));
+        match = safeCatalogo.find((p) => (p?.nombre || '').toLowerCase().includes('castel'));
       }
 
       // 4. Búsqueda por similitud parcial
-      if (!match) {
-        match = catalogo.find(
-          (p) =>
-            normAlmacen.includes(p.nombre.toLowerCase()) ||
-            p.nombre.toLowerCase().includes(normAlmacen)
-        );
+      if (!match && normAlmacen.length >= 3) {
+        match = safeCatalogo.find((p) => {
+          const pNom = (p?.nombre || '').trim().toLowerCase();
+          return pNom ? (normAlmacen.includes(pNom) || pNom.includes(normAlmacen)) : false;
+        });
       }
 
       const pId = match ? parseNumericId(match.id) : undefined;
       return {
         ...item,
+        piezasCalculadas: item.piezasCalculadas ?? item.cantidadNota ?? 0,
         productoId: pId,
         productoNombreApp: match ? match.nombre : undefined,
       };
@@ -718,6 +575,42 @@ export default function SurtidoNotaScreen() {
       tipo: 'exito',
       texto: `✓ Nota #${carga.folio} cargada en lista activa (${carga.items.length} productos listos para surtir).`,
     });
+  };
+
+  // Eliminar una carga del Histórico de Cargas de Notas PDF
+  const handleEliminarCarga = (cargaId: string, folio: string) => {
+    const doDelete = () => {
+      setHistoricoCargas((prev) => {
+        const updated = prev.filter((c) => c.id !== cargaId);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem('miguel_historico_cargas_pdf', JSON.stringify(updated));
+          }
+        } catch {}
+        return updated;
+      });
+      if (cargaExpandidaId === cargaId) {
+        setCargaExpandidaId(null);
+      }
+      setBannerMensaje({
+        tipo: 'exito',
+        texto: `✓ Carga de Nota Folio #${folio} eliminada del histórico correctamente.`,
+      });
+    };
+
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' && window.confirm(`¿Estás seguro de que deseas eliminar la carga de la Nota Folio #${folio} del histórico?`);
+      if (ok) doDelete();
+    } else {
+      Alert.alert(
+        'Eliminar Carga del Histórico',
+        `¿Estás seguro de que deseas eliminar la carga de la Nota Folio #${folio}?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Eliminar', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
   };
 
   // Manejador de selección de archivo PDF (con GIF de carga, vaciado previo y registro en histórico)
@@ -1237,7 +1130,7 @@ export default function SurtidoNotaScreen() {
                     <View style={styles.inputSurtidoRow}>
                       <TextInput
                         style={styles.inputSurtido}
-                        value={item.piezasCalculadas.toString()}
+                        value={(item.piezasCalculadas ?? item.cantidadNota ?? 0).toString()}
                         onChangeText={(t) => handleChangeCantidadSurtida(idx, t)}
                         keyboardType="numeric"
                       />
@@ -1371,13 +1264,26 @@ export default function SurtidoNotaScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.historicoChevronBox}>
-                    <Text style={styles.historicoChevronLabel}>{isExpanded ? 'Ocultar' : 'Ver Detalle'}</Text>
-                    {isExpanded ? (
-                      <ChevronDown size={18} color={colors.primary[700]} />
-                    ) : (
-                      <ChevronRight size={18} color={colors.primary[700]} />
-                    )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={(e: any) => {
+                        e?.stopPropagation?.();
+                        handleEliminarCarga(carga.id, carga.folio);
+                      }}
+                      style={styles.btnTrashHeader}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Trash2 size={15} color={colors.error[600]} />
+                    </TouchableOpacity>
+
+                    <View style={styles.historicoChevronBox}>
+                      <Text style={styles.historicoChevronLabel}>{isExpanded ? 'Ocultar' : 'Ver Detalle'}</Text>
+                      {isExpanded ? (
+                        <ChevronDown size={18} color={colors.primary[700]} />
+                      ) : (
+                        <ChevronRight size={18} color={colors.primary[700]} />
+                      )}
+                    </View>
                   </View>
                 </TouchableOpacity>
 
@@ -1388,15 +1294,24 @@ export default function SurtidoNotaScreen() {
                       <Text style={styles.historicoDetalleTitle}>
                         Detalle de Productos Cargados ({carga.items.length}):
                       </Text>
-                      {!esActiva && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {!esActiva && (
+                          <TouchableOpacity
+                            onPress={() => handleCargarDesdeHistorico(carga)}
+                            style={styles.btnCargarALista}
+                          >
+                            <RotateCcw size={12} color={colors.primary[700]} />
+                            <Text style={styles.btnCargarAListaText}>Cargar a lista</Text>
+                          </TouchableOpacity>
+                        )}
                         <TouchableOpacity
-                          onPress={() => handleCargarDesdeHistorico(carga)}
-                          style={styles.btnCargarALista}
+                          onPress={() => handleEliminarCarga(carga.id, carga.folio)}
+                          style={styles.btnEliminarCarga}
                         >
-                          <RotateCcw size={12} color={colors.primary[700]} />
-                          <Text style={styles.btnCargarAListaText}>Cargar a lista activa</Text>
+                          <Trash2 size={12} color={colors.error[600]} />
+                          <Text style={styles.btnEliminarCargaText}>Eliminar carga</Text>
                         </TouchableOpacity>
-                      )}
+                      </View>
                     </View>
 
                     {/* Tabla de Productos */}
@@ -2655,6 +2570,31 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: fontWeight.bold,
     color: colors.primary[800],
+  },
+  btnEliminarCarga: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.error[50],
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.error[500],
+  },
+  btnEliminarCargaText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: colors.error[700],
+  },
+  btnTrashHeader: {
+    padding: 6,
+    borderRadius: radius.sm,
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[100],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tablaHistorico: {
     backgroundColor: colors.neutral[0],

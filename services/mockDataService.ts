@@ -7,19 +7,116 @@ import type {
   RevisionItem,
   CorteTrabajador,
 } from '@/types';
-import { bitacora, empleados } from '@/constants/mockData';
+import { bitacora, empleados, initialProductos, initialClientes } from '@/constants/mockData';
 
 export const mockEmpleados = empleados;
 export const mockBitacora = bitacora;
 
+// Cargar productos iniciales desde localStorage o constants
+function getProductosIniciales(): Producto[] {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('miguel_mock_productos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+  } catch {}
+  return [...initialProductos];
+}
+
+function getClientesIniciales(): Cliente[] {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('miguel_mock_clientes');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+  } catch {}
+  return [...initialClientes];
+}
+
 // ==========================================
 // 1. PRODUCTOS CON PRESENTACIONES Y CONVERSIONES
 // ==========================================
-export const mockProductos: Producto[] = [];
+export const mockProductos: Producto[] = getProductosIniciales();
+
+export function saveProductosToStorage() {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('miguel_mock_productos', JSON.stringify(mockProductos));
+    }
+  } catch (e) {
+    console.error('Error saving productos to storage:', e);
+  }
+}
 
 export let mockCategorias: CategoriaItem[] = [];
 
-export let mockClientes: Cliente[] = [];
+export let mockClientes: Cliente[] = getClientesIniciales();
+
+export function saveClientesToStorage() {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('miguel_mock_clientes', JSON.stringify(mockClientes));
+    }
+  } catch (e) {
+    console.error('Error saving clientes to storage:', e);
+  }
+}
+
+function getVentasIniciales(): any[] {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('miguel_mock_ventas');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+export let mockVentas: any[] = getVentasIniciales();
+
+export function saveVentasToStorage() {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('miguel_mock_ventas', JSON.stringify(mockVentas));
+    }
+  } catch (e) {
+    console.error('Error saving ventas to storage:', e);
+  }
+}
+
+function getGastosIniciales(): any[] {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('miguel_mock_gastos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
+export let mockGastos: any[] = getGastosIniciales();
+
+export function saveGastosToStorage() {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('miguel_mock_gastos', JSON.stringify(mockGastos));
+    }
+  } catch (e) {
+    console.error('Error saving gastos to storage:', e);
+  }
+}
 
 export const mockRevisionItems: RevisionItem[] = [];
 
@@ -27,6 +124,18 @@ export const mockCortesTrabajadores: CorteTrabajador[] = [];
 
 import { apiService, type RegistrarVentaRequestDto, type RegistrarAbonoRequestDto, type AutorizarAjusteInventarioDto } from './httpApiService';
 import { offlineSyncQueue } from './offlineSyncQueueService';
+
+function applyClienteFiltro(list: Cliente[], filtro?: string): Cliente[] {
+  let result = [...list];
+  if (filtro === 'Hoy') {
+    result = result.filter((c) => (c.diasVisita || []).includes('Lun') || (c.diasVisita || []).includes('Mié'));
+  } else if (filtro === 'Pendientes de cobro' || filtro === 'Con crédito') {
+    result = result.filter((c) => (c.saldo || 0) > 0);
+  } else if (filtro === 'Cercanos') {
+    result = result.filter((c) => c.distanciaMock?.includes('m') && !c.distanciaMock?.includes('km'));
+  }
+  return result;
+}
 
 // ==========================================
 // 5. SERVICIO UNIFICADO (LIVE .NET 9 API CON FALLBACK INTELIGENTE)
@@ -66,21 +175,31 @@ export const DataService = {
 
   getClientes: async (filtro?: 'Todos' | 'Hoy' | 'Pendientes de cobro' | 'Con crédito' | 'Cercanos' | string): Promise<Cliente[]> => {
     try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('miguel_mock_clientes');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            mockClientes = parsed;
+          }
+        }
+      }
+    } catch {}
+
+    try {
       const live = await apiService.getClientes({ filtro });
-      if (Array.isArray(live)) return live;
+      if (Array.isArray(live) && live.length > 0) {
+        const liveIds = new Set(live.map((c) => c.id));
+        const localsOnly = mockClientes.filter((c) => !liveIds.has(c.id));
+        mockClientes = [...localsOnly, ...live];
+        saveClientesToStorage();
+        return applyClienteFiltro(mockClientes, filtro);
+      }
     } catch {
       // Fallback a memoria local
     }
 
-    let result = [...mockClientes];
-    if (filtro === 'Hoy') {
-      result = result.filter((c) => c.diasVisita.includes('Lun') || c.diasVisita.includes('Mié'));
-    } else if (filtro === 'Pendientes de cobro' || filtro === 'Con crédito') {
-      result = result.filter((c) => c.saldo > 0);
-    } else if (filtro === 'Cercanos') {
-      result = result.filter((c) => c.distanciaMock?.includes('m') && !c.distanciaMock?.includes('km'));
-    }
-    return result;
+    return applyClienteFiltro(mockClientes, filtro);
   },
 
   getClienteById: async (id: string): Promise<Cliente | undefined> => {
@@ -97,9 +216,10 @@ export const DataService = {
     try {
       const created = await apiService.createCliente(clienteData);
       mockClientes.unshift(created);
+      saveClientesToStorage();
       return created;
     } catch {
-      const newId = 'c' + (mockClientes.length + 1);
+      const newId = 'c' + Date.now();
       const nuevo: Cliente = {
         id: newId,
         nombre: clienteData.nombre || 'Nuevo Cliente',
@@ -115,13 +235,14 @@ export const DataService = {
         ultimaVisita: new Date().toISOString().split('T')[0],
         telefono: clienteData.telefono || '477 000 0000',
         distanciaMock: clienteData.distanciaMock || '500m',
-        latitud: clienteData.latitud || (21.1221 + (Math.random() - 0.5) * 0.03),
-        longitud: clienteData.longitud || (-101.6828 + (Math.random() - 0.5) * 0.03),
+        latitud: clienteData.latitud !== undefined ? clienteData.latitud : undefined,
+        longitud: clienteData.longitud !== undefined ? clienteData.longitud : undefined,
         activo: true,
         historial: [],
         sugerido: [],
       };
       mockClientes.unshift(nuevo);
+      saveClientesToStorage();
       return nuevo;
     }
   },
@@ -131,11 +252,13 @@ export const DataService = {
       const updated = await apiService.updateCliente(id, updates);
       const idx = mockClientes.findIndex((c) => c.id === id);
       if (idx >= 0) mockClientes[idx] = updated;
+      saveClientesToStorage();
       return updated;
     } catch {
       const idx = mockClientes.findIndex((c) => c.id === id);
       if (idx >= 0) {
         mockClientes[idx] = { ...mockClientes[idx], ...updates };
+        saveClientesToStorage();
         return mockClientes[idx];
       }
       throw new Error('Cliente no encontrado');
@@ -148,12 +271,14 @@ export const DataService = {
       const idx = mockClientes.findIndex((c) => c.id === id);
       if (idx >= 0) {
         mockClientes[idx].activo = false;
+        saveClientesToStorage();
       }
       return true;
     } catch {
       const idx = mockClientes.findIndex((c) => c.id === id);
       if (idx >= 0) {
         mockClientes[idx].activo = false;
+        saveClientesToStorage();
         return true;
       }
       return false;
@@ -164,6 +289,7 @@ export const DataService = {
     try {
       const created = await apiService.createProducto(prodData);
       mockProductos.unshift(created);
+      saveProductosToStorage();
       return created;
     } catch {
       const newId = 'p' + (mockProductos.length + 1);
@@ -192,6 +318,7 @@ export const DataService = {
         ],
       };
       mockProductos.unshift(nuevo);
+      saveProductosToStorage();
       return nuevo;
     }
   },
@@ -201,11 +328,13 @@ export const DataService = {
       const updated = await apiService.updateProducto(id, updates);
       const idx = mockProductos.findIndex((p) => p.id === id);
       if (idx >= 0) mockProductos[idx] = updated;
+      saveProductosToStorage();
       return updated;
     } catch {
       const idx = mockProductos.findIndex((p) => p.id === id);
       if (idx >= 0) {
         mockProductos[idx] = { ...mockProductos[idx], ...updates };
+        saveProductosToStorage();
         return mockProductos[idx];
       }
       throw new Error('Producto no encontrado');
@@ -218,12 +347,14 @@ export const DataService = {
       const idx = mockProductos.findIndex((p) => p.id === id);
       if (idx >= 0) {
         mockProductos[idx].activo = false;
+        saveProductosToStorage();
       }
       return true;
     } catch {
       const idx = mockProductos.findIndex((p) => p.id === id);
       if (idx >= 0) {
         mockProductos[idx].activo = false;
+        saveProductosToStorage();
         return true;
       }
       return false;
@@ -320,63 +451,71 @@ export const DataService = {
 
   getVentas: async (limit = 50) => {
     try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('miguel_mock_ventas');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) mockVentas = parsed;
+        }
+      }
+    } catch {}
+
+    try {
       const live = await apiService.getVentas(limit);
-      if (live && live.length > 0) return live;
+      if (Array.isArray(live) && live.length > 0) return live;
     } catch {
       // Fallback
     }
-    return [
-      {
-        id: 1,
-        folio: 'FOL-20261012-001',
-        clienteId: 1,
-        cliente: { id: 1, nombre: 'Abarrotes Don Pepe', propietario: 'José López', direccion: 'Av. León 102', ruta: 'Ruta Lunes' },
-        usuario: { id: 1, nombre: 'Miguel', rol: 'Administrador' },
-        total: 1850,
-        subtotal: 1850,
-        estado: 'Completada',
-        fechaHora: new Date().toISOString(),
-        detalles: [
-          { productoId: 1, presentacionNombre: 'Caja 24', cantidadPresentaciones: 2, precioUnitario: 580, subtotal: 1160 },
-          { productoId: 3, presentacionNombre: 'Paquete 12', cantidadPresentaciones: 3, precioUnitario: 230, subtotal: 690 },
-        ],
-        pagos: [{ metodo: 'Efectivo', monto: 1850 }],
-      },
-      {
-        id: 2,
-        folio: 'FOL-20261012-002',
-        clienteId: 2,
-        cliente: { id: 2, nombre: 'Cremería La Fina', propietario: 'María Torres', direccion: 'Calle Juárez 45', ruta: 'Ruta Lunes' },
-        usuario: { id: 1, nombre: 'Miguel', rol: 'Administrador' },
-        total: 2420,
-        subtotal: 2420,
-        estado: 'Completada',
-        fechaHora: new Date(Date.now() - 3600000).toISOString(),
-        detalles: [
-          { productoId: 6, presentacionNombre: 'Caja Barra', cantidadPresentaciones: 1, precioUnitario: 1420, subtotal: 1420 },
-          { productoId: 2, presentacionNombre: 'Exhibidor', cantidadPresentaciones: 2, precioUnitario: 500, subtotal: 1000 },
-        ],
-        pagos: [
-          { metodo: 'Efectivo', monto: 1420 },
-          { metodo: 'Crédito', monto: 1000 },
-        ],
-      },
-    ];
+    return [...mockVentas];
   },
 
   registrarVenta: async (venta: RegistrarVentaRequestDto) => {
+    const folio = `FOL-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+    const cliente = mockClientes.find((c) => c.id === venta.clienteId);
+    const creditoOtorgado = venta.pagos.find((p) => p.metodo === 'Crédito')?.monto || 0;
+    if (cliente) {
+      cliente.saldo += creditoOtorgado;
+      cliente.estado = 'Venta realizada';
+      cliente.ultimaCompra = 'Hoy';
+      saveClientesToStorage();
+    }
+
+    const ventaRegistro = {
+      id: Date.now(),
+      folio,
+      clienteId: venta.clienteId,
+      cliente: cliente
+        ? {
+            id: cliente.id,
+            nombre: cliente.nombre,
+            propietario: cliente.propietario,
+            direccion: cliente.direccion,
+            ruta: cliente.ruta,
+          }
+        : { id: 0, nombre: 'Mostrador / General' },
+      usuario: { id: 1, nombre: 'Miguel', rol: 'Administrador' },
+      total: venta.total,
+      subtotal: (venta as any).subtotal || venta.total,
+      estado: 'Completada',
+      fechaHora: new Date().toISOString(),
+      detalles: (venta.items || []).map((it) => ({
+        productoId: it.productoId,
+        presentacionNombre: it.presentacionNombre || 'Pieza',
+        cantidadPresentaciones: it.cantidadPresentaciones,
+        precioUnitario: it.precioUnitario,
+        subtotal: it.subtotal,
+      })),
+      pagos: venta.pagos,
+    };
+
     try {
-      return await apiService.registrarVenta(venta);
+      const liveRes = await apiService.registrarVenta(venta);
+      mockVentas.unshift(ventaRegistro);
+      saveVentasToStorage();
+      return liveRes;
     } catch (err: any) {
-      // Simular respuesta local y encolar para sincronización
-      const folio = `FOL-OFF-${Date.now().toString().slice(-4)}`;
-      const cliente = mockClientes.find((c) => c.id === venta.clienteId);
-      const creditoOtorgado = venta.pagos.find((p) => p.metodo === 'Crédito')?.monto || 0;
-      if (cliente) {
-        cliente.saldo += creditoOtorgado;
-        cliente.estado = 'Venta realizada';
-        cliente.ultimaCompra = 'Hoy (En cola sync)';
-      }
+      mockVentas.unshift(ventaRegistro);
+      saveVentasToStorage();
 
       offlineSyncQueue.enqueue(
         'Venta',
@@ -388,7 +527,7 @@ export const DataService = {
 
       return {
         folio,
-        fechaHora: new Date().toISOString(),
+        fechaHora: ventaRegistro.fechaHora,
         totalVenta: venta.total,
         totalPagado: venta.total - creditoOtorgado,
         creditoOtorgado,
@@ -405,6 +544,7 @@ export const DataService = {
       if (cliente) {
         cliente.saldo = (res as any)?.nuevoSaldo !== undefined ? (res as any).nuevoSaldo : Math.max(0, cliente.saldo - abono.monto);
         cliente.ultimoPago = `Hoy · $${abono.monto}`;
+        saveClientesToStorage();
       }
       return res;
     } catch {
@@ -412,6 +552,7 @@ export const DataService = {
       if (cliente) {
         cliente.saldo = Math.max(0, cliente.saldo - abono.monto);
         cliente.ultimoPago = `Hoy · $${abono.monto} (En cola sync)`;
+        saveClientesToStorage();
       }
 
       offlineSyncQueue.enqueue(
@@ -476,14 +617,32 @@ export const DataService = {
         gastosTotal: 0,
       };
     } catch {
+      const ventasHoyList = mockVentas.filter((v) => {
+        try {
+          return new Date(v.fechaHora).toDateString() === new Date().toDateString();
+        } catch {
+          return false;
+        }
+      });
+      const ventasTotales = ventasHoyList.reduce((sum, v) => sum + (v.total || 0), 0);
+      const totalPiezas = ventasHoyList.reduce(
+        (sum, v) => sum + (v.detalles?.reduce((s: number, d: any) => s + (d.cantidadPresentaciones || 0), 0) || 0),
+        0
+      );
+      const cobranzaDelDia = ventasHoyList.reduce((sum, v) => {
+        const efectivo = v.pagos?.find((p: any) => p.metodo === 'Efectivo')?.monto || 0;
+        return sum + efectivo;
+      }, 0);
+      const gastosTotal = mockGastos.reduce((sum, g) => sum + (g.importe || 0), 0);
+
       return {
-        ventasTotales: 0,
-        pedidosCount: 0,
-        efectivoEnCaja: 0,
-        cobranzaDelDia: 0,
-        clientesVisitados: 0,
-        clientesTotal: 0,
-        gastosTotal: 0,
+        ventasTotales,
+        pedidosCount: totalPiezas,
+        efectivoEnCaja: Math.max(0, cobranzaDelDia - gastosTotal),
+        cobranzaDelDia,
+        clientesVisitados: mockClientes.filter((c) => c.estado === 'Venta realizada' || c.estado === 'Visitado').length,
+        clientesTotal: mockClientes.length,
+        gastosTotal,
       };
     }
   },
@@ -491,12 +650,13 @@ export const DataService = {
   autorizarRevision: async (req: AutorizarAjusteInventarioDto) => {
     const res = await apiService.autorizarRevisionInventario(req);
     if (req.ajustes) {
-      req.ajustes.forEach(aj => {
-        const prod = mockProductos.find(p => p.id === aj.productoId || p.sku === aj.productoId);
+      req.ajustes.forEach((aj) => {
+        const prod = mockProductos.find((p) => p.id === aj.productoId || p.sku === aj.productoId);
         if (prod) {
           prod.existencia = aj.cantidadFisica;
         }
       });
+      saveProductosToStorage();
     }
     return res;
   },
@@ -506,45 +666,58 @@ export const DataService = {
   // ==========================================
   getGastos: async (fecha?: string, empleadoId?: string) => {
     try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('miguel_mock_gastos');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) mockGastos = parsed;
+        }
+      }
+    } catch {}
+
+    try {
       const live = await apiService.getGastos(fecha, empleadoId);
-      if (live) return live;
+      if (Array.isArray(live) && live.length > 0) return live;
     } catch {
       // Fallback
     }
-    return [
-      { id: 1, empleadoId: '1', empleadoNombre: 'Miguel', concepto: 'Gasolina', importe: 350, metodoPago: 'Efectivo', observaciones: 'Carga inicial magna', fechaHora: new Date().toISOString() },
-      { id: 2, empleadoId: '1', empleadoNombre: 'Miguel', concepto: 'Comida', importe: 120, metodoPago: 'Efectivo', observaciones: 'Almuerzo en ruta', fechaHora: new Date().toISOString() },
-      { id: 3, empleadoId: '1', empleadoNombre: 'Miguel', concepto: 'Estacionamiento', importe: 45, metodoPago: 'Efectivo', observaciones: 'Estacionamiento mercado', fechaHora: new Date().toISOString() },
-    ];
+    return [...mockGastos];
   },
 
   registrarGasto: async (req: { empleadoId: string; concepto: string; importe: number; metodoPago: string; observaciones?: string }) => {
+    const nuevoGasto = {
+      id: Date.now(),
+      empleadoId: req.empleadoId,
+      empleadoNombre: 'Miguel',
+      concepto: req.concepto,
+      importe: req.importe,
+      metodoPago: req.metodoPago,
+      observaciones: req.observaciones || '',
+      fechaHora: new Date().toISOString(),
+    };
     try {
-      return await apiService.registrarGasto(req);
+      const liveRes = await apiService.registrarGasto(req);
+      if (liveRes) {
+        mockGastos.unshift(liveRes);
+        saveGastosToStorage();
+        return liveRes;
+      }
     } catch {
-      return {
-        id: Math.floor(Math.random() * 1000),
-        empleadoId: req.empleadoId,
-        empleadoNombre: 'Miguel',
-        concepto: req.concepto,
-        importe: req.importe,
-        metodoPago: req.metodoPago,
-        observaciones: req.observaciones,
-        fechaHora: new Date().toISOString(),
-      };
+      // Fallback local
     }
+    mockGastos.unshift(nuevoGasto);
+    saveGastosToStorage();
+    return nuevoGasto;
   },
 
   getDevoluciones: async (clienteId?: string) => {
     try {
       const live = await apiService.getDevoluciones(clienteId);
-      if (live) return live;
+      if (Array.isArray(live) && live.length > 0) return live;
     } catch {
       // Fallback
     }
-    return [
-      { id: 1, folio: 'DEV-20260915-001', clienteId: 'c1', clienteNombre: 'ABTS ARENAS', productoId: 'p3', productoNombre: 'Jamón Virginia Pavo Zwan', cantidad: 1, presentacionTipo: 'pieza', total: 185, motivo: 'Caducado', destino: 'Merma', metodoReembolso: 'SaldoAFavor', fechaHora: new Date().toISOString() },
-    ];
+    return [];
   },
 
   registrarDevolucion: async (req: { clienteId: string; empleadoId: string; productoId: string; cantidad: number; presentacionTipo: string; precioUnitario: number; total: number; motivo: string; destino: string; metodoReembolso: string; observaciones?: string }) => {
@@ -609,32 +782,78 @@ export const DataService = {
     } catch {
       // Fallback
     }
+    const ventasTotales = mockVentas.reduce((sum, v) => sum + (v.total || 0), 0);
+    const gastosTotal = mockGastos.reduce((sum, g) => sum + (g.importe || 0), 0);
+    const pedidosTotal = mockVentas.length;
+    const ticketPromedio = pedidosTotal > 0 ? Math.round(ventasTotales / pedidosTotal) : 0;
+    const visitadosSet = new Set(mockVentas.map((v) => v.clienteId).filter(Boolean));
+    const clientesVisitados = visitadosSet.size;
+    const clientesTotalRuta = mockClientes.length;
+    const efectividadVisitas = clientesTotalRuta > 0 ? Math.round((clientesVisitados / clientesTotalRuta) * 100) : 0;
+
+    let efectivo = 0;
+    let transferencia = 0;
+    let tarjeta = 0;
+    let credito = 0;
+
+    for (const v of mockVentas) {
+      for (const p of v.pagos || []) {
+        const met = (p.metodo || '').toLowerCase();
+        const m = Number(p.monto) || 0;
+        if (met.includes('efectivo')) efectivo += m;
+        else if (met.includes('transf')) transferencia += m;
+        else if (met.includes('tarj')) tarjeta += m;
+        else if (met.includes('crédito') || met.includes('credito')) credito += m;
+        else efectivo += m;
+      }
+    }
+
+    const cobranzaTotal = efectivo + transferencia + tarjeta;
+    const utilidadEstimada = Math.max(0, ventasTotales - gastosTotal);
+
+    // Calcular top productos dinámicamente
+    const prodsMap: { [id: string]: { productoId: string; nombre: string; cantidadVendida: number; importeTotal: number } } = {};
+    for (const v of mockVentas) {
+      for (const det of v.detalles || []) {
+        const id = det.productoId || det.id;
+        if (!id) continue;
+        if (!prodsMap[id]) {
+          prodsMap[id] = {
+            productoId: id,
+            nombre: det.presentacionNombre || det.nombre || `Producto ${id}`,
+            cantidadVendida: 0,
+            importeTotal: 0,
+          };
+        }
+        prodsMap[id].cantidadVendida += (det.cantidadPresentaciones || det.piezasTotales || 1);
+        prodsMap[id].importeTotal += (det.subtotal || 0);
+      }
+    }
+
+    const topProductos = Object.values(prodsMap)
+      .sort((a, b) => b.importeTotal - a.importeTotal)
+      .slice(0, 5);
+
     return {
       periodo,
       fechaInicio: new Date().toISOString(),
       fechaFin: new Date().toISOString(),
-      ventasTotales: 84250,
-      cobranzaTotal: 32000,
-      creditoColocado: 14300,
-      gastosTotal: 1545,
-      utilidadEstimada: 28400,
-      ticketPromedio: 1850,
-      pedidosTotal: 45,
-      clientesVisitados: 28,
-      clientesTotalRuta: 35,
-      efectividadVisitas: 80,
-      topProductos: [
-        { productoId: 'p1', nombre: 'Queso Castel Barra', cantidadVendida: 42, importeTotal: 8190 },
-        { productoId: 'p3', nombre: 'Jamón Virginia Pavo Zwan', cantidadVendida: 35, importeTotal: 6475 },
-        { productoId: 'p6', nombre: 'Queso Oaxaca Tradicional', cantidadVendida: 28, importeTotal: 5460 },
-        { productoId: 'p4', nombre: 'Salchicha de Pavo San Rafael', cantidadVendida: 24, importeTotal: 3480 },
-        { productoId: 'p2', nombre: 'Chiles Jalapeños La Costeña', cantidadVendida: 52, importeTotal: 1248 },
-      ],
+      ventasTotales,
+      cobranzaTotal,
+      creditoColocado: credito,
+      gastosTotal,
+      utilidadEstimada,
+      ticketPromedio,
+      pedidosTotal,
+      clientesVisitados,
+      clientesTotalRuta,
+      efectividadVisitas,
+      topProductos,
       metodosPago: {
-        efectivo: 45200,
-        transferencia: 18450,
-        tarjeta: 6300,
-        credito: 14300,
+        efectivo,
+        transferencia,
+        tarjeta,
+        credito,
       },
     };
   },
@@ -762,7 +981,74 @@ export const DataService = {
   },
 
   surtirNotaPdf: async (req: any) => {
-    return await apiService.surtirNotaPdf(req);
+    try {
+      const live = await apiService.surtirNotaPdf(req);
+      if (live) return live;
+    } catch {
+      // Fallback a memoria local / offline cuando la API no esté disponible
+    }
+
+    let totalPiezas = 0;
+    let actualizados = 0;
+    const items = req.items || [];
+
+    for (const item of items) {
+      const pzas = item.piezasASurtir > 0 ? item.piezasASurtir : (item.piezasCalculadas || item.cantidadNota || 0);
+      if (pzas <= 0) continue;
+
+      let prod = mockProductos.find(
+        (p) =>
+          (item.productoId && p.id === String(item.productoId)) ||
+          (item.productoIdApp && p.id === String(item.productoIdApp))
+      );
+
+      if (!prod && item.productoAlmacen) {
+        const almNorm = item.productoAlmacen.trim().toLowerCase();
+        prod = mockProductos.find(
+          (p) =>
+            (p.nombreAlmacen || '').trim().toLowerCase() === almNorm ||
+            p.nombre.trim().toLowerCase() === almNorm
+        );
+      }
+
+      if (prod) {
+        prod.existencia = (prod.existencia || 0) + pzas;
+        if (item.recordarVinculacion && item.productoAlmacen) {
+          prod.nombreAlmacen = item.productoAlmacen.trim();
+        }
+        actualizados++;
+        totalPiezas += pzas;
+      } else if (item.productoAlmacen) {
+        // Auto-crear producto en catálogo local si no existe
+        const isKg = (item.um || '').toUpperCase() === 'KG';
+        const nuevoProd: Producto = {
+          id: 'p' + (mockProductos.length + 100),
+          nombre: item.productoAlmacen.trim(),
+          nombreAlmacen: item.productoAlmacen.trim(),
+          categoria: isKg ? 'Jamón' : 'Abarrotes',
+          unidad: isKg ? 'kg' : 'pieza',
+          precioBase: 50,
+          existencia: pzas,
+          precioPorPeso: isKg,
+        };
+        mockProductos.unshift(nuevoProd);
+        actualizados++;
+        totalPiezas += pzas;
+      }
+    }
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('miguel_mock_productos', JSON.stringify(mockProductos));
+      }
+    } catch {}
+
+    return {
+      message: `Nota #${req.folioNota || 'S/N'} procesada con éxito: ${totalPiezas} piezas surtidas en ${actualizados} productos.`,
+      folio: req.folioNota || 'S/N',
+      totalPiezas,
+      productosSurtidos: actualizados,
+    };
   },
 
   // Rutas (ABC)

@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Pressable,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -118,6 +120,16 @@ export default function VentaScreen() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (isClientModalOpen) {
+      DataService.getClientes().then((cls) => {
+        if (cls && Array.isArray(cls)) {
+          setClientesList(cls);
+        }
+      });
+    }
+  }, [isClientModalOpen]);
 
   const effectiveClientes = clientesList;
   const effectiveProductos = productosList;
@@ -618,15 +630,18 @@ export default function VentaScreen() {
         animationType="fade"
         onRequestClose={() => setIsClientModalOpen(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsClientModalOpen(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setIsClientModalOpen(false)}
+          />
           <View style={styles.clientPickerCard}>
             <View style={styles.clientPickerHeaderRow}>
               <Text style={styles.clientPickerTitle}>Seleccionar cliente</Text>
-              <TouchableOpacity onPress={() => setIsClientModalOpen(false)}>
+              <TouchableOpacity
+                onPress={() => setIsClientModalOpen(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <X size={18} color={colors.neutral[500]} />
               </TouchableOpacity>
             </View>
@@ -636,13 +651,18 @@ export default function VentaScreen() {
               <Search size={16} color={colors.neutral[400]} />
               <TextInput
                 style={styles.clientSearchInput}
-                placeholder="Buscar cliente, dueño, ruta..."
+                placeholder="Buscar cliente, dueño, calle o ID..."
                 placeholderTextColor={colors.neutral[400]}
                 value={clientSearch}
                 onChangeText={setClientSearch}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               {clientSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setClientSearch('')}>
+                <TouchableOpacity
+                  onPress={() => setClientSearch('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
                   <X size={14} color={colors.neutral[400]} />
                 </TouchableOpacity>
               )}
@@ -669,17 +689,20 @@ export default function VentaScreen() {
               </View>
               {clienteActivoId === 'general' && <Check size={18} color={colors.primary[600]} />}
             </TouchableOpacity>
-            <ScrollView style={{ maxHeight: 350 }}>
+
+            <ScrollView style={{ maxHeight: 350 }} keyboardShouldPersistTaps="handled">
               {effectiveClientes
                 .filter((c) => {
-                  if (!clientSearch) return true;
+                  if (c.activo === false) return false;
+                  if (!clientSearch.trim()) return true;
                   const q = clientSearch.toLowerCase().trim();
-                  return (
-                    c.nombre.toLowerCase().includes(q) ||
-                    c.propietario?.toLowerCase().includes(q) ||
-                    c.direccion?.toLowerCase().includes(q) ||
-                    c.ruta?.toLowerCase().includes(q)
-                  );
+                  const matchNombre = (c.nombre || '').toLowerCase().includes(q);
+                  const matchProp = (c.propietario || '').toLowerCase().includes(q);
+                  const matchDir = (c.direccion || '').toLowerCase().includes(q);
+                  const matchCol = (c.colonia || '').toLowerCase().includes(q);
+                  const matchRuta = (c.ruta || '').toLowerCase().includes(q);
+                  const matchId = String(c.id || '').toLowerCase().includes(q);
+                  return matchNombre || matchProp || matchDir || matchCol || matchRuta || matchId;
                 })
                 .map((c) => (
                 <TouchableOpacity
@@ -696,7 +719,7 @@ export default function VentaScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.clientItemName}>{c.nombre}</Text>
                     <Text style={styles.clientItemSub}>
-                      {c.propietario} · {c.direccion}
+                      {c.propietario || 'Cliente de ruta'} · {c.direccion || c.colonia || 'León, Gto'}
                     </Text>
                   </View>
                   {cliente?.id === c.id && <Check size={18} color={colors.primary[600]} />}
@@ -704,7 +727,7 @@ export default function VentaScreen() {
               ))}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
@@ -1705,15 +1728,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderRadius: radius.md,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
+    paddingVertical: 4,
     gap: spacing.xs,
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
   },
   clientSearchInput: {
     flex: 1,
-    fontSize: fontSize.xs + 1,
+    fontSize: fontSize.sm,
     color: colors.neutral[900],
-    padding: 0,
+    paddingVertical: Platform.OS === 'web' ? 8 : 4,
+    paddingHorizontal: 4,
+    minHeight: 36,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   clientGeneralBtn: {
     flexDirection: 'row',
