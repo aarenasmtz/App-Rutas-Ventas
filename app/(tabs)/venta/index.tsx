@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -83,6 +84,24 @@ export default function VentaScreen() {
     setClienteActivoId,
     user,
   } = useApp();
+
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+
+  // 3 columnas en móvil estándar cuando el ancho permita leer y tocar;
+  // 2 columnas en pantallas muy estrechas (<355px) o texto ampliado por accesibilidad (>1.25)
+  const numColumns = useMemo(() => {
+    if (windowWidth < 355 || fontScale > 1.25) return 2;
+    if (windowWidth >= 960) return 5;
+    if (windowWidth >= 640) return 4;
+    return 3;
+  }, [windowWidth, fontScale]);
+
+  const gapSize = 7; // Separación de 6–8 px
+  const horizontalPadding = 16; // 8px de margen en cada lado
+  const cardWidth = useMemo(() => {
+    const availableWidth = Math.min(windowWidth, 1200) - horizontalPadding;
+    return Math.floor((availableWidth - (numColumns - 1) * gapSize) / numColumns);
+  }, [windowWidth, numColumns]);
 
   const userId = user?.id || 'default';
 
@@ -912,10 +931,13 @@ export default function VentaScreen() {
         </View>
       </View>
 
-      {/* 2. MOSAICO DE PRODUCTOS (2 Columnas) */}
+      {/* 2. MOSAICO DE PRODUCTOS (3 Columnas en Móvil / 2 en Estrechas) */}
       <ScrollView
         style={styles.gridScroll}
-        contentContainerStyle={styles.gridScrollContent}
+        contentContainerStyle={[
+          styles.gridScrollContent,
+          { paddingBottom: cartCount > 0 ? 115 : 40 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.gridContainer}>
@@ -928,19 +950,29 @@ export default function VentaScreen() {
             const presDefault = p.presentaciones?.[0];
             const price = getProductPrice(p, presDefault);
             const isPendingConfig = p.estadoConfiguracion === 'Pendiente';
-            const unitLabel = presDefault ? presDefault.nombre : p.unidad || 'pieza';
+            const unitLabel = presDefault ? presDefault.nombre : p.unidad || 'pza';
 
             return (
-              <View
+              <TouchableOpacity
                 key={p.id}
+                activeOpacity={isPendingConfig ? 1 : 0.8}
+                disabled={isPendingConfig}
+                onPress={() => {
+                  if (hasMultiplePres) {
+                    setSelectedMultiProd(p);
+                  } else {
+                    handleAddSingleQuick(p);
+                  }
+                }}
                 style={[
                   styles.productCard,
+                  { width: cardWidth },
                   inCart && styles.productCardActive,
                   isPendingConfig && styles.productCardDisabled,
                   shadows.card,
                 ]}
               >
-                {/* Fila superior: Unidad/Presentación + Estrella Favorito */}
+                {/* Fila superior: Presentación/Unidad + Estrella Favorito en esquina */}
                 <View style={styles.cardTopRow}>
                   <View style={styles.unitBadge}>
                     <Text style={styles.unitBadgeText} numberOfLines={1}>
@@ -949,79 +981,62 @@ export default function VentaScreen() {
                   </View>
 
                   <TouchableOpacity
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    onPress={() => handleToggleFavorito(p.id)}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    onPress={(e) => {
+                      e?.stopPropagation?.();
+                      handleToggleFavorito(p.id);
+                    }}
                     style={styles.starTouchArea}
                     accessibilityLabel={isFav ? 'Quitar de favoritos' : 'Marcar como favorito'}
                   >
                     <Star
-                      size={18}
+                      size={15}
                       color={isFav ? '#F59E0B' : colors.neutral[300]}
                       fill={isFav ? '#F59E0B' : 'transparent'}
                     />
                   </TouchableOpacity>
                 </View>
 
-                {/* Nombre del producto */}
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  disabled={isPendingConfig}
-                  onPress={() => {
-                    if (hasMultiplePres) {
-                      setSelectedMultiProd(p);
-                    } else {
-                      handleAddSingleQuick(p);
-                    }
-                  }}
-                  style={styles.cardContentTouch}
-                >
-                  <Text style={styles.productName} numberOfLines={2}>
-                    {p.nombre}
-                  </Text>
+                {/* Nombre del producto: permite varias líneas sin cortar información esencial */}
+                <Text style={styles.productName} numberOfLines={3}>
+                  {p.nombre}
+                </Text>
 
-                  {/* Precio y Disponibilidad */}
-                  <View style={styles.priceRow}>
-                    <Text style={styles.productPrice}>{formatCurrency(price)}</Text>
-                    {isPendingConfig ? (
-                      <Text style={styles.pendingBadge}>⚠️ Pendiente</Text>
-                    ) : (
-                      <Text style={styles.stockText}>
-                        Disp: {p.existencia !== undefined ? p.existencia : 0}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-
-                {/* Controles de Acción Inferior */}
-                <View style={styles.cardBottomRow}>
+                {/* Precio y Disponibilidad */}
+                <View style={styles.priceRow}>
+                  <Text style={styles.productPrice}>{formatCurrency(price)}</Text>
                   {isPendingConfig ? (
-                    <View style={styles.disabledActionWrap}>
-                      <Text style={styles.disabledActionText}>Requiere config.</Text>
-                    </View>
-                  ) : hasMultiplePres && !inCart ? (
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => setSelectedMultiProd(p)}
-                      style={styles.multiPresBtn}
-                    >
-                      <Text style={styles.multiPresBtnText}>Presentaciones</Text>
-                      <ChevronRight size={13} color={colors.primary[700]} />
-                    </TouchableOpacity>
-                  ) : inCart ? (
-                    /* Stepper interactivo directo en tarjeta */
+                    <Text style={styles.pendingBadge}>⚠️ Pendiente</Text>
+                  ) : (
+                    <Text style={styles.stockText}>
+                      Disp: {p.existencia !== undefined ? p.existencia : 0}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Controles de cantidad: ÚNICAMENTE cuando el producto está agregado */}
+                {inCart && (
+                  <View style={styles.cardStepperRow}>
                     <View style={styles.stepperContainer}>
                       <TouchableOpacity
                         activeOpacity={0.7}
-                        onPress={() => handleDecrementProduct(p)}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          handleDecrementProduct(p);
+                        }}
                         style={styles.stepperBtn}
+                        accessibilityLabel="Disminuir cantidad"
                       >
-                        <Minus size={15} color={colors.primary[700]} strokeWidth={2.8} />
+                        <Minus size={13} color={colors.primary[700]} strokeWidth={3} />
                       </TouchableOpacity>
 
                       <TouchableOpacity
                         activeOpacity={0.7}
-                        onPress={() => {
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
                           setQtyPromptItem({
                             producto: p,
                             currentQty: totalQty,
@@ -1031,31 +1046,27 @@ export default function VentaScreen() {
                           setManualQtyInput(totalQty.toString());
                         }}
                         style={styles.stepperQtyTouch}
+                        accessibilityLabel="Editar cantidad directamente"
                       >
                         <Text style={styles.stepperQtyText}>{totalQty}</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
                         activeOpacity={0.7}
-                        onPress={() => handleAddSingleQuick(p)}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          handleAddSingleQuick(p);
+                        }}
                         style={styles.stepperBtn}
+                        accessibilityLabel="Aumentar cantidad"
                       >
-                        <Plus size={15} color={colors.primary[700]} strokeWidth={2.8} />
+                        <Plus size={13} color={colors.primary[700]} strokeWidth={3} />
                       </TouchableOpacity>
                     </View>
-                  ) : (
-                    /* Botón simple de un toque para agregar */
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => handleAddSingleQuick(p)}
-                      style={styles.addSingleBtn}
-                    >
-                      <Plus size={14} color={colors.neutral[0]} strokeWidth={3} />
-                      <Text style={styles.addSingleBtnText}>Agregar</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
+                  </View>
+                )}
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -1659,24 +1670,24 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
   },
 
-  /* Grid Mosaico (2 columnas) */
+  /* Grid Mosaico (3 columnas en móvil / 2 en estrechas) */
   gridScroll: {
     flex: 1,
   },
   gridScrollContent: {
-    padding: 10,
-    paddingBottom: 90,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 115,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 7, // 6–8 px de separación
   },
   productCard: {
-    width: '48.5%',
     backgroundColor: colors.neutral[0],
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 9,
+    padding: 7,
     borderWidth: 1,
     borderColor: colors.neutral[200],
     justifyContent: 'space-between',
@@ -1687,24 +1698,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F7FF',
   },
   productCardDisabled: {
-    opacity: 0.65,
+    opacity: 0.6,
     backgroundColor: colors.neutral[50],
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   unitBadge: {
     backgroundColor: colors.neutral[100],
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderRadius: 4,
-    maxWidth: '75%',
+    maxWidth: '70%',
   },
   unitBadgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
     color: colors.neutral[600],
     textTransform: 'uppercase',
@@ -1712,96 +1723,66 @@ const styles = StyleSheet.create({
   starTouchArea: {
     padding: 2,
   },
-  cardContentTouch: {
-    marginBottom: 8,
-  },
   productName: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '700',
     color: colors.neutral[900],
-    lineHeight: 17,
-    minHeight: 34,
+    lineHeight: 14.5,
+    minHeight: 29,
+    marginBottom: 4,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 2,
   },
   productPrice: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: colors.primary[700],
   },
   stockText: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: '600',
     color: colors.neutral[500],
   },
   pendingBadge: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '700',
     color: colors.warning[700],
   },
-
-  /* Acciones inferiores de tarjeta */
-  cardBottomRow: {
-    marginTop: 'auto',
-  },
-  addSingleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: colors.primary[600],
-    borderRadius: 8,
-    paddingVertical: 7,
-  },
-  addSingleBtnText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.neutral[0],
-  },
-  multiPresBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    backgroundColor: colors.primary[50],
-    borderRadius: 8,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  multiPresBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary[700],
+  cardStepperRow: {
+    marginTop: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.primary[100],
   },
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.neutral[0],
-    borderRadius: 8,
-    borderWidth: 1.5,
+    borderRadius: 6,
+    borderWidth: 1.2,
     borderColor: colors.primary[600],
     overflow: 'hidden',
+    height: 28,
   },
   stepperBtn: {
     flex: 1,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
     backgroundColor: colors.primary[50],
   },
   stepperQtyTouch: {
     flex: 1.2,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
   },
   stepperQtyText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
     color: colors.primary[800],
   },

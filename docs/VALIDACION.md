@@ -163,15 +163,16 @@
 
 ---
 
-### TC-UX-03: Mosaico Compacto y Stepper Interactivo en Tarjeta
-- **Objetivo:** Añadir productos y modificar cantidades directamente desde el mosaico de 2 columnas sin modales por cada producto.
+### TC-UX-03: Mosaico Ultra Compacto en 3 Columnas Móviles y Stepper Condicional
+- **Objetivo:** Maximizar la cantidad de productos visibles en pantalla (3 columnas en móvil estándar, adaptable a 2 en pantallas estrechas o texto grande) con separación de 7 px, sin botones cuando no está agregado, y desplegando stepper `[−] [Cantidad] [+]` con áreas táctiles ≥ 44×44 px únicamente cuando el producto se añade al carrito.
 - **Pasos:**
-  1. Tocar una tarjeta de producto simple.
-  2. Verificar incremento inmediato a 1 unidad y transformación de la tarjeta a control `[−] [1] [+]`.
-  3. Pulsar `[+]` para subir a 2.
-  4. Tocar el número para ingresar una cantidad alta directamente.
-- **Resultado Obtenido:** Actualización visual y en barra flotante inmediata.
-- **Estado:** **APROBADO (Capturas `mosaico_productos_1792364477739.png` y `mosaico_con_carrito_1792364493504.png`)**.
+  1. Acceder al mosaico de venta en viewport estándar (390×844).
+  2. Verificar que el catálogo se despliega en 3 columnas homogéneas con nombres en hasta 3 líneas, precio destacado, unidad en esquina superior izquierda y estrella de favorito independiente en esquina superior derecha.
+  3. Comprobar que las tarjetas no agregadas carecen de botones inferiores redundantes.
+  4. Tocar una tarjeta simple: se añade 1 unidad de inmediato y se despliega el stepper interactivo condicional `[−] [1] [+]`.
+  5. Verificar que el scroll permite ver todos los productos sin que la barra flotante de cobro tape la última fila (`paddingBottom: 115`).
+- **Resultado Obtenido:** 9 a 15 productos visibles de inmediato en pantalla. Stepper y estrella con targets táctiles ≥ 44×44 px sin toques accidentales.
+- **Estado:** **APROBADO (Captura `mosaico_3_columnas_actualizado_1792366588411.png`)**.
 
 ---
 
