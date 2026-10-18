@@ -102,6 +102,11 @@ export default function PagoScreen() {
   const handleConfirm = async () => {
     if (isSubmitting) return;
 
+    if (!carrito || carrito.length === 0) {
+      Alert.alert('Carrito vacío', 'No hay productos en el carrito para cobrar.');
+      return;
+    }
+
     if (!completo) {
       Alert.alert('Pago incompleto', `Aún faltan ${formatCurrency(diferencia)} por cubrir.`);
       return;

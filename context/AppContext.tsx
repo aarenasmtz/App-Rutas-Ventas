@@ -51,7 +51,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [pagos, setPagosState] = useState<Pago[]>([]);
   const [ventaTotal, setVentaTotal] = useState(0);
-  const [clienteActivoId, setClienteActivoId] = useState<string | null>('c1'); // ABTS ARENAS por defecto
+  const [clienteActivoId, setClienteActivoId] = useState<string | null>(null);
   const [ultimoFolioVenta, setUltimoFolioVenta] = useState<string | null>(null);
 
   const login = useCallback(async (params?: { usuario?: string; password?: string; role?: UserRole } | UserRole) => {

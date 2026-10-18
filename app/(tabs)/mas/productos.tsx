@@ -201,22 +201,40 @@ export default function ProductosAdminScreen() {
       if (formUnidad === 'kg') {
         setFormUnidad('paquete');
       }
-      // Si no tiene presentaciones configuradas, sugerir plantillas base o inicializar
+      // Inicializar con presentación base si no tiene ninguna
       if (formPresentaciones.length === 0) {
-        if (formNombre.toLowerCase().includes('castel')) {
-          setFormPresentaciones([
-            { tipo: 'paquete', nombre: 'Paquete', piezasEquivalentes: 1, precio: 8, activa: true, orden: 1, descripcionEquivalencia: '1 paquete = 1 unidad base' },
-            { tipo: 'exhibidor', nombre: 'Exhibidor', piezasEquivalentes: 10, precio: 80, activa: true, orden: 2, descripcionEquivalencia: '1 exhibidor = 10 paquetes' },
-            { tipo: 'caja', nombre: 'Caja', piezasEquivalentes: 60, precio: 480, activa: true, orden: 3, descripcionEquivalencia: '1 caja = 60 paquetes' },
-          ]);
-          setFormPrecioBase('8');
-        } else {
-          setFormPresentaciones([
-            { tipo: 'paquete', nombre: 'Unidad Base', piezasEquivalentes: 1, precio: parseFloat(formPrecioBase) || 10, activa: true, orden: 1 },
-          ]);
-        }
+        setFormPresentaciones([
+          {
+            tipo: 'paquete',
+            nombre: 'Paquete',
+            piezasEquivalentes: 1,
+            precio: parseFloat(formPrecioBase) || 8,
+            activa: true,
+            orden: 1,
+            descripcionEquivalencia: '1 paquete = 1 unidad base',
+          },
+        ]);
       }
     }
+  };
+
+  const handleCargarPlantillaCastel = () => {
+    setFormUnidad('paquete');
+    setFormPresentaciones([
+      { tipo: 'paquete', nombre: 'Paquete', piezasEquivalentes: 1, precio: 8, activa: true, orden: 1, descripcionEquivalencia: '1 paquete = 1 unidad base' },
+      { tipo: 'exhibidor', nombre: 'Exhibidor', piezasEquivalentes: 10, precio: 80, activa: true, orden: 2, descripcionEquivalencia: '1 exhibidor = 10 paquetes' },
+      { tipo: 'caja', nombre: 'Caja', piezasEquivalentes: 60, precio: 480, activa: true, orden: 3, descripcionEquivalencia: '1 caja = 60 paquetes' },
+    ]);
+    setFormPrecioBase('8');
+  };
+
+  const handleCargarPlantillaCajaPieza = () => {
+    setFormUnidad('pieza');
+    const pBase = parseFloat(formPrecioBase) || 10;
+    setFormPresentaciones([
+      { tipo: 'pieza', nombre: 'Pieza', piezasEquivalentes: 1, precio: pBase, activa: true, orden: 1, descripcionEquivalencia: '1 pieza = 1 unidad base' },
+      { tipo: 'caja', nombre: 'Caja (24 pzas)', piezasEquivalentes: 24, precio: pBase * 24, activa: true, orden: 2, descripcionEquivalencia: '1 caja = 24 piezas' },
+    ]);
   };
 
   const handleSaveProduct = async () => {
@@ -638,6 +656,47 @@ export default function ProductosAdminScreen() {
                     <Text style={styles.unidadBaseHint}>
                       * Todas las existencias se registrarán y descontarán en {formUnidad}s.
                     </Text>
+                  </View>
+
+                  {/* Plantillas Rápidas de Presentación */}
+                  <View style={{ marginBottom: spacing.md, paddingHorizontal: 4 }}>
+                    <Text style={{ fontSize: fontSize.xs, color: colors.neutral[600], marginBottom: 6, fontWeight: '600' }}>
+                      Cargar plantilla de equivalencias preconfigurada:
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={handleCargarPlantillaCastel}
+                        style={{
+                          backgroundColor: colors.primary[50],
+                          borderColor: colors.primary[300],
+                          borderWidth: 1,
+                          borderRadius: radius.md,
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                        }}
+                      >
+                        <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: colors.primary[800] }}>
+                          ⚡ Plantilla Castel (Paquete / Exhibidor / Caja)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={handleCargarPlantillaCajaPieza}
+                        style={{
+                          backgroundColor: colors.neutral[100],
+                          borderColor: colors.neutral[300],
+                          borderWidth: 1,
+                          borderRadius: radius.md,
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                        }}
+                      >
+                        <Text style={{ fontSize: fontSize.xs, fontWeight: '600', color: colors.neutral[800] }}>
+                          📦 Plantilla Caja / Pieza (24 pzas)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Lista de Presentaciones del Producto */}

@@ -9,6 +9,7 @@ import {
   Modal,
   Pressable,
   Platform,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -298,6 +299,27 @@ export default function VentaScreen() {
     const precioUnitario = pres ? getPrecioPresentacion(producto, pres, cliente) : getPrecio(producto);
     const factor = pres?.piezasEquivalentes || 1;
     const unidadesBase = isWeight ? cantidad : Math.round(cantidad * factor);
+
+    // Validación preventiva de inventario disponible en camioneta (Req. 14 / AUD-002)
+    const yaEnCarrito = carrito
+      .filter((i) => i.producto.id === producto.id)
+      .reduce((s, i) => s + (i.piezasTotales || i.cantidad * (i.factorConversion || 1)), 0);
+
+    const requeridasTotales = yaEnCarrito + unidadesBase;
+
+    if (producto.existencia !== undefined && requeridasTotales > producto.existencia) {
+      const disponible = Math.max(0, producto.existencia - yaEnCarrito);
+      const unidadStr = producto.unidad || 'unidad';
+      Alert.alert(
+        'Inventario insuficiente',
+        `No hay suficiente stock en camioneta para "${producto.nombre}".\n\n` +
+          `Disponible en camioneta: ${disponible} ${unidadStr}(s)\n` +
+          `Solicitado en esta selección: ${unidadesBase} ${unidadStr}(s)` +
+          (yaEnCarrito > 0 ? `\n(Ya agregaste ${yaEnCarrito} ${unidadStr}(s) previamente al carrito)` : '')
+      );
+      return;
+    }
+
     const subtotal = Math.round(cantidad * precioUnitario * 100) / 100;
 
     const item: ItemCarrito = {

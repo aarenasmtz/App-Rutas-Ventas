@@ -120,8 +120,11 @@ export interface AutorizarAjusteInventarioDto {
 }
 
 class HttpApiService {
-  private timeoutMs = 4000;
+  private timeoutMs = 3500;
   private authToken: string | null = null;
+  private isKnownOffline = false;
+  private lastOfflineTime = 0;
+  private readonly OFFLINE_COOLDOWN_MS = 25000;
 
   setAuthToken(token: string | null) {
     this.authToken = token;
@@ -139,6 +142,11 @@ class HttpApiService {
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    // Si la API falló recientemente (offline o túnel caído), evitar stall de timeout
+    if (this.isKnownOffline && Date.now() - this.lastOfflineTime < this.OFFLINE_COOLDOWN_MS) {
+      throw new Error('API Offline (cooldown activo, usando fallback local)');
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -174,9 +182,14 @@ class HttpApiService {
         throw new Error(`HTTP ${res.status}: ${errDetail || res.statusText}`);
       }
 
+      this.isKnownOffline = false;
+      this.lastOfflineTime = 0;
+
       return (await res.json()) as T;
     } catch (err: any) {
       clearTimeout(timer);
+      this.isKnownOffline = true;
+      this.lastOfflineTime = Date.now();
       throw err;
     }
   }
@@ -186,11 +199,20 @@ class HttpApiService {
     try {
       const base = API_BASE_URL.replace('/api/v1', '');
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
+      const timer = setTimeout(() => controller.abort(), 1500);
       const res = await fetch(`${base}/api/health`, { signal: controller.signal });
       clearTimeout(timer);
+      if (res.ok) {
+        this.isKnownOffline = false;
+        this.lastOfflineTime = 0;
+      } else {
+        this.isKnownOffline = true;
+        this.lastOfflineTime = Date.now();
+      }
       return res.ok;
     } catch {
+      this.isKnownOffline = true;
+      this.lastOfflineTime = Date.now();
       return false;
     }
   }

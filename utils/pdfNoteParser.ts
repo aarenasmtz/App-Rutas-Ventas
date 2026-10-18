@@ -1,4 +1,5 @@
-import pako from 'pako';
+import * as pakoModule from 'pako';
+const pako: any = (pakoModule as any).default || pakoModule;
 import type { ItemNotaPdf } from '@/types';
 
 export interface ParsedPdfNota {
@@ -53,7 +54,7 @@ export function decodePdfString(raw: string): string {
 }
 
 /**
- * Descomprime los streams /FlateDecode de un archivo PDF usando pako o DecompressionStream.
+ * Descomprime los streams /FlateDecode de un archivo PDF usando pako de forma síncrona y segura.
  */
 export async function decompressPdfStreams(arrayBuffer: ArrayBuffer): Promise<string> {
   const bytes = new Uint8Array(arrayBuffer);
@@ -73,54 +74,32 @@ export async function decompressPdfStreams(arrayBuffer: ArrayBuffer): Promise<st
 
     // 1. Descompresión primaria con pako (Síncrona, robusta y universal)
     try {
-      const inflated = pako.inflate(rawBytes);
-      const text = new TextDecoder('utf-8').decode(inflated);
-      allText += text + '\n';
-      streamDecompressed = true;
+      const inflateFn = pako.inflate || (pako as any).default?.inflate;
+      if (typeof inflateFn === 'function') {
+        const inflated = inflateFn(rawBytes);
+        const text = new TextDecoder('utf-8').decode(inflated);
+        allText += text + '\n';
+        streamDecompressed = true;
+      }
     } catch {
       // pako falló o stream es raw deflate sin cabecera zlib
     }
 
     if (!streamDecompressed) {
       try {
-        const rawInflated = pako.inflateRaw(rawBytes);
-        const text = new TextDecoder('utf-8').decode(rawInflated);
-        allText += text + '\n';
-        streamDecompressed = true;
+        const inflateRawFn = pako.inflateRaw || (pako as any).default?.inflateRaw;
+        if (typeof inflateRawFn === 'function') {
+          const rawInflated = inflateRawFn(rawBytes);
+          const text = new TextDecoder('utf-8').decode(rawInflated);
+          allText += text + '\n';
+          streamDecompressed = true;
+        }
       } catch {
         // No es raw deflate
       }
     }
 
-    // 2. Descompresión secundaria con DecompressionStream (Web API nativa si existe)
-    if (!streamDecompressed && typeof DecompressionStream !== 'undefined') {
-      try {
-        const ds = new DecompressionStream('deflate');
-        const writer = ds.writable.getWriter();
-        await writer.write(rawBytes);
-        await writer.close();
-        const reader = ds.readable.getReader();
-        const chunks: Uint8Array[] = [];
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (value) chunks.push(value);
-        }
-        const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
-        const combined = new Uint8Array(totalLen);
-        let offset = 0;
-        for (const c of chunks) {
-          combined.set(c, offset);
-          offset += c.length;
-        }
-        allText += new TextDecoder('utf-8').decode(combined) + '\n';
-        streamDecompressed = true;
-      } catch {
-        // Stream no comprimido o error
-      }
-    }
-
-    // 3. Si no estaba comprimido o falló el inflate, inspeccionar texto crudo
+    // 2. Si no estaba comprimido o falló el inflate, inspeccionar texto crudo directamente
     if (!streamDecompressed) {
       try {
         const rawText = new TextDecoder('utf-8', { fatal: false }).decode(rawBytes);

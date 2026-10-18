@@ -20,8 +20,9 @@ function getProductosIniciales(): Producto[] {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Filtrar cualquier producto antiguo de prueba/semilla hardcodeado (p1..p18)
-          const validos = parsed.filter((p: any) => !String(p.id).match(/^p\d+$/));
+          // Filtrar únicamente los IDs semilla antiguos de prueba de la demo (p1..p18)
+          const legacyProdIds = new Set(['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15','p16','p17','p18']);
+          const validos = parsed.filter((p: any) => !legacyProdIds.has(String(p.id)));
           return validos;
         }
       }
@@ -37,8 +38,9 @@ function getClientesIniciales(): Cliente[] {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Filtrar cualquier cliente antiguo de prueba/semilla hardcodeado (c1..c10)
-          const validos = parsed.filter((c: any) => !String(c.id).match(/^c\d+$/));
+          // Filtrar únicamente los IDs semilla antiguos de prueba de la demo (c1..c10)
+          const legacyClientIds = new Set(['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10']);
+          const validos = parsed.filter((c: any) => !legacyClientIds.has(String(c.id)));
           return validos;
         }
       }
@@ -229,7 +231,7 @@ export const DataService = {
       saveClientesToStorage();
       return created;
     } catch {
-      const newId = 'c' + Date.now();
+      const newId = 'cli_' + Date.now();
       const nuevo: Cliente = {
         id: newId,
         nombre: clienteData.nombre || 'Nuevo Cliente',
@@ -302,7 +304,7 @@ export const DataService = {
       saveProductosToStorage();
       return created;
     } catch {
-      const newId = 'p' + (mockProductos.length + 1);
+      const newId = 'prod_' + Date.now();
       const nuevo: Producto = {
         id: newId,
         nombre: prodData.nombre || 'Nuevo Producto',
@@ -483,6 +485,21 @@ export const DataService = {
     const folio = `FOL-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
     const cliente = mockClientes.find((c) => c.id === venta.clienteId);
     const creditoOtorgado = venta.pagos.find((p) => p.metodo === 'Crédito')?.monto || 0;
+    // 1. Descontar inventario en unidades base de forma inmediata y persistente
+    if (Array.isArray(venta.items)) {
+      for (const item of venta.items) {
+        const prod = mockProductos.find(
+          (p) => String(p.id) === String(item.productoId) || (p as any).codigo === item.productoId
+        );
+        if (prod) {
+          const factor = item.factorConversion || 1;
+          const unidadesBaseADescontar = item.piezasTotalesCalculadas || (item.cantidadPresentaciones * factor);
+          prod.existencia = Math.max(0, prod.existencia - unidadesBaseADescontar);
+        }
+      }
+      saveProductosToStorage();
+    }
+
     if (cliente) {
       cliente.saldo += creditoOtorgado;
       cliente.estado = 'Venta realizada';
@@ -737,6 +754,18 @@ export const DataService = {
       const cliente = mockClientes.find((c) => c.id === req.clienteId);
       if (cliente && req.metodoReembolso === 'SaldoAFavor') {
         cliente.saldo = Math.max(0, cliente.saldo - req.total);
+        saveClientesToStorage();
+      }
+
+      // Si el destino es Inventario, reingresar las unidades base al stock disponible
+      if (req.destino === 'Inventario') {
+        const prod = mockProductos.find((p) => String(p.id) === String(req.productoId) || (p as any).codigo === req.productoId);
+        if (prod) {
+          const pres = prod.presentaciones?.find((pr) => pr.tipo === req.presentacionTipo || pr.nombre === req.presentacionTipo);
+          const factor = pres?.piezasEquivalentes || 1;
+          prod.existencia += Math.round(req.cantidad * factor);
+          saveProductosToStorage();
+        }
       }
       return {
         id: Math.floor(Math.random() * 1000),
@@ -1032,14 +1061,25 @@ export const DataService = {
         // Auto-crear producto en catálogo local si no existe
         const isKg = (item.um || '').toUpperCase() === 'KG';
         const nuevoProd: Producto = {
-          id: 'p' + (mockProductos.length + 100),
+          id: `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           nombre: item.productoAlmacen.trim(),
           nombreAlmacen: item.productoAlmacen.trim(),
           categoria: isKg ? 'Jamón' : 'Abarrotes',
           unidad: isKg ? 'kg' : 'pieza',
           precioBase: 50,
+          precioCompra: 35,
           existencia: pzas,
           precioPorPeso: isKg,
+          activo: true,
+          favorito: false,
+          presentaciones: [
+            {
+              tipo: 'pieza',
+              nombre: isKg ? 'Por Kilo' : 'Pieza Individual',
+              piezasEquivalentes: 1,
+              precio: 50,
+            },
+          ],
         };
         mockProductos.unshift(nuevoProd);
         actualizados++;
@@ -1047,11 +1087,7 @@ export const DataService = {
       }
     }
 
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('miguel_mock_productos', JSON.stringify(mockProductos));
-      }
-    } catch {}
+    saveProductosToStorage();
 
     return {
       message: `Nota #${req.folioNota || 'S/N'} procesada con éxito: ${totalPiezas} piezas surtidas en ${actualizados} productos.`,
