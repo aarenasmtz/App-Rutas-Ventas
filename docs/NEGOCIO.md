@@ -66,6 +66,22 @@ Don Miguel y sus choferes/vendedores recorren rutas predefinidas visitando tiend
 Fórmula obligatoria del Efectivo Esperado en mano del vendedor:
 $$\text{Efectivo Esperado} = \text{Ventas Cobradas en Efectivo} + \text{Cobranza de Abonos en Efectivo} - \text{Gastos Pagados en Efectivo}$$
 
+### 4.5. Reglas de Importación de Catálogo Real (CSV Miguel)
+- **Mapeo de Campos:** `Nombre` → `Producto.Nombre`, `Costo` → `Producto.PrecioCompra`, `Precio` → `Producto.PrecioBase`.
+- **Exclusión de Columnas Históricas:** `Valor vendido`, `Cantidad Vendida` y `Ganancia` no representan saldo de apertura ni generan transacciones, compras o ventas pasadas.
+- **Interpretación Numérica:** Formato contable con punto `.` como miles y coma `,` como decimales (ej. `241.088,06` → `241088.06`, `16.762,5` → `16762.50`, `1.350` → `1350`). Rechazo estricto de formatos ambiguos.
+- **Identificadores y Códigos:** El código del CSV se preserva como `CodigoOrigen`. Los códigos internos de catálogo se asignan secuencialmente (`p{nextNum}`) de forma concurrente y respetando longitud máxima de 20 caracteres, manteniendo `ProductoDto.Id == Producto.Codigo`.
+- **Protección de Existencias y Presentaciones:**
+  - Nuevos productos: existencia inicial estrictamente `0`.
+  - Productos existentes: se actualiza costo/precio y se preserva íntegramente el inventario actual, presentaciones, factores y precios especiales por cliente.
+  - No se inventan categorías (se asigna `"Sin categoría"`), ni códigos de barras falsos.
+- **Bloqueo Operativo de Productos Pendientes:** Productos con unidad "unidad" no confirmada ingresan como `EstadoConfiguracion = "Pendiente"`. Se prohíbe su venta en mostrador/carrito hasta que el Administrador confirme su unidad y factor de conversión.
+
+### 4.6. Limitación Arquitectónica: Venta y Existencias Fraccionarias (Kilogramos)
+- **Diagnóstico:** En la base de datos y backend (.NET 9 / SQL Server), `Producto.Existencia`, `InventarioMovimiento.Cantidad` y conversiones de multipresentación operan con enteros (`int`).
+- **Comportamiento en Frontend:** La interfaz visual muestra la unidad `kg`, pero el motor de transacciones no admite decimales en stock o venta.
+- **Directiva Operativa:** Está prohibido redondear kilos para simular piezas. Los productos que requieran pesaje fraccionario deben permanecer en estado `Pendiente` de configuración o definirse por empaques cerrados de peso fijo hasta que se complete la migración a `decimal(18,3)` de extremo a extremo.
+
 ---
 
 ## 5. PREGUNTAS ABIERTAS Y DECISIONES PENDIENTES DEL NEGOCIO
@@ -74,3 +90,4 @@ $$\text{Efectivo Esperado} = \text{Ventas Cobradas en Efectivo} + \text{Cobranza
 2. **Autorización de Sobregiro de Crédito:** Cuando un cliente excede su límite de crédito, ¿el vendedor puede solicitar autorización remota o requiere PIN del Administrador en pantalla?
 3. **Manejo de Devolución por Cambio:** Cuando una devolución se marca como destino "Cambio", ¿se exige seleccionar el producto entregado en sustitución en la misma pantalla o se procesa como dos movimientos independientes (devolución + nueva venta)?
 4. **Comisiones de Vendedores:** ¿Los vendedores perciben comisión por volumen vendido o por cobranza recuperada?
+5. **Migración a Pesaje Fraccionario:** Cronograma para migrar campos de stock y venta a `decimal(18,3)` para permitir venta de fracciones de kilo directamente en báscula.

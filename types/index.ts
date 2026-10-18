@@ -1,4 +1,4 @@
-export type Unidad = 'kg' | 'pieza' | 'paquete';
+export type Unidad = 'kg' | 'pieza' | 'paquete' | 'caja' | 'exhibidor' | 'unidad' | string;
 
 export type Categoria =
   | 'Jamón'
@@ -10,7 +10,9 @@ export type Categoria =
   | 'Mantequillas'
   | 'Mayonesas'
   | 'Enlatados'
-  | 'Otros';
+  | 'Sin categoría'
+  | 'Otros'
+  | string;
 
 export type PresentacionTipo = 'pieza' | 'paquete' | 'caja' | 'exhibidor';
 
@@ -41,6 +43,8 @@ export interface Producto {
   codigoBarras?: string;
   favorito?: boolean;
   activo?: boolean;
+  estadoConfiguracion?: 'Completo' | 'Pendiente';
+  codigoOrigen?: string;
   manejaMultiplesPresentaciones?: boolean;
   imagen?: string;
   presentaciones?: PresentacionConfig[];
@@ -263,4 +267,76 @@ export interface CorteTrabajador {
   inventarioActualPiezas: number;
   piezasVendidas: number;
   diferenciaCaja: number;
+}
+
+export interface FilaPreviewImportacion {
+  numeroFila: number;
+  codigoCsv: string;
+  nombreCsv: string;
+  categoriaCsv: string;
+  unidadCsv: string;
+  costoCsv?: number;
+  precioCsv?: number;
+  clasificacion: 'Nuevo' | 'Existente' | 'Ambiguo' | 'Invalido';
+  motivoClasificacion?: string;
+  productoCoincidenteId?: string;
+  productoCoincidenteNombre?: string;
+  productoCoincidentePrecioActual?: number;
+  productoCoincidenteCostoActual?: number;
+  productoCoincidenteExistenciaActual?: number;
+  candidatosCoincidentes: CoincidenciaCandidata[];
+}
+
+export interface CoincidenciaCandidata {
+  productoId: string;
+  codigo: string;
+  nombre: string;
+  precioBase: number;
+  precioCompra?: number;
+  existencia: number;
+  unidad: string;
+  categoria: string;
+}
+
+export interface PreviewImportacionResponse {
+  fileHash: string;
+  nombreArchivo: string;
+  totalFilas: number;
+  totalNuevos: number;
+  totalExistentes: number;
+  totalAmbiguos: number;
+  totalInvalidos: number;
+  yaFueImportadoPreviamente: boolean;
+  fechaUltimaImportacion?: string;
+  filas: FilaPreviewImportacion[];
+}
+
+export interface ResolucionFilaImportacion {
+  numeroFila: number;
+  codigoCsv: string;
+  nombreCsv: string;
+  costoCsv: number;
+  precioCsv: number;
+  accion: 'Crear' | 'Vincular' | 'Omitir';
+  productoExistenteId?: string;
+  unidadConfirmada?: string;
+}
+
+export interface ConfirmarImportacionRequest {
+  fileHash: string;
+  nombreArchivo: string;
+  usuario?: string;
+  resoluciones: ResolucionFilaImportacion[];
+}
+
+export interface ConfirmarImportacionResponse {
+  success: boolean;
+  message: string;
+  fileHash: string;
+  totalProcesados: number;
+  totalCreados: number;
+  totalActualizados: number;
+  totalOmitidos: number;
+  totalPendientesConfiguracion: number;
+  advertencias: string[];
 }

@@ -70,6 +70,8 @@ public class ProductoDto
     public string CodigoBarras { get; set; } = string.Empty;
     public bool Favorito { get; set; }
     public bool Activo { get; set; }
+    public string EstadoConfiguracion { get; set; } = "Completo"; // "Completo" | "Pendiente"
+    public string? CodigoOrigen { get; set; }
     public bool ManejaMultiplesPresentaciones { get; set; }
     public List<PresentacionConfigDto> Presentaciones { get; set; } = new();
 }
@@ -338,6 +340,7 @@ public class ConfirmarCargaInicialRequestDto
 {
     public string EmpleadoId { get; set; } = string.Empty;
     public string UbicacionDestino { get; set; } = "Camioneta 1";
+    public bool EsEntradaMercancia { get; set; } = false;
     public List<ItemTransferenciaDto> Lotes { get; set; } = new();
 }
 
@@ -508,6 +511,8 @@ public class GuardarProductoRequestDto
     public string? Sku { get; set; }
     public string? CodigoBarras { get; set; }
     public bool Favorito { get; set; } = false;
+    public string? EstadoConfiguracion { get; set; }
+    public string? CodigoOrigen { get; set; }
     public bool ManejaMultiplesPresentaciones { get; set; } = false;
     public List<PresentacionConfigDto>? Presentaciones { get; set; }
 }
@@ -581,5 +586,92 @@ public class GuardarRutaRequestDto
     public string Nombre { get; set; } = string.Empty;
     public string? Descripcion { get; set; }
     public bool? Activa { get; set; } = true;
+}
+
+// ==========================================
+// 14. Importación de Catálogo CSV DTOs
+// ==========================================
+public class PreviewImportacionRequestDto
+{
+    public string NombreArchivo { get; set; } = string.Empty;
+    public string ContenidoCsv { get; set; } = string.Empty;
+}
+
+public class PreviewImportacionResponseDto
+{
+    public string FileHash { get; set; } = string.Empty;
+    public string NombreArchivo { get; set; } = string.Empty;
+    public int TotalFilas { get; set; }
+    public int TotalNuevos { get; set; }
+    public int TotalExistentes { get; set; }
+    public int TotalAmbiguos { get; set; }
+    public int TotalInvalidos { get; set; }
+    public bool YaFueImportadoPreviamente { get; set; }
+    public DateTime? FechaUltimaImportacion { get; set; }
+    public List<FilaPreviewImportacionDto> Filas { get; set; } = new();
+}
+
+public class FilaPreviewImportacionDto
+{
+    public int NumeroFila { get; set; }
+    public string CodigoCsv { get; set; } = string.Empty;
+    public string NombreCsv { get; set; } = string.Empty;
+    public string CategoriaCsv { get; set; } = string.Empty;
+    public string UnidadCsv { get; set; } = string.Empty;
+    public decimal? CostoCsv { get; set; }
+    public decimal? PrecioCsv { get; set; }
+    public string Clasificacion { get; set; } = "Nuevo"; // "Nuevo" | "Existente" | "Ambiguo" | "Invalido"
+    public string? MotivoClasificacion { get; set; }
+    public string? ProductoCoincidenteId { get; set; }
+    public string? ProductoCoincidenteNombre { get; set; }
+    public decimal? ProductoCoincidentePrecioActual { get; set; }
+    public decimal? ProductoCoincidenteCostoActual { get; set; }
+    public int? ProductoCoincidenteExistenciaActual { get; set; }
+    public List<CoincidenciaCandidataDto> CandidatosCoincidentes { get; set; } = new();
+}
+
+public class CoincidenciaCandidataDto
+{
+    public string ProductoId { get; set; } = string.Empty;
+    public string Codigo { get; set; } = string.Empty;
+    public string Nombre { get; set; } = string.Empty;
+    public decimal PrecioBase { get; set; }
+    public decimal? PrecioCompra { get; set; }
+    public int Existencia { get; set; }
+    public string Unidad { get; set; } = string.Empty;
+    public string Categoria { get; set; } = string.Empty;
+}
+
+public class ConfirmarImportacionRequestDto
+{
+    public string FileHash { get; set; } = string.Empty;
+    public string NombreArchivo { get; set; } = string.Empty;
+    public string Usuario { get; set; } = "Miguel";
+    public List<ResolucionFilaImportacionDto> Resoluciones { get; set; } = new();
+}
+
+public class ResolucionFilaImportacionDto
+{
+    public int NumeroFila { get; set; }
+    public string CodigoCsv { get; set; } = string.Empty;
+    public string NombreCsv { get; set; } = string.Empty;
+    public decimal CostoCsv { get; set; }
+    public decimal PrecioCsv { get; set; }
+    public string Accion { get; set; } = "Crear"; // "Crear" | "Vincular" | "Omitir"
+    public string? ProductoExistenteId { get; set; } // Codigo del producto a actualizar si Accion == "Vincular"
+    public string? UnidadConfirmada { get; set; } // "pieza" | "paquete" | "kg" etc. Si null/empty -> queda en estado "Pendiente"
+}
+
+public class ConfirmarImportacionResponseDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public string FileHash { get; set; } = string.Empty;
+    public int TotalProcesados { get; set; }
+    public int TotalCreados { get; set; }
+    public int TotalActualizados { get; set; }
+    public int TotalOmitidos { get; set; }
+    public int TotalPendientesConfiguracion { get; set; }
+    public List<string> Advertencias { get; set; } = new();
 }
 

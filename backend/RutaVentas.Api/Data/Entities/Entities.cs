@@ -166,6 +166,12 @@ public class Producto
 
     public bool Activo { get; set; } = true;
 
+    [MaxLength(30)]
+    public string EstadoConfiguracion { get; set; } = "Completo"; // "Completo" | "Pendiente"
+
+    [MaxLength(50)]
+    public string? CodigoOrigen { get; set; }
+
     public bool ManejaMultiplesPresentaciones { get; set; } = false;
 
     public DateTime FechaCreacion { get; set; } = DateTime.Now;
@@ -609,3 +615,29 @@ public class Categoria
 
     public DateTime FechaCreacion { get; set; } = DateTime.Now;
 }
+
+public class ImportacionCatalogo
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(64)]
+    public string FileHash { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string NombreArchivo { get; set; } = string.Empty;
+
+    public int TotalFilas { get; set; }
+    public int TotalCreados { get; set; }
+    public int TotalActualizados { get; set; }
+    public int TotalOmitidos { get; set; }
+    public int TotalPendientesConfiguracion { get; set; }
+
+    public DateTime FechaHora { get; set; } = DateTime.Now;
+
+    [MaxLength(100)]
+    public string Usuario { get; set; } = "Miguel";
+}
+

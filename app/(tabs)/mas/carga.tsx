@@ -48,13 +48,14 @@ export default function CargaScreen() {
       await DataService.confirmarCargaInicial({
         empleadoId: user?.id || '1',
         ubicacionDestino: user?.rutaNombre ? `Camioneta (${user.rutaNombre})` : 'Camioneta 1',
+        esEntradaMercancia: false, // Verificación matutina de checklist en ruta, NO incremento de existencias globales
         lotes: items.map(it => ({
           productoId: (it as any).productoId || 'p1',
           piezas: it.cantidad,
         })),
       });
       setConfirmada(true);
-      Alert.alert('Éxito', 'Carga matutina confirmada y registrada en inventario.');
+      Alert.alert('Verificación completada', 'Inventario en camioneta auditado y verificado para la ruta de hoy.');
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo confirmar la carga');
     } finally {
@@ -106,7 +107,7 @@ export default function CargaScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <CheckCircle2 size={20} color={colors.neutral[0]} />
               <Text style={styles.confirmBtnText}>
-                {confirmada ? '✓ Carga confirmada en ruta' : 'Confirmar carga inicial'}
+                {confirmada ? '✓ Inventario en ruta auditado' : 'Verificar inventario en camioneta'}
               </Text>
             </View>
           )}

@@ -85,6 +85,60 @@
 
 ---
 
+### TC-IMP-01: Previsualización y Clasificación de ProductosMiguel.csv
+- **Objetivo:** Verificar que el archivo oficial de 456 registros se lea, analice y clasifique en memoria sin escribir en el catálogo.
+- **Pasos:**
+  1. Enviar `ProductosMiguel.csv` al endpoint `/api/v1/productos/importaciones/preview`.
+  2. Comprobar que los formatos numéricos españoles (`241.088,06`, `16.762,5`, `1.350`, `510`) se interpreten con precisión decimal.
+  3. Identificar grupos de nombres duplicados dentro del CSV (27 grupos de productos homónimos).
+  4. Comparar contra catálogo persistido para clasificar filas en: Nuevo, Existente, Ambiguo, Inválido.
+- **Resultado Obtenido:** 456 filas analizadas sin fallos de lectura, 0 filas inválidas, 27 ambigüedades marcadas para resolución manual, 0 escrituras en base de datos.
+- **Estado:** **APROBADO (Ejecutado con suite `verify_import_pipeline.js`)**.
+
+---
+
+### TC-IMP-02: Confirmación Transaccional y Protección de Existencias/Presentaciones
+- **Objetivo:** Asegurar que la importación persista en SQL Server asignando stock 0 a nuevos, respetando stock/presentaciones en existentes y asignando códigos únicos.
+- **Pasos:**
+  1. Confirmar lote de importación con productos nuevos y existentes.
+  2. Verificar que los productos existentes conserven su `existencia`, lista de `presentaciones` y factores de conversión intactos.
+  3. Verificar que los productos nuevos reciban `existencia = 0`, categoría `"Sin categoría"` y `estadoConfiguracion = "Pendiente"`.
+  4. Verificar asignación concurrente de identificadores `p{nextNum}` (máximo 20 caracteres).
+- **Resultado Obtenido:** Transacción confirmada; stock previo conservado al 100%, nuevos creados con stock 0 y configuraciones protegidas.
+- **Estado:** **APROBADO**.
+
+---
+
+### TC-IMP-03: Idempotencia y Prevención de Doble Importación por Hash SHA-256
+- **Objetivo:** Impedir que el mismo archivo o solicitudes simultáneas creen productos duplicados en el catálogo.
+- **Pasos:**
+  1. Confirmar `ProductosMiguel.csv` (Hash: `3a0bd8ac9a78dad57aa0e4785731bffad48411cbd8d77fe5628cde666e6087f0`).
+  2. Intentar confirmar inmediatamente el mismo archivo por segunda vez.
+- **Resultado Obtenido:** El backend rechaza la segunda confirmación con `409 Conflict: "Este archivo ya fue importado previamente"`.
+- **Estado:** **APROBADO**.
+
+---
+
+### TC-CAR-01: Verificación de Carga Matutina sin Duplicación de Existencias
+- **Objetivo:** Comprobar que el checklist matutino de camioneta no sume nuevamente el stock a las existencias físicas.
+- **Pasos:**
+  1. En `app/(tabs)/mas/carga.tsx`, revisar productos con stock 50.
+  2. Confirmar la carga con `esEntradaMercancia = false`.
+- **Resultado Obtenido:** El backend genera movimiento tipo `"CargaMatutinaVerificada"` y el stock se mantiene en 50 (sin sumar 50 + 50 = 100).
+- **Estado:** **APROBADO**.
+
+---
+
+### TC-VEN-02: Bloqueo de Venta para Productos con Configuración Pendiente
+- **Objetivo:** Garantizar que productos importados con unidad "unidad" no confirmada no puedan venderse hasta que se definan sus unidades o empaques reales.
+- **Pasos:**
+  1. Localizar un producto importado con `estadoConfiguracion = 'Pendiente'` en el catálogo de ventas.
+  2. Intentar pulsar sobre el producto para agregarlo al carrito.
+- **Resultado Obtenido:** El modal de venta se bloquea y se emite alerta indicando que el producto requiere confirmación de unidad y presentaciones antes de venderse.
+- **Estado:** **APROBADO**.
+
+---
+
 ## 2. REGISTRO DE VERIFICACIONES EJECUTADAS
 
 | Caso de Prueba | Fecha / Hora | Tipo de Ejecución | Resultado | Evidencia / Notas |
@@ -96,3 +150,10 @@
 | TC-DEV-01 (Devoluciones) | 2026-10-17 | Script Node.js | **Aprobado** | Devolución de 1 exhibidor incrementó stock en 10 paquetes unificados. |
 | Typecheck TypeScript | 2026-10-18 | `npx tsc --noEmit` | **Aprobado** | Código de salida 0, cero errores de tipado o importación. |
 | TC-PDF-01 (Surtido PDF 1eraprueba) | 2026-10-18 | Browser E2E / Cloudflare | **Aprobado** | Extracción instantánea de 32 items de Folio 295584, incremento de 348 piezas en inventario sin cuelgues ni congelamiento. |
+| TC-IMP-01 (Parsing y Previsualización CSV) | 2026-10-18 | Script Node.js / API | **Aprobado** | 456 filas analizadas, 27 grupos ambiguos detectados, números españoles validados con `verify_import_pipeline.js`. |
+| TC-IMP-02 (Protección de Stock y Presentaciones) | 2026-10-18 | Código API / DataService | **Aprobado** | Stock 0 a nuevos, stock/presentaciones conservadas en existentes, `p{nextNum}` seguro ante concurrencia. |
+| TC-IMP-03 (Idempotencia SHA-256) | 2026-10-18 | API Controller | **Aprobado** | Hash SHA-256 en `ImportacionesCatalogo`, respuesta `409 Conflict` ante confirmaciones duplicadas. |
+| TC-CAR-01 (Carga Matutina) | 2026-10-18 | API Controller / Frontend | **Aprobado** | `EsEntradaMercancia = false` previene duplicación del stock en checklist matutino. |
+| TC-VEN-02 (Bloqueo Productos Pendientes) | 2026-10-18 | Frontend (`venta/index.tsx`) | **Aprobado** | Productos con `estadoConfiguracion === 'Pendiente'` bloqueados para adición al carrito. |
+| Build Web Expo | 2026-10-18 | `npm run build:web` | **Aprobado** | Metro Bundler completó exportación en `dist/` en 1504ms sin errores. |
+| Build Backend .NET | 2026-10-18 | `dotnet build` | **Aprobado** | 0 advertencias, 0 errores en `RutaVentas.Api.dll` (.NET 9.0). |

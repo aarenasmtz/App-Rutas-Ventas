@@ -143,15 +143,20 @@ public class InventarioController : ControllerBase
                 var prod = await _db.Productos.FirstOrDefaultAsync(p => p.Codigo == lote.ProductoId || p.Id.ToString() == lote.ProductoId);
                 if (prod != null)
                 {
-                    prod.Existencia += lote.Piezas;
+                    if (req.EsEntradaMercancia)
+                    {
+                        prod.Existencia += lote.Piezas;
+                    }
 
                     _db.InventarioMovimientos.Add(new InventarioMovimiento
                     {
                         ProductoId = prod.Id,
-                        TipoMovimiento = "CargaInicial",
+                        TipoMovimiento = req.EsEntradaMercancia ? "EntradaMercancia" : "CargaMatutinaVerificada",
                         Ubicacion = req.UbicacionDestino ?? usuario.RutaAsignada ?? "Camioneta 1",
                         Piezas = lote.Piezas,
-                        Motivo = $"Carga matutina de ruta ({DateTime.Now:dd/MM/yyyy})",
+                        Motivo = req.EsEntradaMercancia
+                            ? $"Entrada de mercancía / surtido ({DateTime.Now:dd/MM/yyyy})"
+                            : $"Verificación matutina de ruta ({DateTime.Now:dd/MM/yyyy}) - Sin duplicar existencias globales",
                         FechaHora = DateTime.Now
                     });
                 }
@@ -162,8 +167,11 @@ public class InventarioController : ControllerBase
 
             return Ok(new
             {
-                message = "Carga inicial de camioneta confirmada y registrada en inventario",
+                message = req.EsEntradaMercancia
+                    ? "Entrada de mercancía confirmada e incrementada en inventario"
+                    : "Verificación de carga matutina confirmada (existencias globales preservadas sin duplicación)",
                 piezasCargadas = req.Lotes.Sum(l => l.Piezas),
+                esEntradaMercancia = req.EsEntradaMercancia,
                 ubicacion = req.UbicacionDestino ?? "Camioneta 1"
             });
         }

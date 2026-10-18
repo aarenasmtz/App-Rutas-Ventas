@@ -93,6 +93,18 @@ export default function VentaScreen() {
   const [clientSearch, setClientSearch] = useState('');
   const [viewMode, setViewMode] = useState<'mosaico' | 'lista'>('mosaico');
 
+  const handleOpenQtyModal = (p: Producto) => {
+    if (p.estadoConfiguracion === 'Pendiente') {
+      Alert.alert(
+        'Producto pendiente de configuración',
+        `"${p.nombre}" proviene del catálogo importado y está marcado como pendiente de configuración.\n\n` +
+          `Debes ingresar a Más > Catálogo de Productos y confirmar su unidad de venta (pieza, paquete o kg) antes de poder venderlo.`
+      );
+      return;
+    }
+    setShowQtyModal(p);
+  };
+
   // Estados de datos vivos (VPS / fallback local)
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
   const [productosList, setProductosList] = useState<Producto[]>([]);
@@ -293,6 +305,14 @@ export default function VentaScreen() {
 
   // Agregar al carrito según el flujo de venta rápida de Miguel y soporte multipresentación
   const handleAddProduct = (producto: Producto, cantidad: number, presentacion?: PresentacionConfig) => {
+    if (producto.estadoConfiguracion === 'Pendiente') {
+      Alert.alert(
+        'Producto pendiente de configuración',
+        `"${producto.nombre}" está pendiente de configuración. Confirma su unidad y presentación en Catálogo antes de venderlo.`
+      );
+      return;
+    }
+
     const isMultipres = Boolean(producto.manejaMultiplesPresentaciones || (producto.presentaciones && producto.presentaciones.length > 1));
     const isWeight = !isMultipres && isProductoPorKilo(producto);
     const pres = presentacion || (producto.presentaciones && producto.presentaciones.length > 0 ? producto.presentaciones[0] : undefined);
@@ -570,7 +590,7 @@ export default function VentaScreen() {
                 precio={getPrecio(p)}
                 cliente={cliente}
                 sugerido={sugeridosMap.get(p.id)}
-                onPress={() => setShowQtyModal(p)}
+                onPress={() => handleOpenQtyModal(p)}
               />
             ))}
           </View>
@@ -582,7 +602,7 @@ export default function VentaScreen() {
               precio={getPrecio(p)}
               cliente={cliente}
               sugerido={sugeridosMap.get(p.id)}
-              onPress={() => setShowQtyModal(p)}
+              onPress={() => handleOpenQtyModal(p)}
             />
           ))
         )}

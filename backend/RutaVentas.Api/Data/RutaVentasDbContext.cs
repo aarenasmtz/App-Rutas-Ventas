@@ -26,6 +26,7 @@ public class RutaVentasDbContext : DbContext
     public DbSet<Devolucion> Devoluciones => Set<Devolucion>();
     public DbSet<BitacoraEvento> BitacoraEventos => Set<BitacoraEvento>();
     public DbSet<Categoria> Categorias => Set<Categoria>();
+    public DbSet<ImportacionCatalogo> ImportacionesCatalogo => Set<ImportacionCatalogo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -132,6 +133,12 @@ public class RutaVentasDbContext : DbContext
         modelBuilder.Entity<GastoOperativo>(entity =>
         {
             entity.ToTable("GastosOperativos");
+        });
+
+        modelBuilder.Entity<ImportacionCatalogo>(entity =>
+        {
+            entity.ToTable("ImportacionesCatalogo");
+            entity.HasIndex(e => e.FileHash);
         });
     }
 }

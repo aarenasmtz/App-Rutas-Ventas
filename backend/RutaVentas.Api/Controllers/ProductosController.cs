@@ -55,6 +55,8 @@ public class ProductosController : ControllerBase
                 CodigoBarras = p.CodigoBarras ?? "",
                 Favorito = p.Favorito,
                 Activo = p.Activo,
+                EstadoConfiguracion = p.EstadoConfiguracion ?? "Completo",
+                CodigoOrigen = p.CodigoOrigen,
                 ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
                 Presentaciones = p.Presentaciones
                     .Where(pr => pr.Activa)
@@ -100,6 +102,8 @@ public class ProductosController : ControllerBase
             CodigoBarras = p.CodigoBarras ?? "",
             Favorito = p.Favorito,
             Activo = p.Activo,
+            EstadoConfiguracion = p.EstadoConfiguracion ?? "Completo",
+            CodigoOrigen = p.CodigoOrigen,
             ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
             Presentaciones = p.Presentaciones
                 .OrderBy(pr => pr.Orden)
@@ -154,6 +158,8 @@ public class ProductosController : ControllerBase
             CodigoBarras = req.CodigoBarras?.Trim() ?? $"750{DateTime.Now.Ticks.ToString()[^9..]}",
             Favorito = req.Favorito,
             Activo = true,
+            EstadoConfiguracion = !string.IsNullOrWhiteSpace(req.EstadoConfiguracion) ? req.EstadoConfiguracion.Trim() : "Completo",
+            CodigoOrigen = req.CodigoOrigen?.Trim(),
             ManejaMultiplesPresentaciones = req.ManejaMultiplesPresentaciones,
             FechaCreacion = DateTime.Now
         };
@@ -209,6 +215,8 @@ public class ProductosController : ControllerBase
             CodigoBarras = producto.CodigoBarras ?? "",
             Favorito = producto.Favorito,
             Activo = producto.Activo,
+            EstadoConfiguracion = producto.EstadoConfiguracion ?? "Completo",
+            CodigoOrigen = producto.CodigoOrigen,
             ManejaMultiplesPresentaciones = producto.ManejaMultiplesPresentaciones,
             Presentaciones = producto.Presentaciones.Select(pr => new PresentacionConfigDto
             {
@@ -244,6 +252,8 @@ public class ProductosController : ControllerBase
         if (!string.IsNullOrWhiteSpace(req.Sku)) producto.Sku = req.Sku.Trim();
         if (req.CodigoBarras != null) producto.CodigoBarras = req.CodigoBarras.Trim();
         producto.Favorito = req.Favorito;
+        if (!string.IsNullOrWhiteSpace(req.EstadoConfiguracion)) producto.EstadoConfiguracion = req.EstadoConfiguracion.Trim();
+        if (req.CodigoOrigen != null) producto.CodigoOrigen = string.IsNullOrWhiteSpace(req.CodigoOrigen) ? null : req.CodigoOrigen.Trim();
         producto.ManejaMultiplesPresentaciones = req.ManejaMultiplesPresentaciones;
 
         if (req.Presentaciones != null && req.Presentaciones.Any())

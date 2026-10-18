@@ -151,6 +151,30 @@ try
         UPDATE Clientes SET Latitud = 21.1685, Longitud = -101.6892, Colonia = 'Echeveste', Ciudad = 'León, Gto' WHERE Codigo = 'c6' AND Latitud IS NULL;
         UPDATE Clientes SET Latitud = 21.1092, Longitud = -101.6695, Colonia = 'León Moderno', Ciudad = 'León, Gto' WHERE Codigo = 'c7' AND Latitud IS NULL;
         UPDATE Clientes SET Latitud = 21.1200 + (Id * 0.003), Longitud = -101.6800 - (Id * 0.0025), Colonia = 'León', Ciudad = 'León, Gto' WHERE Latitud IS NULL;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Productos') AND name = 'EstadoConfiguracion')
+            ALTER TABLE Productos ADD EstadoConfiguracion NVARCHAR(30) NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Productos') AND name = 'CodigoOrigen')
+            ALTER TABLE Productos ADD CodigoOrigen NVARCHAR(50) NULL;
+
+        UPDATE Productos SET EstadoConfiguracion = 'Completo' WHERE EstadoConfiguracion IS NULL;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ImportacionesCatalogo')
+        BEGIN
+            CREATE TABLE ImportacionesCatalogo (
+                Id INT IDENTITY(1,1) PRIMARY KEY,
+                FileHash NVARCHAR(64) NOT NULL,
+                NombreArchivo NVARCHAR(100) NOT NULL,
+                TotalFilas INT NOT NULL,
+                TotalCreados INT NOT NULL,
+                TotalActualizados INT NOT NULL,
+                TotalOmitidos INT NOT NULL,
+                TotalPendientesConfiguracion INT NOT NULL,
+                FechaHora DATETIME2 NOT NULL,
+                Usuario NVARCHAR(100) NOT NULL
+            );
+            CREATE INDEX IX_ImportacionesCatalogo_FileHash ON ImportacionesCatalogo(FileHash);
+        END
     ");
 }
 catch (Exception ex)

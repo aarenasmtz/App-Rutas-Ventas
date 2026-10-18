@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, TextInput, Modal, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, TextInput, Modal, Pressable, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Boxes,
@@ -15,16 +15,39 @@ import {
   Scale,
   Layers,
   Sparkles,
+  UploadCloud,
+  FileSpreadsheet,
+  Check,
+  HelpCircle,
+  Filter,
+  ArrowRight,
+  RefreshCw,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockProductos, mockCategorias, DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader, SearchBar, MoneyDisplay, StockBadge } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
 import { desglosarInventario } from '@/utils/multipresentacion';
-import type { Producto, CategoriaItem, Categoria, PresentacionConfig, PresentacionTipo, Unidad } from '@/types';
+import { useApp } from '@/context/AppContext';
+import type {
+  Producto,
+  CategoriaItem,
+  Categoria,
+  PresentacionConfig,
+  PresentacionTipo,
+  Unidad,
+  PreviewImportacionResponse,
+  FilaPreviewImportacion,
+  ResolucionFilaImportacion,
+  ConfirmarImportacionResponse,
+} from '@/types';
 
 export default function ProductosAdminScreen() {
   const router = useRouter();
+  const { user } = useApp();
   const [productosList, setProductosList] = useState<Producto[]>([]);
   const [categoriasList, setCategoriasList] = useState<CategoriaItem[]>([]);
   const [search, setSearch] = useState('');
@@ -60,6 +83,215 @@ export default function ProductosAdminScreen() {
   const [presFormCodigo, setPresFormCodigo] = useState('');
   const [presFormActiva, setPresFormActiva] = useState(true);
   const [presFormOrden, setPresFormOrden] = useState('1');
+
+  // Modal Importación CSV Catálogo
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importStage, setImportStage] = useState<'select' | 'preview' | 'confirm' | 'result'>('select');
+  const [importFileName, setImportFileName] = useState('');
+  const [importCsvContent, setImportCsvContent] = useState('');
+  const [importPreviewData, setImportPreviewData] = useState<PreviewImportacionResponse | null>(null);
+  const [importResoluciones, setImportResoluciones] = useState<Record<number, ResolucionFilaImportacion>>({});
+  const [importFilterTab, setImportFilterTab] = useState<'Todas' | 'Nuevo' | 'Existente' | 'Ambiguo' | 'Invalido'>('Todas');
+  const [importIsLoading, setImportIsLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<ConfirmarImportacionResponse | null>(null);
+  const [importPage, setImportPage] = useState(1);
+  const IMPORT_PAGE_SIZE = 50;
+
+  const handleOpenImportCsv = () => {
+    setImportModalVisible(true);
+    setImportStage('select');
+    setImportFileName('');
+    setImportCsvContent('');
+    setImportPreviewData(null);
+    setImportResoluciones({});
+    setImportFilterTab('Todas');
+    setImportIsLoading(false);
+    setImportError(null);
+    setImportResult(null);
+    setImportPage(1);
+  };
+
+  const handlePickFileWeb = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,text/csv';
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          setImportFileName(file.name);
+          setImportError(null);
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            const content = evt.target?.result as string;
+            setImportCsvContent(content);
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    } else {
+      Alert.alert('Aviso', 'La selección interactiva de archivos CSV está habilitada en la versión web.');
+    }
+  };
+
+  const handleLoadDemoCsv = async () => {
+    setImportIsLoading(true);
+    setImportError(null);
+    try {
+      const res = await DataService.getArchivoDemoCsv();
+      if (res && res.contenidoCsv) {
+        setImportFileName(res.nombreArchivo || 'ProductosMiguel.csv');
+        setImportCsvContent(res.contenidoCsv);
+      } else {
+        throw new Error('No se pudo obtener el archivo de demostración');
+      }
+    } catch (err: any) {
+      setImportError(err.message || 'Error al cargar el archivo de prueba');
+    } finally {
+      setImportIsLoading(false);
+    }
+  };
+
+  const handleGeneratePreview = async () => {
+    if (!importCsvContent.trim()) {
+      setImportError('Selecciona o carga un archivo CSV primero.');
+      return;
+    }
+    setImportIsLoading(true);
+    setImportError(null);
+    try {
+      const preview = await DataService.previewImportacionProductos({
+        nombreArchivo: importFileName || 'ProductosMiguel.csv',
+        contenidoCsv: importCsvContent,
+      });
+
+      setImportPreviewData(preview);
+
+      const resolucionesMap: Record<number, ResolucionFilaImportacion> = {};
+      preview.filas.forEach((f) => {
+        const esExistente = f.clasificacion === 'Existente';
+        const esInvalido = f.clasificacion === 'Invalido';
+        const accionDefault = esExistente ? 'Vincular' : (esInvalido ? 'Omitir' : 'Crear');
+        const prodExistId = esExistente ? f.productoCoincidenteId : undefined;
+
+        resolucionesMap[f.numeroFila] = {
+          numeroFila: f.numeroFila,
+          codigoCsv: f.codigoCsv,
+          nombreCsv: f.nombreCsv,
+          costoCsv: f.costoCsv || 0,
+          precioCsv: f.precioCsv || 0,
+          accion: accionDefault,
+          productoExistenteId: prodExistId,
+          unidadConfirmada: (f.unidadCsv && f.unidadCsv.toLowerCase() !== 'unidad') ? f.unidadCsv.toLowerCase() : undefined,
+        };
+      });
+
+      setImportResoluciones(resolucionesMap);
+      setImportStage('preview');
+      setImportPage(1);
+    } catch (err: any) {
+      setImportError(err.message || 'Error al procesar la previsualización en el servidor');
+    } finally {
+      setImportIsLoading(false);
+    }
+  };
+
+  const handleSetResolucionAccion = (numeroFila: number, accion: 'Crear' | 'Vincular' | 'Omitir', productoExistenteId?: string) => {
+    setImportResoluciones((prev) => {
+      const existing = prev[numeroFila];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        [numeroFila]: {
+          ...existing,
+          accion,
+          productoExistenteId: accion === 'Vincular' ? (productoExistenteId || existing.productoExistenteId) : undefined,
+        },
+      };
+    });
+  };
+
+  const handleSetResolucionUnidad = (numeroFila: number, unidad: string | undefined) => {
+    setImportResoluciones((prev) => {
+      const existing = prev[numeroFila];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        [numeroFila]: {
+          ...existing,
+          unidadConfirmada: unidad,
+        },
+      };
+    });
+  };
+
+  const handleAprobarSugerencias = () => {
+    if (!importPreviewData) return;
+    const updated: Record<number, ResolucionFilaImportacion> = {};
+    importPreviewData.filas.forEach((f) => {
+      const esExistente = f.clasificacion === 'Existente';
+      const esInvalido = f.clasificacion === 'Invalido';
+      const accion = esExistente ? 'Vincular' : (esInvalido ? 'Omitir' : 'Crear');
+      updated[f.numeroFila] = {
+        numeroFila: f.numeroFila,
+        codigoCsv: f.codigoCsv,
+        nombreCsv: f.nombreCsv,
+        costoCsv: f.costoCsv || 0,
+        precioCsv: f.precioCsv || 0,
+        accion,
+        productoExistenteId: esExistente ? f.productoCoincidenteId : undefined,
+        unidadConfirmada: (f.unidadCsv && f.unidadCsv.toLowerCase() !== 'unidad') ? f.unidadCsv.toLowerCase() : undefined,
+      };
+    });
+    setImportResoluciones(updated);
+    Alert.alert('Sugerencias aplicadas', 'Se restablecieron las acciones recomendadas para todas las filas.');
+  };
+
+  const handleExecuteImport = async () => {
+    if (!importPreviewData) return;
+    setImportIsLoading(true);
+    setImportError(null);
+    try {
+      const resolucionesArray = Object.values(importResoluciones);
+      const res = await DataService.confirmarImportacionProductos({
+        fileHash: importPreviewData.fileHash,
+        nombreArchivo: importFileName || 'ProductosMiguel.csv',
+        usuario: user?.nombre || 'Miguel',
+        resoluciones: resolucionesArray,
+      });
+
+      setImportResult(res);
+      setImportStage('result');
+      await loadProductos();
+    } catch (err: any) {
+      setImportError(err.message || 'Error al confirmar la importación en la base de datos');
+    } finally {
+      setImportIsLoading(false);
+    }
+  };
+
+  const importFilteredFilas = useMemo(() => {
+    if (!importPreviewData) return [];
+    if (importFilterTab === 'Todas') return importPreviewData.filas;
+    return importPreviewData.filas.filter((f) => f.clasificacion === importFilterTab);
+  }, [importPreviewData, importFilterTab]);
+
+  const importTotalPages = Math.max(1, Math.ceil(importFilteredFilas.length / IMPORT_PAGE_SIZE));
+  const importPaginatedFilas = useMemo(() => {
+    const start = (importPage - 1) * IMPORT_PAGE_SIZE;
+    return importFilteredFilas.slice(start, start + IMPORT_PAGE_SIZE);
+  }, [importFilteredFilas, importPage]);
+
+  const importSummaryStats = useMemo(() => {
+    const list = Object.values(importResoluciones);
+    const crear = list.filter((r) => r.accion === 'Crear').length;
+    const vincular = list.filter((r) => r.accion === 'Vincular').length;
+    const omitir = list.filter((r) => r.accion === 'Omitir').length;
+    const pendientes = list.filter((r) => r.accion === 'Crear' && (!r.unidadConfirmada || r.unidadConfirmada === 'unidad')).length;
+    return { crear, vincular, omitir, pendientes };
+  }, [importResoluciones]);
 
   const loadProductos = async () => {
     try {
@@ -348,10 +580,16 @@ export default function ProductosAdminScreen() {
         subtitle={`${filtered.length} de ${productosList.length} referencias`}
         onBack={handleBack}
         right={
-          <TouchableOpacity activeOpacity={0.8} onPress={handleOpenCreate} style={styles.createBtnHeader}>
-            <Plus size={18} color="#FFFFFF" />
-            <Text style={styles.createBtnHeaderText}>Nuevo</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity activeOpacity={0.85} onPress={handleOpenImportCsv} style={styles.importBtnHeader}>
+              <UploadCloud size={16} color="#FFFFFF" />
+              <Text style={styles.importBtnHeaderText}>Importar CSV</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.85} onPress={handleOpenCreate} style={styles.createBtnHeader}>
+              <Plus size={18} color="#FFFFFF" />
+              <Text style={styles.createBtnHeaderText}>Nuevo</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -435,6 +673,12 @@ export default function ProductosAdminScreen() {
                           <View style={styles.multiBadge}>
                             <Layers size={11} color={colors.primary[700]} />
                             <Text style={styles.multiBadgeText}>Multipresentación</Text>
+                          </View>
+                        ) : null}
+                        {p.estadoConfiguracion === 'Pendiente' ? (
+                          <View style={styles.pendingBadge}>
+                            <AlertCircle size={11} color="#B45309" />
+                            <Text style={styles.pendingBadgeText}>⚠️ Pendiente config.</Text>
                           </View>
                         ) : null}
                       </View>
@@ -963,6 +1207,651 @@ export default function ProductosAdminScreen() {
               <CheckCircle2 size={16} color="#FFFFFF" />
               <Text style={styles.savePresBtnText}>Guardar Presentación</Text>
             </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ========================================================= */}
+      {/* MODAL DE IMPORTACIÓN CSV DE CATÁLOGO                     */}
+      {/* ========================================================= */}
+      <Modal
+        visible={importModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!importIsLoading) setImportModalVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.importModalOverlay}
+          onPress={() => {
+            if (!importIsLoading) setImportModalVisible(false);
+          }}
+        >
+          <Pressable style={styles.importModalSheet} onPress={(e) => e.stopPropagation()}>
+            {/* Header del Modal */}
+            <View style={styles.importModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.importHeaderIcon}>
+                  <FileSpreadsheet size={22} color={colors.primary[700]} />
+                </View>
+                <View>
+                  <Text style={styles.importModalTitle}>Importar Catálogo CSV</Text>
+                  <Text style={styles.importModalSubtitle}>
+                    {importStage === 'select' && 'Paso 1: Seleccionar archivo CSV'}
+                    {importStage === 'preview' && `Paso 2: Vista previa y revisión (${importPreviewData?.totalFilas || 0} filas)`}
+                    {importStage === 'confirm' && 'Paso 3: Confirmación de cambios en SQL Server'}
+                    {importStage === 'result' && 'Paso 4: Resumen de persistencia'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!importIsLoading) setImportModalVisible(false);
+                }}
+                style={styles.modalCloseBtn}
+              >
+                <X size={20} color={colors.neutral[500]} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Error Banner si existe */}
+            {importError && (
+              <View style={styles.importErrorBanner}>
+                <AlertCircle size={16} color={colors.error[700]} />
+                <Text style={styles.importErrorText}>{importError}</Text>
+              </View>
+            )}
+
+            {/* STAGE 1: SELECCION DE ARCHIVO */}
+            {importStage === 'select' && (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+                <Text style={styles.importInstructionText}>
+                  Carga el catálogo comercial real de Miguel. El sistema mapeará nombres, costos y precios oficiales, clasificará coincidencias y protegerá las existencias y presentaciones actuales.
+                </Text>
+
+                <View style={styles.importSourceCards}>
+                  {/* Opción 1: Archivo local */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handlePickFileWeb}
+                    style={styles.importOptionCard}
+                  >
+                    <View style={styles.importOptionIconWrap}>
+                      <UploadCloud size={28} color={colors.primary[600]} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.importOptionTitle}>1. Seleccionar archivo de tu equipo</Text>
+                      <Text style={styles.importOptionDesc}>
+                        Elige ProductosMiguel.csv u otro archivo desde tu explorador de archivos local.
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Opción 2: Archivo oficial del proyecto */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleLoadDemoCsv}
+                    style={[styles.importOptionCard, styles.importOptionCardHighlight]}
+                  >
+                    <View style={[styles.importOptionIconWrap, { backgroundColor: colors.primary[100] }]}>
+                      <Sparkles size={28} color={colors.primary[700]} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.importOptionTitle, { color: colors.primary[900] }]}>
+                        2. Cargar ProductosMiguel.csv del proyecto
+                      </Text>
+                      <Text style={styles.importOptionDesc}>
+                        Carga directa del archivo oficial con los 456 registros reales de Don Miguel para demostración inmediata.
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Archivo cargado preview */}
+                {importFileName ? (
+                  <View style={styles.fileSelectedBox}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <FileText size={22} color={colors.primary[700]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fileSelectedName}>{importFileName}</Text>
+                        <Text style={styles.fileSelectedSize}>
+                          {(importCsvContent.length / 1024).toFixed(1)} KB • {importCsvContent.split('\n').length - 1} filas detectadas
+                        </Text>
+                      </View>
+                      <CheckCircle2 size={20} color={colors.success[600]} />
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Botón generar preview */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={handleGeneratePreview}
+                  disabled={!importCsvContent || importIsLoading}
+                  style={[
+                    styles.primaryActionBtn,
+                    (!importCsvContent || importIsLoading) && styles.primaryActionBtnDisabled,
+                  ]}
+                >
+                  {importIsLoading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryActionBtnText}>Generar Vista Previa y Clasificación</Text>
+                      <ArrowRight size={18} color="#FFFFFF" />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+
+            {/* STAGE 2: VISTA PREVIA Y RESOLUCIÓN */}
+            {importStage === 'preview' && importPreviewData && (
+              <View style={{ flex: 1 }}>
+                {/* Banner de archivo ya importado */}
+                {importPreviewData.yaFueImportadoPreviamente && (
+                  <View style={styles.importWarningBanner}>
+                    <AlertCircle size={16} color="#92400E" />
+                    <Text style={styles.importWarningText}>
+                      ⚠️ Este archivo ya fue importado el{' '}
+                      {new Date(importPreviewData.fechaUltimaImportacion || '').toLocaleString()}.
+                      El servidor evitará importaciones duplicadas para proteger los datos.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Métricas de Clasificación */}
+                <View style={styles.metricRow}>
+                  <View style={[styles.metricCard, { borderLeftColor: colors.neutral[400] }]}>
+                    <Text style={styles.metricVal}>{importPreviewData.totalFilas}</Text>
+                    <Text style={styles.metricLabel}>Total Filas</Text>
+                  </View>
+                  <View style={[styles.metricCard, { borderLeftColor: colors.success[600] }]}>
+                    <Text style={[styles.metricVal, { color: colors.success[700] }]}>
+                      {importPreviewData.totalNuevos}
+                    </Text>
+                    <Text style={styles.metricLabel}>Nuevos</Text>
+                  </View>
+                  <View style={[styles.metricCard, { borderLeftColor: colors.primary[600] }]}>
+                    <Text style={[styles.metricVal, { color: colors.primary[700] }]}>
+                      {importPreviewData.totalExistentes}
+                    </Text>
+                    <Text style={styles.metricLabel}>Existentes</Text>
+                  </View>
+                  <View style={[styles.metricCard, { borderLeftColor: colors.warning[600] }]}>
+                    <Text style={[styles.metricVal, { color: colors.warning[700] }]}>
+                      {importPreviewData.totalAmbiguos}
+                    </Text>
+                    <Text style={styles.metricLabel}>Ambiguos</Text>
+                  </View>
+                  <View style={[styles.metricCard, { borderLeftColor: colors.error[600] }]}>
+                    <Text style={[styles.metricVal, { color: colors.error[700] }]}>
+                      {importPreviewData.totalInvalidos}
+                    </Text>
+                    <Text style={styles.metricLabel}>Inválidos</Text>
+                  </View>
+                </View>
+
+                {/* Tabs de Filtro y Botón rápido */}
+                <View style={styles.filterAndActionsRow}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      {(['Todas', 'Nuevo', 'Existente', 'Ambiguo', 'Invalido'] as const).map((tab) => {
+                        const count =
+                          tab === 'Todas'
+                            ? importPreviewData.totalFilas
+                            : tab === 'Nuevo'
+                            ? importPreviewData.totalNuevos
+                            : tab === 'Existente'
+                            ? importPreviewData.totalExistentes
+                            : tab === 'Ambiguo'
+                            ? importPreviewData.totalAmbiguos
+                            : importPreviewData.totalInvalidos;
+
+                        return (
+                          <TouchableOpacity
+                            key={tab}
+                            onPress={() => {
+                              setImportFilterTab(tab);
+                              setImportPage(1);
+                            }}
+                            style={[
+                              styles.importFilterTab,
+                              importFilterTab === tab && styles.importFilterTabActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.importFilterTabText,
+                                importFilterTab === tab && styles.importFilterTabTextActive,
+                              ]}
+                            >
+                              {tab} ({count})
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    onPress={handleAprobarSugerencias}
+                    style={styles.applySuggestionsBtn}
+                  >
+                    <Check size={14} color={colors.primary[700]} />
+                    <Text style={styles.applySuggestionsBtnText}>Restablecer sugerencias</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Lista de Filas Pagina */}
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: 8 }}>
+                  {importPaginatedFilas.map((f) => {
+                    const resolucion = importResoluciones[f.numeroFila] || {
+                      numeroFila: f.numeroFila,
+                      codigoCsv: f.codigoCsv,
+                      nombreCsv: f.nombreCsv,
+                      costoCsv: f.costoCsv || 0,
+                      precioCsv: f.precioCsv || 0,
+                      accion: 'Crear',
+                    };
+
+                    const badgeStyle =
+                      f.clasificacion === 'Nuevo'
+                        ? styles.badgeNuevo
+                        : f.clasificacion === 'Existente'
+                        ? styles.badgeExistente
+                        : f.clasificacion === 'Ambiguo'
+                        ? styles.badgeAmbiguo
+                        : styles.badgeInvalido;
+
+                    const badgeTextStyle =
+                      f.clasificacion === 'Nuevo'
+                        ? styles.badgeTextNuevo
+                        : f.clasificacion === 'Existente'
+                        ? styles.badgeTextExistente
+                        : f.clasificacion === 'Ambiguo'
+                        ? styles.badgeTextAmbiguo
+                        : styles.badgeTextInvalido;
+
+                    return (
+                      <View key={f.numeroFila} style={styles.importRowCard}>
+                        {/* Fila Top: # y Nombre */}
+                        <View style={styles.importRowTop}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.importRowNum}>#{f.numeroFila}</Text>
+                              <View style={[styles.classificationBadge, badgeStyle]}>
+                                <Text style={[styles.classificationBadgeText, badgeTextStyle]}>
+                                  {f.clasificacion}
+                                </Text>
+                              </View>
+                              {f.codigoCsv ? (
+                                <Text style={styles.importRowCode}>Origen: {f.codigoCsv}</Text>
+                              ) : null}
+                            </View>
+                            <Text style={styles.importRowName}>{f.nombreCsv || '(Sin nombre)'}</Text>
+                          </View>
+
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.importRowPrice}>${(f.precioCsv || 0).toFixed(2)}</Text>
+                            <Text style={styles.importRowCost}>Costo: ${(f.costoCsv || 0).toFixed(2)}</Text>
+                          </View>
+                        </View>
+
+                        {/* Motivo de clasificación */}
+                        {f.motivoClasificacion ? (
+                          <Text style={styles.importRowMotivo}>ℹ️ {f.motivoClasificacion}</Text>
+                        ) : null}
+
+                        {/* Candidato si es existente o ambiguo */}
+                        {f.candidatosCoincidentes.length > 0 && (
+                          <View style={styles.candidatosBox}>
+                            <Text style={styles.candidatosTitle}>
+                              Candidatos coincidentes en catálogo:
+                            </Text>
+                            {f.candidatosCoincidentes.map((c) => (
+                              <View key={c.codigo} style={styles.candidatoItem}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.candidatoNombre}>
+                                    {c.nombre} <Text style={{ color: colors.neutral[500] }}>({c.codigo})</Text>
+                                  </Text>
+                                  <Text style={styles.candidatoInfo}>
+                                    Precio actual: ${c.precioBase} • Costo: ${c.precioCompra || 0} • Stock actual: {c.existencia} {c.unidad}s
+                                  </Text>
+                                </View>
+                                {resolucion.accion === 'Vincular' && resolucion.productoExistenteId === c.codigo ? (
+                                  <View style={styles.linkedBadge}>
+                                    <Check size={12} color={colors.primary[700]} />
+                                    <Text style={styles.linkedBadgeText}>Vinculado</Text>
+                                  </View>
+                                ) : (
+                                  <TouchableOpacity
+                                    onPress={() => handleSetResolucionAccion(f.numeroFila, 'Vincular', c.codigo)}
+                                    style={styles.linkCandidateBtn}
+                                  >
+                                    <Text style={styles.linkCandidateBtnText}>Vincular a este</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* Acciones para esta fila */}
+                        <View style={styles.rowResolucionActions}>
+                          <Text style={styles.resolucionLabel}>Acción:</Text>
+                          <View style={styles.actionChipsRow}>
+                            <TouchableOpacity
+                              onPress={() => handleSetResolucionAccion(f.numeroFila, 'Crear')}
+                              style={[
+                                styles.actionChip,
+                                resolucion.accion === 'Crear' && styles.actionChipActiveCrear,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.actionChipText,
+                                  resolucion.accion === 'Crear' && styles.actionChipTextActive,
+                                ]}
+                              >
+                                Crear nuevo (stock 0)
+                              </Text>
+                            </TouchableOpacity>
+
+                            {f.candidatosCoincidentes.length > 0 && (
+                              <TouchableOpacity
+                                onPress={() =>
+                                  handleSetResolucionAccion(
+                                    f.numeroFila,
+                                    'Vincular',
+                                    f.productoCoincidenteId || f.candidatosCoincidentes[0]?.codigo
+                                  )
+                                }
+                                style={[
+                                  styles.actionChip,
+                                  resolucion.accion === 'Vincular' && styles.actionChipActiveVincular,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.actionChipText,
+                                    resolucion.accion === 'Vincular' && styles.actionChipTextActive,
+                                  ]}
+                                >
+                                  Vincular (conservar stock)
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+
+                            <TouchableOpacity
+                              onPress={() => handleSetResolucionAccion(f.numeroFila, 'Omitir')}
+                              style={[
+                                styles.actionChip,
+                                resolucion.accion === 'Omitir' && styles.actionChipActiveOmitir,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.actionChipText,
+                                  resolucion.accion === 'Omitir' && styles.actionChipTextActive,
+                                ]}
+                              >
+                                Omitir
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Selector de Unidad de Venta si es Crear */}
+                        {resolucion.accion === 'Crear' && (
+                          <View style={styles.unidadConfirmRow}>
+                            <Text style={styles.resolucionLabel}>Unidad de venta:</Text>
+                            <View style={styles.unidadChipsRow}>
+                              {[
+                                { key: undefined, label: '⚠️ Pendiente' },
+                                { key: 'pieza', label: 'Pieza' },
+                                { key: 'paquete', label: 'Paquete' },
+                                { key: 'caja', label: 'Caja' },
+                                { key: 'kg', label: 'Kg' },
+                              ].map((u) => {
+                                const isSelected = resolucion.unidadConfirmada === u.key;
+                                return (
+                                  <TouchableOpacity
+                                    key={u.label}
+                                    onPress={() => handleSetResolucionUnidad(f.numeroFila, u.key)}
+                                    style={[
+                                      styles.unidadPickChip,
+                                      isSelected && styles.unidadPickChipActive,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.unidadPickChipText,
+                                        isSelected && styles.unidadPickChipTextActive,
+                                      ]}
+                                    >
+                                      {u.label}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Paginación */}
+                {importTotalPages > 1 && (
+                  <View style={styles.paginationRow}>
+                    <TouchableOpacity
+                      disabled={importPage <= 1}
+                      onPress={() => setImportPage((p) => Math.max(1, p - 1))}
+                      style={[styles.pageBtn, importPage <= 1 && styles.pageBtnDisabled]}
+                    >
+                      <Text style={styles.pageBtnText}>◀ Anterior</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.pageNumberText}>
+                      Página {importPage} de {importTotalPages} ({importFilteredFilas.length} registros)
+                    </Text>
+                    <TouchableOpacity
+                      disabled={importPage >= importTotalPages}
+                      onPress={() => setImportPage((p) => Math.min(importTotalPages, p + 1))}
+                      style={[
+                        styles.pageBtn,
+                        importPage >= importTotalPages && styles.pageBtnDisabled,
+                      ]}
+                    >
+                      <Text style={styles.pageBtnText}>Siguiente ▶</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Footer con Resumen y Continuar */}
+                <View style={styles.importFooter}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.footerSummaryText}>
+                      <Text style={{ fontWeight: '700', color: colors.success[700] }}>
+                        {importSummaryStats.crear}
+                      </Text>{' '}
+                      a crear ({importSummaryStats.pendientes} pendientes de unidad),{' '}
+                      <Text style={{ fontWeight: '700', color: colors.primary[700] }}>
+                        {importSummaryStats.vincular}
+                      </Text>{' '}
+                      a vincular,{' '}
+                      <Text style={{ fontWeight: '700', color: colors.neutral[600] }}>
+                        {importSummaryStats.omitir}
+                      </Text>{' '}
+                      a omitir
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => setImportStage('select')}
+                      style={styles.secondaryBtn}
+                    >
+                      <Text style={styles.secondaryBtnText}>Atrás</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setImportStage('confirm')}
+                      style={styles.primaryActionBtnSmall}
+                    >
+                      <Text style={styles.primaryActionBtnText}>Continuar a Confirmación</Text>
+                      <ArrowRight size={16} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* STAGE 3: CONFIRMACIÓN DE CAMBIOS */}
+            {importStage === 'confirm' && (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+                <View style={styles.confirmBox}>
+                  <View style={styles.confirmHeaderRow}>
+                    <AlertCircle size={26} color={colors.primary[700]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.confirmTitle}>Resumen de Cambios a Persistir</Text>
+                      <Text style={styles.confirmSubtitle}>
+                        La operación se ejecutará bajo una transacción en SQL Server.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.confirmList}>
+                    <View style={styles.confirmItem}>
+                      <Check size={18} color={colors.success[600]} />
+                      <Text style={styles.confirmItemText}>
+                        <Text style={{ fontWeight: '700' }}>{importSummaryStats.crear} productos nuevos</Text>{' '}
+                        se darán de alta en catálogo con <Text style={{ fontWeight: '700' }}>existencia = 0</Text> (sin inventar existencias ficticias).
+                      </Text>
+                    </View>
+
+                    <View style={styles.confirmItem}>
+                      <Check size={18} color={colors.warning[600]} />
+                      <Text style={styles.confirmItemText}>
+                        <Text style={{ fontWeight: '700' }}>{importSummaryStats.pendientes} productos</Text>{' '}
+                        quedarán como <Text style={{ fontWeight: '700' }}>'⚠️ Pendiente'</Text>, requiriendo confirmar su unidad en Catálogo antes de poder venderse.
+                      </Text>
+                    </View>
+
+                    <View style={styles.confirmItem}>
+                      <Check size={18} color={colors.primary[600]} />
+                      <Text style={styles.confirmItemText}>
+                        <Text style={{ fontWeight: '700' }}>{importSummaryStats.vincular} productos existentes</Text>{' '}
+                        actualizarán exclusivamente su precio y costo. Sus existencias, presentaciones e historial permanecen 100% intactos.
+                      </Text>
+                    </View>
+
+                    <View style={styles.confirmItem}>
+                      <Check size={18} color={colors.neutral[500]} />
+                      <Text style={styles.confirmItemText}>
+                        <Text style={{ fontWeight: '700' }}>{importSummaryStats.omitir} filas</Text>{' '}
+                        serán ignoradas sin realizar alteraciones.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.securityAuditBox}>
+                    <Text style={styles.securityAuditText}>
+                      🔒 <Text style={{ fontWeight: '700' }}>Auditoría activa:</Text> Se registrará un registro en la tabla{' '}
+                      <Text style={{ fontWeight: '700' }}>ImportacionesCatalogo</Text> con el hash SHA-256 del archivo para impedir reimportaciones accidentales.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.lg }}>
+                  <TouchableOpacity
+                    onPress={() => setImportStage('preview')}
+                    style={[styles.secondaryBtn, { flex: 1 }]}
+                    disabled={importIsLoading}
+                  >
+                    <Text style={styles.secondaryBtnText}>Volver a Revisión</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleExecuteImport}
+                    disabled={importIsLoading}
+                    style={[
+                      styles.primaryActionBtn,
+                      { flex: 2 },
+                      importIsLoading && styles.primaryActionBtnDisabled,
+                    ]}
+                  >
+                    {importIsLoading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <CheckCircle2 size={18} color="#FFFFFF" />
+                        <Text style={styles.primaryActionBtnText}>Confirmar e Importar Ahora</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+
+            {/* STAGE 4: RESULTADO PERSISTIDO */}
+            {importStage === 'result' && (
+              <View style={styles.resultContainer}>
+                <View style={styles.resultIconWrap}>
+                  <CheckCircle2 size={54} color={colors.success[600]} />
+                </View>
+                <Text style={styles.resultTitle}>¡Importación Exitosa!</Text>
+                <Text style={styles.resultMessage}>{importResult?.message}</Text>
+
+                <View style={styles.resultStatsBox}>
+                  <View style={styles.resultStatRow}>
+                    <Text style={styles.resultStatLabel}>Total registros procesados:</Text>
+                    <Text style={styles.resultStatVal}>{importResult?.totalProcesados}</Text>
+                  </View>
+                  <View style={styles.resultStatRow}>
+                    <Text style={styles.resultStatLabel}>Nuevos productos creados:</Text>
+                    <Text style={[styles.resultStatVal, { color: colors.success[700] }]}>
+                      {importResult?.totalCreados}
+                    </Text>
+                  </View>
+                  <View style={styles.resultStatRow}>
+                    <Text style={styles.resultStatLabel}>Productos existentes actualizados:</Text>
+                    <Text style={[styles.resultStatVal, { color: colors.primary[700] }]}>
+                      {importResult?.totalActualizados}
+                    </Text>
+                  </View>
+                  <View style={styles.resultStatRow}>
+                    <Text style={styles.resultStatLabel}>Pendientes de unidad de venta:</Text>
+                    <Text style={[styles.resultStatVal, { color: colors.warning[700] }]}>
+                      {importResult?.totalPendientesConfiguracion}
+                    </Text>
+                  </View>
+                  <View style={styles.resultStatRow}>
+                    <Text style={styles.resultStatLabel}>Filas omitidas:</Text>
+                    <Text style={styles.resultStatVal}>{importResult?.totalOmitidos}</Text>
+                  </View>
+                </View>
+
+                {importResult?.advertencias && importResult.advertencias.length > 0 && (
+                  <View style={styles.advertenciasBox}>
+                    <Text style={styles.advertenciasTitle}>Observaciones del servidor:</Text>
+                    {importResult.advertencias.map((adv, idx) => (
+                      <Text key={idx} style={styles.advertenciaText}>• {adv}</Text>
+                    ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setImportModalVisible(false)}
+                  style={styles.primaryActionBtn}
+                >
+                  <Text style={styles.primaryActionBtnText}>Ver Catálogo Actualizado ({productosList.length} productos)</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1667,5 +2556,689 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: fontSize.sm,
     fontWeight: '700',
+  },
+  importBtnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  importBtnHeaderText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  pendingBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  importModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  importModalSheet: {
+    width: '100%',
+    maxWidth: 720,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    maxHeight: '92%',
+    ...shadows.floating,
+  },
+  importModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+    marginBottom: spacing.md,
+  },
+  importHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  importModalTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  importModalSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  importErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+  },
+  importErrorText: {
+    flex: 1,
+    fontSize: fontSize.xs,
+    color: colors.error[700],
+    fontWeight: '600',
+  },
+  importWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  importWarningText: {
+    flex: 1,
+    fontSize: fontSize.xs,
+    color: '#92400E',
+    fontWeight: '600',
+  },
+  importInstructionText: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  importSourceCards: {
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  importOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+    backgroundColor: colors.neutral[50],
+  },
+  importOptionCardHighlight: {
+    borderColor: colors.primary[400],
+    backgroundColor: colors.primary[50],
+  },
+  importOptionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  importOptionTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  importOptionDesc: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  fileSelectedBox: {
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  fileSelectedName: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  fileSelectedSize: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    marginTop: 2,
+  },
+  primaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  primaryActionBtnDisabled: {
+    opacity: 0.5,
+  },
+  primaryActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  primaryActionBtnSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.xs + 2,
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  metricVal: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: colors.neutral[800],
+  },
+  metricLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.neutral[500],
+    textTransform: 'uppercase',
+    marginTop: 1,
+  },
+  filterAndActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: spacing.xs,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  importFilterTab: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  importFilterTabActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
+  },
+  importFilterTabText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.neutral[700],
+  },
+  importFilterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  applySuggestionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  applySuggestionsBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  importRowCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    padding: spacing.sm + 2,
+    marginBottom: spacing.xs + 4,
+  },
+  importRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  importRowNum: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.neutral[400],
+  },
+  importRowCode: {
+    fontSize: 10,
+    color: colors.neutral[500],
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  importRowName: {
+    fontSize: fontSize.xs + 1,
+    fontWeight: '700',
+    color: colors.neutral[900],
+    marginTop: 2,
+  },
+  importRowPrice: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: colors.primary[700],
+  },
+  importRowCost: {
+    fontSize: 10,
+    color: colors.neutral[500],
+  },
+  importRowMotivo: {
+    fontSize: 10,
+    color: colors.neutral[600],
+    marginTop: 4,
+    backgroundColor: colors.neutral[50],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  classificationBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  classificationBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  badgeNuevo: {
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  badgeExistente: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  badgeAmbiguo: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  badgeInvalido: {
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  badgeTextNuevo: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.success[700],
+  },
+  badgeTextExistente: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.primary[700],
+  },
+  badgeTextAmbiguo: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  badgeTextInvalido: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.error[700],
+  },
+  candidatosBox: {
+    marginTop: spacing.xs + 2,
+    padding: spacing.xs + 2,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  candidatosTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary[900],
+    marginBottom: 4,
+  },
+  candidatoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary[100],
+  },
+  candidatoNombre: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral[800],
+  },
+  candidatoInfo: {
+    fontSize: 9,
+    color: colors.neutral[600],
+  },
+  linkedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  linkedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary[800],
+  },
+  linkCandidateBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.primary[600],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  linkCandidateBtnText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  rowResolucionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.xs + 2,
+  },
+  resolucionLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.neutral[600],
+  },
+  actionChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    flex: 1,
+  },
+  actionChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  actionChipActiveCrear: {
+    backgroundColor: colors.success[600],
+    borderColor: colors.success[700],
+  },
+  actionChipActiveVincular: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
+  },
+  actionChipActiveOmitir: {
+    backgroundColor: colors.neutral[600],
+    borderColor: colors.neutral[700],
+  },
+  actionChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.neutral[700],
+  },
+  actionChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  unidadConfirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  unidadPickChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  unidadPickChipActive: {
+    backgroundColor: colors.neutral[800],
+    borderColor: colors.neutral[900],
+  },
+  unidadPickChipText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.neutral[700],
+  },
+  unidadPickChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    marginTop: 4,
+  },
+  pageBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  pageBtnDisabled: {
+    opacity: 0.35,
+  },
+  pageBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  pageNumberText: {
+    fontSize: 10,
+    color: colors.neutral[600],
+    fontWeight: '600',
+  },
+  importFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    marginTop: spacing.xs,
+  },
+  footerSummaryText: {
+    fontSize: 11,
+    color: colors.neutral[600],
+  },
+  secondaryBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+    backgroundColor: colors.neutral[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtnText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  confirmBox: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  confirmHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  confirmTitle: {
+    fontSize: fontSize.base,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  confirmSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+  },
+  confirmList: {
+    gap: spacing.sm,
+  },
+  confirmItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  confirmItemText: {
+    flex: 1,
+    fontSize: fontSize.xs,
+    color: colors.neutral[800],
+    lineHeight: 18,
+  },
+  securityAuditBox: {
+    backgroundColor: colors.primary[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    marginTop: spacing.md,
+  },
+  securityAuditText: {
+    fontSize: 10,
+    color: colors.primary[900],
+    lineHeight: 15,
+  },
+  resultContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  resultIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  resultTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  resultMessage: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: spacing.md,
+  },
+  resultStatsBox: {
+    width: '100%',
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  resultStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  resultStatLabel: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[700],
+  },
+  resultStatVal: {
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  advertenciasBox: {
+    width: '100%',
+    backgroundColor: '#FEF3C7',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  advertenciasTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 4,
+  },
+  advertenciaText: {
+    fontSize: 10,
+    color: '#78350F',
+    lineHeight: 14,
   },
 });

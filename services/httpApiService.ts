@@ -7,6 +7,9 @@ import type {
   Empleado,
   SurtidoNotaPdfRequest,
   RutaItem,
+  PreviewImportacionResponse,
+  ConfirmarImportacionRequest,
+  ConfirmarImportacionResponse,
 } from '@/types';
 
 // Determinación inteligente de la URL base (soporta variables de entorno de Cloudflare Pages y VPS)
@@ -277,6 +280,8 @@ class HttpApiService {
         codigoBarras: p.codigoBarras || '',
         favorito: p.favorito,
         activo: p.activo,
+        estadoConfiguracion: p.estadoConfiguracion || 'Completo',
+        codigoOrigen: p.codigoOrigen || undefined,
         presentaciones: p.presentaciones || [],
       };
     });
@@ -881,6 +886,25 @@ class HttpApiService {
   async getPerfil(): Promise<any> {
     return this.request<any>('/auth/perfil');
   }
+
+  // Importaciones CSV Catálogo
+  async getArchivoDemoCsv(): Promise<{ nombreArchivo: string; contenidoCsv: string }> {
+    return this.request<{ nombreArchivo: string; contenidoCsv: string }>('/productos/importaciones/archivo-demo');
+  }
+
+  async previewImportacionProductos(req: { nombreArchivo: string; contenidoCsv: string }): Promise<PreviewImportacionResponse> {
+    return this.request<PreviewImportacionResponse>('/productos/importaciones/preview', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async confirmarImportacionProductos(req: ConfirmarImportacionRequest): Promise<ConfirmarImportacionResponse> {
+    return this.request<ConfirmarImportacionResponse>('/productos/importaciones/confirmar', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
 }
 
 export interface SyncBatchRequestDto {
@@ -1004,6 +1028,7 @@ export interface CerrarCorteCajaRequestDto {
 export interface ConfirmarCargaInicialRequestDto {
   empleadoId: string;
   ubicacionDestino: string;
+  esEntradaMercancia?: boolean;
   lotes: { productoId: string; piezas: number }[];
 }
 

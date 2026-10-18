@@ -14,6 +14,8 @@
 | **AUD-006** | **P2** | Cobro de Venta | Protección insuficiente contra doble clic y notas vacías en pantalla de cobro | **CORREGIDO Y VERIFICADO** |
 | **AUD-007** | **P3** | UX / Móvil | Márgenes inferiores ajustados para Home Indicator de iPhone en PWA | **VERIFICADO** |
 | **AUD-008** | **P0** | Surtido / PDF | Carga infinita con `DecompressionStream` y bloqueo al surtir inventario en PR | **CORREGIDO Y VERIFICADO** |
+| **AUD-009** | **P1** | Carga Matutina / Inventario | Duplicación indebida de existencias en `ConfirmarCargaInicial` por sumar el stock actual | **CORREGIDO Y VERIFICADO** |
+| **AUD-010** | **P1** | Catálogo / Importación CSV | Inexistencia de importación masiva real, riesgo de duplicados, números contables y sobreescritura de presentaciones | **CORREGIDO Y VERIFICADO** |
 
 ---
 
@@ -78,4 +80,29 @@
   4. En `services/mockDataService.ts`, se corrigió la creación de productos en surtido a `prod_${Date.now()}_...` con `presentaciones` válidas y guardado automático con `saveProductosToStorage()`.
   5. Despliegue de producción ejecutado en Cloudflare Workers (`demo-miguelappventa.aaronarenasmartinez.workers.dev`).
 - **Verificación:** Navegación en vivo sobre la URL de Cloudflare (`https://demo-miguelappventa.aaronarenasmartinez.workers.dev/mas/surtido-nota`), recarga de bundle (`entry-504dbc680c3d1e2ea8ea811645ae8987.js`), verificación de los 32 productos extraídos de la nota #295584 y clic exitoso en "Aumentar Inventario" con modal de confirmación desplegado instantáneamente (captura `surtido_success_1792313313249.png`).
+
+### AUD-009 [P1]: Duplicación de Existencias en Auditoría de Carga Matutina
+- **Archivos:** `app/(tabs)/mas/carga.tsx` y `backend/RutaVentas.Api/Controllers/InventarioController.cs`
+- **Evidencia original:**
+  En `carga.tsx`, el formulario cargaba la existencia actual de cada producto y la enviaba como `Cantidad`. En el backend, `InventarioController.ConfirmarCargaInicial` ejecutaba `prod.Existencia += item.Cantidad`, duplicando el stock en cada confirmación matutina de ruta.
+- **Acción aplicada:**
+  1. Se agregó el campo `EsEntradaMercancia` a `ConfirmarCargaInicialRequestDto` (por defecto `false` en revisiones diarias).
+  2. En `InventarioController.ConfirmarCargaInicial`, solo si `req.EsEntradaMercancia == true` se incrementa `prod.Existencia`. Si es `false`, se genera un movimiento de auditoría `"CargaMatutinaVerificada"` registrando la verificación física sin alterar las existencias.
+  3. En `carga.tsx`, se actualizó la interfaz aclarando que se trata de verificación física de salida y se envía `esEntradaMercancia: false`.
+- **Verificación:** Comprobación de compilación limpia en C# y TypeScript, verificación de lógica en suite de pruebas.
+
+### AUD-010 [P1]: Importación Segura de Catálogo CSV, Idempotencia y Protección de Existencias
+- **Archivos:** `backend/RutaVentas.Api/Controllers/ImportacionesController.cs`, `backend/RutaVentas.Api/Data/Entities/Entities.cs`, `app/(tabs)/mas/productos.tsx`, `services/httpApiService.ts`, `services/mockDataService.ts`, `types/index.ts`
+- **Evidencia original:**
+  No existía flujo de importación masiva para el catálogo real (`ProductosMiguel.csv`, 456 registros). Un PUT genérico habría sobrescrito presentaciones existentes y asignado existencias arbitrarias. Además, números contables españoles (`241.088,06`, `1.350`) corrían riesgo de ser truncados o malinterpretados como centavos.
+- **Acción aplicada:**
+  1. Creación de endpoints `/api/v1/productos/importaciones/preview` y `/confirmar` bajo transacción SQL y autorización de Administrador.
+  2. Detección de duplicados mediante `FileHash` SHA-256 en entidad `ImportacionCatalogo`, devolviendo `409 Conflict` ante confirmaciones repetidas o simultáneas.
+  3. Parser contable español que convierte `.` de miles y `,` de decimales a `decimal` estricto en backend, reconociendo que `1.350` son $1,350 MXN y no $1.35.
+  4. Preservación estricta de stock y presentaciones en productos existentes (solo se actualiza costo y precio).
+  5. Asignación de stock `0`, categoría `"Sin categoría"` y estado `EstadoConfiguracion = "Pendiente"` para productos nuevos sin unidad confirmada.
+  6. Bloqueo en pantalla de venta (`app/(tabs)/venta/index.tsx`) para impedir vender productos con configuración pendiente.
+  7. Interfaz en `app/(tabs)/mas/productos.tsx` con 4 etapas: selección de archivo o demo 1-clic, previsualización paginada con filtros por clasificación (Nuevo, Existente, Ambiguo, Inválido), resolución de coincidencias y confirmación transaccional con persistencia real.
+- **Verificación:** Ejecución de `node scripts/verify_import_pipeline.js` (456 filas procesadas, 27 grupos ambiguos detectados, números españoles validados al 100%), `dotnet build` sin advertencias y `npm run build:web` exitoso.
+
 

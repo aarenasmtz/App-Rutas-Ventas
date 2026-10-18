@@ -58,3 +58,26 @@
 - **Contexto:** Miguel utiliza un iPhone para la operación en campo.
 - **Decisión:** Las pantallas deben incorporar márgenes seguros inferiores (`paddingBottom` / `SafeAreaView`) para que los botones de cobro y navegación no colisionen con la barra de gestos de inicio de iOS (Home Indicator).
 - **Restricción:** Toda barra flotante o pie de página fijo debe reservar al menos 24px de resguardo inferior en dispositivos móviles.
+
+---
+
+## ADR-007: Importación Transaccional de Catálogo CSV e Idempotencia
+- **Estado:** Aprobado y en vigor.
+- **Contexto:** La carga del catálogo oficial de Miguel (`ProductosMiguel.csv`, 456 filas) requería evitar duplicación de productos, proteger las existencias en camioneta y no destruir las configuraciones de multipresentación existentes.
+- **Decisión:**
+  - Endpoint de previsualización (`/api/v1/productos/importaciones/preview`): No escribe en base de datos. Detecta ambigüedades dentro del archivo y busca candidatos por coincidencia normalizada en base de datos.
+  - Endpoint de confirmación (`/api/v1/productos/importaciones/confirmar`): Ejecuta bajo transacción SQL (`IDbContextTransaction`) con autorización estricta de Administrador.
+  - Idempotencia: Se computa el hash SHA-256 del contenido (`FileHash`) y se registra en `ImportacionesCatalogo`. Si se intenta confirmar exactamente el mismo archivo, el servidor responde `409 Conflict`.
+  - Asignación de Códigos: Generación concurrente y segura de códigos de catálogo `p{nextNum}` (máximo 20 caracteres), preservando el código original en `CodigoOrigen`.
+  - Protección de Stock y Presentaciones: Para productos existentes, la actualización se limita exclusivamente a `PrecioCompra` y `PrecioBase`. El inventario (`Existencia`), las presentaciones (`ProductoPresentacion`) y precios especiales de clientes permanecen inalterados.
+  - Existencias Cero: Los productos nuevos se crean con `Existencia = 0`, categoría `"Sin categoría"` y estado `EstadoConfiguracion = "Pendiente"`.
+
+---
+
+## ADR-008: Separación entre Auditoría Matutina de Camioneta y Entrada de Mercancía
+- **Estado:** Aprobado y en vigor.
+- **Contexto:** `app/(tabs)/mas/carga.tsx` cargaba la existencia actual y el backend en `InventarioController.ConfirmarCargaInicial` sumaba de nuevo esa cantidad a `prod.Existencia`, provocando la duplicación progresiva del inventario en cada verificación matutina.
+- **Decisión:** Se incorporó el parámetro `EsEntradaMercancia` en `ConfirmarCargaInicialRequestDto`.
+  - Cuando `EsEntradaMercancia == false` (valor por omisión en la revisión matutina de carga): se genera el movimiento de auditoría tipo `"CargaMatutinaVerificada"` sin incrementar las existencias de los productos.
+  - Solo cuando `EsEntradaMercancia == true` (recepción de compras de almacén o surtido formal con nota): se incrementa físicamente `prod.Existencia`.
+- **Restricción:** Ninguna pantalla de checklist diario debe sumar stock como si fuera una compra.

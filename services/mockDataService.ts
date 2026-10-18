@@ -6,6 +6,9 @@ import type {
   CategoriaItem,
   RevisionItem,
   CorteTrabajador,
+  PreviewImportacionResponse,
+  ConfirmarImportacionRequest,
+  ConfirmarImportacionResponse,
 } from '@/types';
 import { bitacora, empleados, initialProductos, initialClientes } from '@/constants/mockData';
 
@@ -72,7 +75,7 @@ export function saveClientesToStorage() {
 // ==========================================
 // 1. PRODUCTOS CON PRESENTACIONES Y CONVERSIONES
 // ==========================================
-export const mockProductos: Producto[] = getProductosIniciales();
+export let mockProductos: Producto[] = getProductosIniciales();
 saveProductosToStorage();
 
 export let mockCategorias: CategoriaItem[] = [];
@@ -311,14 +314,16 @@ export const DataService = {
         marca: prodData.marca || 'Genérica',
         categoria: prodData.categoria || 'Abarrotes',
         unidad: prodData.unidad || 'pieza',
-        precioBase: prodData.precioBase || 100,
-        precioCompra: prodData.precioCompra || 70,
-        existencia: prodData.existencia || 10,
+        precioBase: prodData.precioBase !== undefined ? prodData.precioBase : 100,
+        precioCompra: prodData.precioCompra !== undefined ? prodData.precioCompra : 70,
+        existencia: prodData.existencia !== undefined ? prodData.existencia : 0,
         precioPorPeso: prodData.precioPorPeso ?? false,
         sku: prodData.sku || `SKU-${Date.now().toString().slice(-4)}`,
-        codigoBarras: prodData.codigoBarras || `750${Date.now().toString().slice(-9)}`,
+        codigoBarras: prodData.codigoBarras || '',
         favorito: false,
         activo: true,
+        estadoConfiguracion: prodData.estadoConfiguracion || 'Completo',
+        codigoOrigen: prodData.codigoOrigen,
         presentaciones: prodData.presentaciones || [
           {
             tipo: 'pieza',
@@ -799,16 +804,57 @@ export const DataService = {
     }
   },
 
-  confirmarCargaInicial: async (req: { empleadoId: string; ubicacionDestino: string; lotes: { productoId: string; piezas: number }[] }) => {
+  confirmarCargaInicial: async (req: {
+    empleadoId: string;
+    ubicacionDestino: string;
+    esEntradaMercancia?: boolean;
+    lotes: { productoId: string; piezas: number }[];
+  }) => {
     try {
       return await apiService.confirmarCargaInicial(req);
     } catch {
       return {
-        message: 'Carga inicial confirmada localmente',
+        message: req.esEntradaMercancia
+          ? 'Entrada confirmada localmente'
+          : 'Verificación matutina confirmada localmente (sin duplicar existencias)',
         piezasCargadas: req.lotes.reduce((s, l) => s + l.piezas, 0),
+        esEntradaMercancia: req.esEntradaMercancia,
         ubicacion: req.ubicacionDestino,
       };
     }
+  },
+
+  // ==========================================
+  // Importación de Catálogo CSV (Fase Real)
+  // ==========================================
+  getArchivoDemoCsv: async (): Promise<{ nombreArchivo: string; contenidoCsv: string }> => {
+    return await apiService.getArchivoDemoCsv();
+  },
+
+  previewImportacionProductos: async (req: {
+    nombreArchivo: string;
+    contenidoCsv: string;
+  }): Promise<PreviewImportacionResponse> => {
+    // Requiere conexión real con API y SQL Server - propagar error si está offline
+    return await apiService.previewImportacionProductos(req);
+  },
+
+  confirmarImportacionProductos: async (
+    req: ConfirmarImportacionRequest
+  ): Promise<ConfirmarImportacionResponse> => {
+    // Requiere conexión real y persistencia en SQL Server
+    const response = await apiService.confirmarImportacionProductos(req);
+    // Tras confirmar exitosamente en SQL Server, refrescar catálogo local desde la API
+    try {
+      const refreshed = await apiService.getProductos();
+      if (refreshed && refreshed.length > 0) {
+        mockProductos = refreshed;
+        saveProductosToStorage();
+      }
+    } catch {
+      // Ignorar fallo de recarga secundaria
+    }
+    return response;
   },
 
   // ==========================================
