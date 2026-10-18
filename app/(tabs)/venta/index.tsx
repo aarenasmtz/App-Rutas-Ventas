@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  Pressable,
   Platform,
   Alert,
 } from 'react-native';
@@ -17,137 +16,158 @@ import {
   ShoppingCart,
   ChevronRight,
   Clock,
-  Flame,
   User,
   Check,
   X,
-  Layers,
   Package,
-  Boxes,
-  LayoutGrid,
-  List,
   Star,
-  Sparkles,
   Plus,
+  Minus,
+  SlidersHorizontal,
+  ArrowUpToLine,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
   Store,
+  UserPlus,
+  ArrowLeft,
+  Flame,
+  Sparkles,
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import {
-  mockProductos,
-  mockCategorias,
-  mockClientes,
-  DataService,
-} from '@/services/mockDataService';
+import { DataService } from '@/services/mockDataService';
 import { useApp } from '@/context/AppContext';
-import { Card, ConnectivityIndicator } from '@/components/shared';
-import { formatCurrency, getStockEstado } from '@/utils/helpers';
-import { getPrecioPresentacion, desglosarInventario } from '@/utils/multipresentacion';
+import { ConnectivityIndicator } from '@/components/shared';
+import { formatCurrency } from '@/utils/helpers';
+import { getPrecioPresentacion } from '@/utils/multipresentacion';
 import type { Producto, Cliente, ItemCarrito, PresentacionConfig } from '@/types';
 
-// Helper para detectar productos que se venden por kilo (Carnes frías, quesos, embutidos)
-export function isProductoPorKilo(p: Producto): boolean {
-  // Los productos multipresentación o por paquete NUNCA se venden por kilo
-  if (p.manejaMultiplesPresentaciones === true) return false;
-  if (p.unidad?.toLowerCase() === 'paquete') return false;
-  if (p.precioPorPeso === false) return false;
-  if (p.precioPorPeso === true) return true;
-  if (p.unidad?.toLowerCase() === 'kg' || p.unidad?.toLowerCase() === 'kilo') return true;
-
-  const cat = (p.categoria || '').toLowerCase();
-  const kiloCategorias = [
-    'jamón',
-    'jamon',
-    'salchicha',
-    'chorizo',
-    'carnes frías',
-    'carnes frias',
-  ];
-  if (kiloCategorias.includes(cat)) return true;
-  const nom = (p.nombre || '').toLowerCase();
-  if (
-    nom.includes('jamón') ||
-    nom.includes('jamon') ||
-    nom.includes('salchicha') ||
-    nom.includes('chorizo') ||
-    nom.includes('tocino') ||
-    nom.includes('pepperoni')
-  ) {
-    return true;
-  }
-  return false;
+// Helper para normalizar texto (sin acentos, minúsculas)
+function normalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 }
+
+// Cliente predeterminado para venta rápida de mostrador
+const CLIENTE_GENERAL: Cliente = {
+  id: 'general',
+  nombre: 'Venta de Mostrador / General',
+  propietario: 'Cliente General',
+  direccion: 'Venta directa en ruta',
+  ruta: 'Ruta General',
+  diasVisita: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
+  saldo: 0,
+  limiteCredito: 0,
+  estado: 'Pendiente',
+  ultimaVisita: '',
+  telefono: '',
+  activo: true,
+  distanciaMock: '0m',
+  historial: [],
+  sugerido: [],
+};
 
 export default function VentaScreen() {
   const router = useRouter();
   const {
     carrito,
     addToCarrito,
+    updateCarritoItem,
+    removeFromCarrito,
+    clearCarrito,
     clienteActivoId,
     setClienteActivoId,
+    user,
   } = useApp();
 
-  const [search, setSearch] = useState('');
-  const [categoriaActiva, setCategoriaActiva] = useState('Todas');
-  const [showQtyModal, setShowQtyModal] = useState<Producto | null>(null);
-  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
-  const [clientSearch, setClientSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'mosaico' | 'lista'>('mosaico');
+  const userId = user?.id || 'default';
 
-  const handleOpenQtyModal = (p: Producto) => {
-    if (p.estadoConfiguracion === 'Pendiente') {
-      Alert.alert(
-        'Producto pendiente de configuración',
-        `"${p.nombre}" proviene del catálogo importado y está marcado como pendiente de configuración.\n\n` +
-          `Debes ingresar a Más > Catálogo de Productos y confirmar su unidad de venta (pieza, paquete o kg) antes de poder venderlo.`
-      );
-      return;
-    }
-    setShowQtyModal(p);
-  };
-
-  // Estados de datos vivos (VPS / fallback local)
+  // Datos del catálogo
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
   const [productosList, setProductosList] = useState<Producto[]>([]);
   const [categoriasList, setCategoriasList] = useState<any[]>([]);
 
-  useEffect(() => {
-    let mounted = true;
-    const loadLiveData = async () => {
-      try {
-        const [cls, prs, cats] = await Promise.all([
-          DataService.getClientes(),
-          DataService.getProductos(),
-          DataService.getCategorias(),
-        ]);
-        if (mounted) {
-          setClientesList(cls ?? []);
-          setProductosList(prs ?? []);
-          setCategoriasList(cats ?? []);
-        }
-      } catch (err) {
-        console.warn('Error loading live data in VentaScreen:', err);
-      }
-    };
-    loadLiveData();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // Búsqueda y filtros
+  const [productSearch, setProductSearch] = useState('');
+  const [categoriaActiva, setCategoriaActiva] = useState('Todas');
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | 'favoritos' | 'frecuentes'>('todos');
+  const [ordenModo, setOrdenModo] = useState<'mi_orden' | 'az'>('mi_orden');
 
-  useEffect(() => {
-    if (isClientModalOpen) {
-      DataService.getClientes().then((cls) => {
-        if (cls && Array.isArray(cls)) {
-          setClientesList(cls);
-        }
-      });
+  // Cliente selección y búsqueda
+  const [clientSearch, setClientSearch] = useState('');
+  const [isChangingClient, setIsChangingClient] = useState(false);
+  const [showNuevoClienteModal, setShowNuevoClienteModal] = useState(false);
+
+  // Formulario nuevo cliente
+  const [nuevoNombre, setNuevoNombre] = useState('');
+  const [nuevoPropietario, setNuevoPropietario] = useState('');
+  const [nuevoTelefono, setNuevoTelefono] = useState('');
+  const [nuevaDireccion, setNuevaDireccion] = useState('');
+
+  // Modales interactivos de producto
+  const [selectedMultiProd, setSelectedMultiProd] = useState<Producto | null>(null);
+  const [qtyPromptItem, setQtyPromptItem] = useState<{
+    producto: Producto;
+    currentQty: number;
+    cartIndex: number;
+    presentacion?: PresentacionConfig;
+  } | null>(null);
+  const [manualQtyInput, setManualQtyInput] = useState('');
+
+  // Modo Ordenar Personalizado (Spotify)
+  const [isOrderingMode, setIsOrderingMode] = useState(false);
+  const [draftOrderIds, setDraftOrderIds] = useState<string[]>([]);
+
+  // Favoritos y orden persistido
+  const [favoritoIds, setFavoritoIds] = useState<Set<string>>(new Set());
+  const [savedOrderIds, setSavedOrderIds] = useState<string[]>([]);
+  const [frecuenciaMap, setFrecuenciaMap] = useState<Record<string, number>>({});
+
+  // Cargar datos
+  const reloadData = useCallback(async () => {
+    try {
+      const [cls, prs, cats] = await Promise.all([
+        DataService.getClientes(),
+        DataService.getProductos(),
+        DataService.getCategorias(),
+      ]);
+      setClientesList(cls || []);
+      setProductosList(prs || []);
+      setCategoriasList(cats || []);
+
+      const favs = DataService.getFavoritos(userId);
+      setFavoritoIds(new Set(favs));
+
+      const ord = DataService.getOrdenPersonalizado(userId);
+      setSavedOrderIds(ord);
+
+      const pref = DataService.getSortPreference(userId);
+      if (pref === 'az') setOrdenModo('az');
+      else setOrdenModo('mi_orden');
+
+      const frecs = DataService.getFrecuenciaVentas(30);
+      setFrecuenciaMap(frecs);
+    } catch (err) {
+      console.warn('Error loading sale data:', err);
     }
-  }, [isClientModalOpen]);
+  }, [userId]);
 
-  const effectiveClientes = clientesList;
-  const effectiveProductos = productosList;
+  useEffect(() => {
+    reloadData();
+  }, [reloadData]);
 
-  // Lista unificada de categorías
+  // Cliente activo
+  const cliente = useMemo(() => {
+    if (!clienteActivoId) return null;
+    if (clienteActivoId === 'general') return CLIENTE_GENERAL;
+    return clientesList.find((c) => String(c.id) === String(clienteActivoId)) || null;
+  }, [clienteActivoId, clientesList]);
+
+  // Lista de categorías
   const categorias = useMemo(() => {
     const defaultCats = [
       'Todas',
@@ -157,7 +177,6 @@ export default function VentaScreen() {
       'Quesos',
       'Carnes frías',
       'Abarrotes',
-      'Enlatados',
       'Mantequillas',
       'Mayonesas',
     ];
@@ -168,235 +187,603 @@ export default function VentaScreen() {
     return defaultCats;
   }, [categoriasList]);
 
-  // Cliente activo
-  const cliente = useMemo(() => {
-    if (!clienteActivoId) return null;
-    return (
-      effectiveClientes.find((c) => c.id === clienteActivoId) ||
-
-      null
-    );
-  }, [effectiveClientes, clienteActivoId]);
-
-  // Ranking dinámico de productos más vendidos / sugeridos por cliente
-  const sugeridosData = useMemo(() => {
-    const stats: Record<string, { count: number; totalQty: number; avgQty: number }> = {};
-
-    if (cliente) {
-      if (cliente.historial && cliente.historial.length > 0) {
-        cliente.historial.forEach((v) => {
-          if (v.items) {
-            v.items.forEach((it) => {
-              const prod = effectiveProductos.find(
-                (p) => p.nombre.toLowerCase().trim() === it.productoNombre.toLowerCase().trim()
-              );
-              const key = prod ? prod.id : it.productoNombre;
-              if (!stats[key]) stats[key] = { count: 0, totalQty: 0, avgQty: 0 };
-              stats[key].count += 1;
-              stats[key].totalQty += it.cantidad || 1;
-            });
-          }
-        });
-      }
-
-      if (cliente.sugerido && cliente.sugerido.length > 0) {
-        cliente.sugerido.forEach((s) => {
-          if (!stats[s.productoId]) {
-            stats[s.productoId] = { count: 3, totalQty: s.cantidad || 2, avgQty: s.cantidad || 2 };
-          } else {
-            stats[s.productoId].count += 2;
-            stats[s.productoId].totalQty += s.cantidad || 1;
-          }
-        });
-      }
-    }
-
-    Object.keys(stats).forEach((k) => {
-      const st = stats[k];
-      st.avgQty = Math.max(1, Math.round(st.totalQty / st.count));
+  // Clientes filtrados para la selección
+  const filteredClients = useMemo(() => {
+    const q = normalizeText(clientSearch);
+    if (!q) return clientesList;
+    return clientesList.filter((c) => {
+      const matchNom = normalizeText(c.nombre).includes(q);
+      const matchProp = normalizeText(c.propietario || '').includes(q);
+      const matchTel = normalizeText(c.telefono || '').includes(q);
+      const matchDir = normalizeText(c.direccion || '').includes(q);
+      return matchNom || matchProp || matchTel || matchDir;
     });
+  }, [clientSearch, clientesList]);
 
-    const resultado = Object.entries(stats)
-      .sort((a, b) => b[1].count - a[1].count || b[1].totalQty - a[1].totalQty)
-      .map(([idOrName, st]) => {
-        const prod = effectiveProductos.find(
-          (p) => p.id === idOrName || p.nombre.toLowerCase().trim() === idOrName.toLowerCase().trim()
-        );
-        if (!prod) return null;
-        return {
-          producto: prod,
-          cantidadSugerida: st.avgQty,
-          frecuencia: st.count,
-          esTopCliente: true,
-          esSugeridoGeneral: false,
-        };
-      })
-      .filter(Boolean) as {
-        producto: Producto;
-        cantidadSugerida: number;
-        frecuencia: number;
-        esTopCliente: boolean;
-        esSugeridoGeneral: boolean;
-      }[];
+  // Obtener precio de producto para el cliente activo
+  const getProductPrice = useCallback(
+    (p: Producto, pres?: PresentacionConfig): number => {
+      if (pres) {
+        return getPrecioPresentacion(p, pres, cliente);
+      }
+      if (cliente?.precioEspecial?.[p.id]) {
+        return cliente.precioEspecial[p.id];
+      }
+      return p.precioBase;
+    },
+    [cliente]
+  );
 
-    if (resultado.length === 0 && effectiveProductos.length > 0) {
-      return effectiveProductos.slice(0, 4).map((p) => ({
-        producto: p,
-        cantidadSugerida: isProductoPorKilo(p) ? 1 : 2,
-        frecuencia: 1,
-        esTopCliente: false,
-        esSugeridoGeneral: true,
-      }));
+  // Recalcular precios en carrito si el cliente cambia
+  const handleSelectClient = (selected: Cliente) => {
+    setClienteActivoId(selected.id);
+    setIsChangingClient(false);
+
+    // Si ya hay productos en carrito, actualizar precios especiales según el nuevo cliente
+    if (carrito.length > 0) {
+      carrito.forEach((item, idx) => {
+        const nuevoPrecio = getProductPrice(item.producto, item.presentacion);
+        if (nuevoPrecio !== item.precioFinal) {
+          updateCarritoItem(idx, {
+            ...item,
+            precioLista: nuevoPrecio,
+            precioFinal: nuevoPrecio,
+            subtotal: Math.round(item.cantidad * nuevoPrecio * 100) / 100,
+          });
+        }
+      });
     }
-
-    return resultado;
-  }, [cliente, effectiveProductos]);
-
-  const sugeridosMap = useMemo(() => {
-    const map = new Map<string, {
-      producto: Producto;
-      cantidadSugerida: number;
-      frecuencia: number;
-      esTopCliente: boolean;
-      esSugeridoGeneral: boolean;
-    }>();
-    sugeridosData.forEach((s) => map.set(s.producto.id, s));
-    return map;
-  }, [sugeridosData]);
-
-  // Productos frecuentes del cliente seleccionado
-  const productosFrecuentes = useMemo(() => {
-    if (!cliente || !cliente.sugerido) return [];
-    return cliente.sugerido
-      .map((s) => effectiveProductos.find((p) => p.id === s.productoId))
-      .filter(Boolean) as Producto[];
-  }, [cliente, effectiveProductos]);
-
-  // Filtrado de productos por texto y categoría
-  const filtered = useMemo(() => {
-    return effectiveProductos.filter((p) => {
-      const q = search.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        p.nombre.toLowerCase().includes(q) ||
-        p.categoria.toLowerCase().includes(q) ||
-        p.marca?.toLowerCase().includes(q) ||
-        p.sku?.toLowerCase().includes(q);
-
-      const matchCat =
-        categoriaActiva === 'Todas' ||
-        p.categoria.toLowerCase() === categoriaActiva.toLowerCase();
-
-      return matchSearch && matchCat;
-    });
-  }, [effectiveProductos, search, categoriaActiva]);
-
-  // Totales de carrito
-  const cartTotal = carrito.reduce((s, i) => s + i.subtotal, 0);
-  const cartCount = carrito.length;
-
-  // Precio final según cliente (respeta precios especiales pactados por Don Juan / Miguel)
-  const getPrecio = (producto: Producto): number => {
-    if (cliente?.precioEspecial?.[producto.id]) {
-      return cliente.precioEspecial[producto.id];
-    }
-    return producto.precioBase;
   };
 
-  // Agregar al carrito según el flujo de venta rápida de Miguel y soporte multipresentación
-  const handleAddProduct = (producto: Producto, cantidad: number, presentacion?: PresentacionConfig) => {
+  // Crear nuevo cliente rápido
+  const handleGuardarNuevoCliente = async () => {
+    if (!nuevoNombre.trim()) {
+      Alert.alert('Datos incompletos', 'Ingresa el nombre del negocio o cliente.');
+      return;
+    }
+    try {
+      const nuevo = await DataService.createCliente({
+        nombre: nuevoNombre.trim(),
+        propietario: nuevoPropietario.trim() || nuevoNombre.trim(),
+        telefono: nuevoTelefono.trim() || 'Sin teléfono',
+        direccion: nuevaDireccion.trim() || 'Ruta local',
+        ruta: user?.rutaNombre || 'Ruta Centro',
+        limiteCredito: 3000,
+      });
+
+      setShowNuevoClienteModal(false);
+      setNuevoNombre('');
+      setNuevoPropietario('');
+      setNuevoTelefono('');
+      setNuevaDireccion('');
+
+      // Recargar y seleccionar cliente inmediatamente
+      setClientesList((prev) => [nuevo, ...prev]);
+      handleSelectClient(nuevo);
+    } catch {
+      Alert.alert('Error', 'No se pudo registrar el cliente.');
+    }
+  };
+
+  // Toggle Favorito (Sólo cambia la estrella, no altera el carrito ni el orden)
+  const handleToggleFavorito = (pId: string) => {
+    const updatedList = DataService.toggleFavorito(pId, userId);
+    setFavoritoIds(new Set(updatedList));
+  };
+
+  // Apertura del modo Ordenar
+  const handleOpenOrderingMode = () => {
+    // Tomar catálogo completo ordenado actualmente
+    const baseList = [...productosList];
+    const orderMap = new Map<string, number>();
+    savedOrderIds.forEach((id, idx) => orderMap.set(id, idx));
+
+    baseList.sort((a, b) => {
+      const posA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
+      const posB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
+      return posA - posB;
+    });
+
+    setDraftOrderIds(baseList.map((p) => p.id));
+    setIsOrderingMode(true);
+  };
+
+  // Guardar nuevo orden personalizado
+  const handleSaveOrder = () => {
+    DataService.saveOrdenPersonalizado(draftOrderIds, userId);
+    setSavedOrderIds(draftOrderIds);
+    setOrdenModo('mi_orden');
+    DataService.saveSortPreference('mi_orden', userId);
+    setIsOrderingMode(false);
+  };
+
+  // Mover producto en la lista draft
+  const moveDraftItem = (index: number, direction: 'up' | 'down' | 'top') => {
+    if (direction === 'top') {
+      if (index === 0) return;
+      const copy = [...draftOrderIds];
+      const [item] = copy.splice(index, 1);
+      copy.unshift(item);
+      setDraftOrderIds(copy);
+      return;
+    }
+
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= draftOrderIds.length) return;
+
+    const copy = [...draftOrderIds];
+    const temp = copy[index];
+    copy[index] = copy[targetIdx];
+    copy[targetIdx] = temp;
+    setDraftOrderIds(copy);
+  };
+
+  // Filtro y ordenamiento del catálogo en pantalla
+  const displayProducts = useMemo(() => {
+    let prods = [...productosList];
+
+    // 1. Filtrar por categoría
+    if (categoriaActiva !== 'Todas') {
+      prods = prods.filter(
+        (p) => p.categoria?.toLowerCase() === categoriaActiva.toLowerCase()
+      );
+    }
+
+    // 2. Filtrar por texto de búsqueda
+    const q = normalizeText(productSearch);
+    if (q) {
+      prods = prods.filter((p) => {
+        return (
+          normalizeText(p.nombre).includes(q) ||
+          normalizeText(p.categoria || '').includes(q) ||
+          normalizeText(p.marca || '').includes(q) ||
+          normalizeText(p.sku || '').includes(q)
+        );
+      });
+    }
+
+    // 3. Filtrar por pestaña: Todos / Favoritos / Frecuentes
+    if (filtroTipo === 'favoritos') {
+      prods = prods.filter((p) => favoritoIds.has(p.id));
+    } else if (filtroTipo === 'frecuentes') {
+      // Mostrar productos que tienen frecuencia de venta
+      prods = prods.filter((p) => (frecuenciaMap[p.id] || 0) > 0);
+    }
+
+    // 4. Ordenamiento
+    if (filtroTipo === 'frecuentes') {
+      // Ordenar por número de ventas confirmadas en últimos 30 días descendente
+      prods.sort((a, b) => (frecuenciaMap[b.id] || 0) - (frecuenciaMap[a.id] || 0));
+    } else if (ordenModo === 'az') {
+      prods.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    } else {
+      // "Mi orden" personalizado de Miguel
+      const orderMap = new Map<string, number>();
+      savedOrderIds.forEach((id, idx) => orderMap.set(id, idx));
+
+      prods.sort((a, b) => {
+        const posA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999;
+        const posB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999;
+        if (posA === posB) return a.nombre.localeCompare(b.nombre);
+        return posA - posB;
+      });
+    }
+
+    return prods;
+  }, [
+    productosList,
+    categoriaActiva,
+    productSearch,
+    filtroTipo,
+    ordenModo,
+    favoritoIds,
+    savedOrderIds,
+    frecuenciaMap,
+  ]);
+
+  // Encontrar item en carrito para un producto
+  const getCartInfoForProduct = useCallback(
+    (pId: string) => {
+      const items = carrito.filter((i) => i.producto.id === pId);
+      const totalQty = items.reduce((s, i) => s + i.cantidad, 0);
+      const firstIndex = carrito.findIndex((i) => i.producto.id === pId);
+      return { inCart: totalQty > 0, totalQty, firstIndex, item: items[0] };
+    },
+    [carrito]
+  );
+
+  // Agregar 1 unidad de producto con presentación única
+  const handleAddSingleQuick = (producto: Producto) => {
     if (producto.estadoConfiguracion === 'Pendiente') {
       Alert.alert(
         'Producto pendiente de configuración',
-        `"${producto.nombre}" está pendiente de configuración. Confirma su unidad y presentación en Catálogo antes de venderlo.`
+        `"${producto.nombre}" está marcado como pendiente de configuración.\n\n` +
+          `Confirma su unidad y presentación en el Catálogo antes de venderlo.`
       );
       return;
     }
 
-    const isMultipres = Boolean(producto.manejaMultiplesPresentaciones || (producto.presentaciones && producto.presentaciones.length > 1));
-    const isWeight = !isMultipres && isProductoPorKilo(producto);
-    const pres = presentacion || (producto.presentaciones && producto.presentaciones.length > 0 ? producto.presentaciones[0] : undefined);
-    const precioUnitario = pres ? getPrecioPresentacion(producto, pres, cliente) : getPrecio(producto);
+    const { inCart, firstIndex, item } = getCartInfoForProduct(producto.id);
+
+    // Si ya está en carrito, incrementar en 1
+    if (inCart && firstIndex >= 0 && item) {
+      const newQty = item.cantidad + 1;
+      const factor = item.presentacion?.piezasEquivalentes || 1;
+      const unidadesRequeridas = newQty * factor;
+
+      if (producto.existencia !== undefined && unidadesRequeridas > producto.existencia) {
+        Alert.alert(
+          'Inventario insuficiente',
+          `Disponible en camioneta: ${producto.existencia} ${producto.unidad || 'unidad'}(s).\n` +
+            `Ya tienes ${item.cantidad} en carrito.`
+        );
+        return;
+      }
+
+      updateCarritoItem(firstIndex, {
+        ...item,
+        cantidad: newQty,
+        piezasTotales: unidadesRequeridas,
+        subtotal: Math.round(newQty * item.precioFinal * 100) / 100,
+      });
+      return;
+    }
+
+    // Agregar nuevo al carrito
+    const pres =
+      producto.presentaciones && producto.presentaciones.length > 0
+        ? producto.presentaciones[0]
+        : undefined;
     const factor = pres?.piezasEquivalentes || 1;
-    const unidadesBase = isWeight ? cantidad : Math.round(cantidad * factor);
+    const precio = getProductPrice(producto, pres);
 
-    // Validación preventiva de inventario disponible en camioneta (Req. 14 / AUD-002)
-    const yaEnCarrito = carrito
-      .filter((i) => i.producto.id === producto.id)
-      .reduce((s, i) => s + (i.piezasTotales || i.cantidad * (i.factorConversion || 1)), 0);
-
-    const requeridasTotales = yaEnCarrito + unidadesBase;
-
-    if (producto.existencia !== undefined && requeridasTotales > producto.existencia) {
-      const disponible = Math.max(0, producto.existencia - yaEnCarrito);
-      const unidadStr = producto.unidad || 'unidad';
+    if (producto.existencia !== undefined && factor > producto.existencia) {
       Alert.alert(
         'Inventario insuficiente',
-        `No hay suficiente stock en camioneta para "${producto.nombre}".\n\n` +
-          `Disponible en camioneta: ${disponible} ${unidadStr}(s)\n` +
-          `Solicitado en esta selección: ${unidadesBase} ${unidadStr}(s)` +
-          (yaEnCarrito > 0 ? `\n(Ya agregaste ${yaEnCarrito} ${unidadStr}(s) previamente al carrito)` : '')
+        `No hay suficiente stock en camioneta para "${producto.nombre}".\n` +
+          `Disponible: ${producto.existencia} ${producto.unidad || 'unidad'}(s).`
       );
       return;
     }
 
-    const subtotal = Math.round(cantidad * precioUnitario * 100) / 100;
-
-    const item: ItemCarrito = {
-      producto: {
-        ...producto,
-        unidad: isWeight ? 'kg' : (producto.unidad || 'pieza'),
-        precioPorPeso: isWeight,
-      },
-      cantidad,
-      unidad: pres ? pres.tipo : (isWeight ? 'kg' : producto.unidad || 'pieza'),
+    const cartItem: ItemCarrito = {
+      producto,
+      cantidad: 1,
+      unidad: pres ? pres.tipo : producto.unidad || 'pieza',
       presentacion: pres,
       presentacionNombre: pres?.nombre,
       factorConversion: factor,
-      piezasTotales: unidadesBase,
-      precioLista: precioUnitario,
+      piezasTotales: factor,
+      precioLista: precio,
       descuento: 0,
-      precioFinal: precioUnitario,
-      subtotal,
+      precioFinal: precio,
+      subtotal: precio,
     };
 
-    addToCarrito(item);
-    setShowQtyModal(null);
+    addToCarrito(cartItem);
   };
 
-  return (
-    <View style={styles.container}>
-      {/* ========================================================= */}
-      {/* ENCABEZADO DE VENTA                                       */}
-      {/* ========================================================= */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.title}>Nueva venta</Text>
-            {cliente ? (
+  // Decrementar producto desde la tarjeta
+  const handleDecrementProduct = (producto: Producto) => {
+    const { inCart, firstIndex, item } = getCartInfoForProduct(producto.id);
+    if (!inCart || firstIndex < 0 || !item) return;
+
+    if (item.cantidad <= 1) {
+      removeFromCarrito(firstIndex);
+    } else {
+      const newQty = item.cantidad - 1;
+      const factor = item.presentacion?.piezasEquivalentes || 1;
+      updateCarritoItem(firstIndex, {
+        ...item,
+        cantidad: newQty,
+        piezasTotales: newQty * factor,
+        subtotal: Math.round(newQty * item.precioFinal * 100) / 100,
+      });
+    }
+  };
+
+  // Confirmar cantidad manual escrita
+  const handleConfirmManualQty = () => {
+    if (!qtyPromptItem) return;
+    const val = parseFloat(manualQtyInput);
+    if (isNaN(val) || val <= 0) {
+      if (qtyPromptItem.cartIndex >= 0) {
+        removeFromCarrito(qtyPromptItem.cartIndex);
+      }
+      setQtyPromptItem(null);
+      return;
+    }
+
+    const { producto, presentacion, cartIndex } = qtyPromptItem;
+    const factor = presentacion?.piezasEquivalentes || 1;
+    const unidadesBase = Math.round(val * factor);
+
+    if (producto.existencia !== undefined && unidadesBase > producto.existencia) {
+      Alert.alert(
+        'Inventario insuficiente',
+        `Disponible en camioneta: ${producto.existencia} ${producto.unidad || 'unidad'}(s).\n` +
+          `Solicitado: ${unidadesBase}.`
+      );
+      return;
+    }
+
+    const precio = getProductPrice(producto, presentacion);
+    const subtotal = Math.round(val * precio * 100) / 100;
+
+    if (cartIndex >= 0) {
+      updateCarritoItem(cartIndex, {
+        ...carrito[cartIndex],
+        cantidad: val,
+        piezasTotales: unidadesBase,
+        subtotal,
+      });
+    } else {
+      addToCarrito({
+        producto,
+        cantidad: val,
+        unidad: presentacion ? presentacion.tipo : producto.unidad || 'pieza',
+        presentacion,
+        presentacionNombre: presentacion?.nombre,
+        factorConversion: factor,
+        piezasTotales: unidadesBase,
+        precioLista: precio,
+        descuento: 0,
+        precioFinal: precio,
+        subtotal,
+      });
+    }
+
+    setQtyPromptItem(null);
+  };
+
+  // Totales de la barra inferior
+  const cartTotal = carrito.reduce((s, i) => s + i.subtotal, 0);
+  const cartCount = carrito.length;
+  const totalPiezas = carrito.reduce((s, i) => s + (i.piezasTotales || i.cantidad), 0);
+
+  // ====================================================================
+  // VISTA 1: SELECCIÓN DE CLIENTE (Si no hay cliente activo)
+  // ====================================================================
+  if (!cliente || isChangingClient) {
+    return (
+      <View style={styles.container}>
+        {/* Cabecera selección cliente */}
+        <View style={styles.clientPickHeader}>
+          <View style={styles.clientPickTopRow}>
+            {isChangingClient && (
               <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setIsClientModalOpen(true)}
-                style={styles.clientSelectorRow}
+                onPress={() => setIsChangingClient(false)}
+                style={styles.backBtn}
               >
-                <Text style={styles.subtitle}>
-                  Cliente: <Text style={styles.clientNameHighlight}>{cliente.nombre}</Text>
-                </Text>
-                <ChevronRight size={14} color={colors.primary[600]} />
+                <ArrowLeft size={20} color={colors.neutral[800]} />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setIsClientModalOpen(true)}
-                style={styles.clientSelectorRow}
-              >
-                <Text style={[styles.subtitle, { color: colors.warning[700], fontWeight: '600' }]}>
-                  ⚠️ Toca para seleccionar cliente
-                </Text>
-                <ChevronRight size={14} color={colors.warning[700]} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clientPickTitle}>
+                {isChangingClient ? 'Cambiar cliente' : 'Selecciona un cliente'}
+              </Text>
+              <Text style={styles.clientPickSubtitle}>
+                Elige el cliente para iniciar la nota de venta
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setShowNuevoClienteModal(true)}
+              style={styles.nuevoClienteHeaderBtn}
+            >
+              <UserPlus size={16} color={colors.primary[700]} />
+              <Text style={styles.nuevoClienteHeaderText}>+ Nuevo</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Buscador de clientes */}
+          <View style={styles.searchWrap}>
+            <Search size={18} color={colors.neutral[400]} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar por nombre, negocio o teléfono..."
+              placeholderTextColor={colors.neutral[400]}
+              value={clientSearch}
+              onChangeText={setClientSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {clientSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setClientSearch('')}>
+                <X size={16} color={colors.neutral[400]} />
               </TouchableOpacity>
             )}
           </View>
+        </View>
+
+        {/* Notificación de venta pendiente en curso */}
+        {carrito.length > 0 && !isChangingClient && (
+          <View style={styles.pendingSaleBanner}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pendingSaleTitle}>Venta pendiente en curso</Text>
+              <Text style={styles.pendingSaleSub}>
+                {carrito.length} productos agregados ({formatCurrency(cartTotal)})
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => clearCarrito()}
+              style={styles.pendingSaleDiscardBtn}
+            >
+              <Text style={styles.pendingSaleDiscardText}>Descartar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ScrollView
+          style={styles.clientListScroll}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Opción rápida: Venta de Mostrador */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => handleSelectClient(CLIENTE_GENERAL)}
+            style={[styles.clientCardGeneral, shadows.card]}
+          >
+            <View style={styles.clientGeneralIconWrap}>
+              <Store size={22} color={colors.neutral[0]} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.clientGeneralName}>Venta de Mostrador / General</Text>
+              <Text style={styles.clientGeneralSub}>Sin cuenta corriente · Pago inmediato</Text>
+            </View>
+            <ChevronRight size={18} color={colors.primary[600]} />
+          </TouchableOpacity>
+
+          <Text style={styles.clientSectionLabel}>Clientes de la Ruta ({filteredClients.length})</Text>
+
+          {filteredClients.map((c) => {
+            const hasSaldo = (c.saldo || 0) > 0;
+            return (
+              <TouchableOpacity
+                key={c.id}
+                activeOpacity={0.7}
+                onPress={() => handleSelectClient(c)}
+                style={[styles.clientCard, shadows.card]}
+              >
+                <View style={styles.clientAvatarWrap}>
+                  <User size={18} color={colors.primary[700]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.clientItemName} numberOfLines={1}>
+                    {c.nombre}
+                  </Text>
+                  <Text style={styles.clientItemDetail} numberOfLines={1}>
+                    {c.propietario ? `${c.propietario} · ` : ''}
+                    {c.telefono ? `${c.telefono} · ` : ''}
+                    {c.direccion || 'Ruta'}
+                  </Text>
+                </View>
+                <View style={styles.clientItemRight}>
+                  {hasSaldo ? (
+                    <Text style={styles.clientSaldoDue}>Saldo: {formatCurrency(c.saldo)}</Text>
+                  ) : (
+                    <Text style={styles.clientSaldoOk}>Al corriente</Text>
+                  )}
+                  <ChevronRight size={16} color={colors.neutral[400]} />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          {filteredClients.length === 0 && (
+            <View style={styles.emptyClientsWrap}>
+              <Text style={styles.emptyClientsText}>
+                No se encontraron clientes para "{clientSearch}".
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowNuevoClienteModal(true)}
+                style={styles.emptyClientsAddBtn}
+              >
+                <Text style={styles.emptyClientsAddBtnText}>+ Registrar a este cliente</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Modal Registrar Nuevo Cliente */}
+        <Modal
+          visible={showNuevoClienteModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowNuevoClienteModal(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Registrar Nuevo Cliente</Text>
+                <TouchableOpacity onPress={() => setShowNuevoClienteModal(false)}>
+                  <X size={20} color={colors.neutral[500]} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>Nombre del Negocio / Tienda *</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Ej. Abarrotes La Lupita"
+                  value={nuevoNombre}
+                  onChangeText={setNuevoNombre}
+                />
+              </View>
+
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>Propietario / Encargado</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Ej. Doña María López"
+                  value={nuevoPropietario}
+                  onChangeText={setNuevoPropietario}
+                />
+              </View>
+
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>Teléfono</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Ej. 477 123 4567"
+                  value={nuevoTelefono}
+                  onChangeText={setNuevoTelefono}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.formField}>
+                <Text style={styles.formLabel}>Dirección / Ubicación</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Ej. Calle Hidalgo #45, Col. Centro"
+                  value={nuevaDireccion}
+                  onChangeText={setNuevaDireccion}
+                />
+              </View>
+
+              <View style={styles.modalActionsRow}>
+                <TouchableOpacity
+                  onPress={() => setShowNuevoClienteModal(false)}
+                  style={styles.modalCancelBtn}
+                >
+                  <Text style={styles.modalCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleGuardarNuevoCliente}
+                  style={styles.modalSubmitBtn}
+                >
+                  <Text style={styles.modalSubmitText}>Guardar y Elegir</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  // ====================================================================
+  // VISTA 2: MOSAICO DE PRODUCTOS Y VENTA
+  // ====================================================================
+  return (
+    <View style={styles.container}>
+      {/* 1. ENCABEZADO SUPERIOR CON CLIENTE */}
+      <View style={styles.catalogHeader}>
+        <View style={styles.catalogTopRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setIsChangingClient(true)}
+            style={styles.clientSelectedBadge}
+          >
+            <User size={15} color={colors.primary[700]} />
+            <Text style={styles.clientSelectedName} numberOfLines={1}>
+              {cliente.nombre}
+            </Text>
+            <Text style={styles.clientSelectedChangeBtn}>Cambiar</Text>
+          </TouchableOpacity>
+
           <ConnectivityIndicator />
         </View>
 
@@ -407,20 +794,18 @@ export default function VentaScreen() {
             style={styles.searchInput}
             placeholder="Buscar producto..."
             placeholderTextColor={colors.neutral[400]}
-            value={search}
-            onChangeText={setSearch}
+            value={productSearch}
+            onChangeText={setProductSearch}
           />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
+          {productSearch.length > 0 && (
+            <TouchableOpacity onPress={() => setProductSearch('')}>
               <X size={16} color={colors.neutral[400]} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Categorías deslizables */}
-        <View style={styles.controlsBar}>
-          <ScrollView
-            style={{ flex: 1 }}
+        <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.catsRow}
@@ -442,781 +827,554 @@ export default function VentaScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
-          <View style={styles.viewModeToggle}>
+
+        {/* Barra de Filtros: Todos · Favoritos · Frecuentes + Botón Ordenar */}
+        <View style={styles.filterTabsRow}>
+          <View style={styles.filterTabsWrap}>
             <TouchableOpacity
-              style={[styles.viewModeBtn, viewMode === 'mosaico' && styles.viewModeBtnActive]}
-              onPress={() => setViewMode('mosaico')}
+              onPress={() => setFiltroTipo('todos')}
+              style={[styles.filterTab, filtroTipo === 'todos' && styles.filterTabActive]}
             >
-              <LayoutGrid size={15} color={viewMode === 'mosaico' ? colors.primary[700] : colors.neutral[500]} />
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filtroTipo === 'todos' && styles.filterTabTextActive,
+                ]}
+              >
+                Todos
+              </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.viewModeBtn, viewMode === 'lista' && styles.viewModeBtnActive]}
-              onPress={() => setViewMode('lista')}
+              onPress={() => setFiltroTipo('favoritos')}
+              style={[styles.filterTab, filtroTipo === 'favoritos' && styles.filterTabActive]}
             >
-              <List size={15} color={viewMode === 'lista' ? colors.primary[700] : colors.neutral[500]} />
+              <Star
+                size={13}
+                color={filtroTipo === 'favoritos' ? '#B45309' : colors.neutral[500]}
+                fill={filtroTipo === 'favoritos' ? '#F59E0B' : 'transparent'}
+              />
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filtroTipo === 'favoritos' && styles.filterTabTextActive,
+                ]}
+              >
+                Favoritos
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setFiltroTipo('frecuentes')}
+              style={[styles.filterTab, filtroTipo === 'frecuentes' && styles.filterTabActive]}
+            >
+              <Flame
+                size={13}
+                color={filtroTipo === 'frecuentes' ? colors.warning[600] : colors.neutral[500]}
+              />
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filtroTipo === 'frecuentes' && styles.filterTabTextActive,
+                ]}
+              >
+                Frecuentes
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Botón Ordenar (Spotify-style) */}
+          <View style={styles.sortControlsWrap}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                const nextModo = ordenModo === 'mi_orden' ? 'az' : 'mi_orden';
+                setOrdenModo(nextModo);
+                DataService.saveSortPreference(nextModo, userId);
+              }}
+              style={styles.sortModeBtn}
+            >
+              <Text style={styles.sortModeBtnText}>
+                {ordenModo === 'mi_orden' ? 'Mi orden' : 'A-Z'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleOpenOrderingMode}
+              style={styles.ordenarBtn}
+              accessibilityLabel="Personalizar orden de productos"
+            >
+              <SlidersHorizontal size={14} color={colors.primary[700]} />
+              <Text style={styles.ordenarBtnText}>Ordenar</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
 
-      {/* ========================================================= */}
-      {/* LISTADO DE PRODUCTOS                                      */}
-      {/* ========================================================= */}
+      {/* 2. MOSAICO DE PRODUCTOS (2 Columnas) */}
       <ScrollView
-        style={styles.list}
+        style={styles.gridScroll}
+        contentContainerStyle={styles.gridScrollContent}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 110 }}
       >
-        {/* Banner para seleccionar cliente si no hay uno activo */}
-        {!cliente && (
-          <TouchableOpacity
-            activeOpacity={0.88}
-            style={styles.selectClientBanner}
-            onPress={() => setIsClientModalOpen(true)}
-          >
-            <View style={styles.selectClientIconCircle}>
-              <User size={22} color={colors.primary[600]} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.selectClientTitle}>Seleccionar Cliente de Ruta</Text>
-              <Text style={styles.selectClientSub}>
-                Toca aquí para asignar cliente o realizar venta de mostrador
-              </Text>
-            </View>
-            <View style={styles.selectClientActionBadge}>
-              <Text style={styles.selectClientActionText}>Elegir</Text>
-              <ChevronRight size={14} color={colors.primary[700]} />
-            </View>
-          </TouchableOpacity>
-        )}
+        <View style={styles.gridContainer}>
+          {displayProducts.map((p) => {
+            const isFav = favoritoIds.has(p.id);
+            const { inCart, totalQty, firstIndex, item } = getCartInfoForProduct(p.id);
+            const hasMultiplePres = Boolean(
+              p.manejaMultiplesPresentaciones || (p.presentaciones && p.presentaciones.length > 1)
+            );
+            const presDefault = p.presentaciones?.[0];
+            const price = getProductPrice(p, presDefault);
+            const isPendingConfig = p.estadoConfiguracion === 'Pendiente';
+            const unitLabel = presDefault ? presDefault.nombre : p.unidad || 'pieza';
 
-        {/* Sección de Venta Sugerida (Top Productos del cliente / ruta) */}
-        {sugeridosData.length > 0 && !search && categoriaActiva === 'Todas' && (
-          <View style={styles.sugeridaSection}>
-            <View style={styles.sugeridaHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Sparkles size={16} color={colors.warning[600]} />
-                <Text style={styles.sugeridaTitle}>
-                  {cliente ? `Venta Sugerida · ${cliente.nombre}` : 'Venta Sugerida (Top Productos)'}
-                </Text>
-              </View>
-              <View style={styles.sugeridaBadge}>
-                <Text style={styles.sugeridaBadgeText}>
-                  {cliente && cliente.historial?.length ? 'Top más comprados' : 'Más vendidos'}
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sugeridaScroll}
-            >
-              {sugeridosData.map((sug) => {
-                const isWeight = isProductoPorKilo(sug.producto);
-                const presBase = sug.producto.presentaciones?.[0];
-                const precio = presBase ? getPrecioPresentacion(sug.producto, presBase, cliente) : getPrecio(sug.producto);
-                const displayUnit = isWeight ? 'kg' : (sug.producto.unidad || 'pza');
-
-                return (
-                  <View key={'sug-' + sug.producto.id} style={styles.sugeridaCard}>
-                    <View style={styles.sugeridaCardTop}>
-                      <View style={styles.sugeridaStarBadge}>
-                        <Star size={11} color="#B45309" fill="#F59E0B" />
-                        <Text style={styles.sugeridaStarText}>
-                          {sug.esTopCliente ? 'Top Cliente' : 'Top Ruta'}
-                        </Text>
-                      </View>
-                      <Text style={styles.sugeridaCardPrice}>{formatCurrency(precio)}</Text>
-                    </View>
-
-                    <Text style={styles.sugeridaCardName} numberOfLines={2}>
-                      {sug.producto.nombre}
+            return (
+              <View
+                key={p.id}
+                style={[
+                  styles.productCard,
+                  inCart && styles.productCardActive,
+                  isPendingConfig && styles.productCardDisabled,
+                  shadows.card,
+                ]}
+              >
+                {/* Fila superior: Unidad/Presentación + Estrella Favorito */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.unitBadge}>
+                    <Text style={styles.unitBadgeText} numberOfLines={1}>
+                      {unitLabel}
                     </Text>
+                  </View>
 
-                    <Text style={styles.sugeridaCardQty}>
-                      Sugerido: <Text style={{ fontWeight: '700', color: colors.neutral[900] }}>
-                        {sug.cantidadSugerida} {displayUnit}{sug.cantidadSugerida === 1 ? '' : 's'}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={() => handleToggleFavorito(p.id)}
+                    style={styles.starTouchArea}
+                    accessibilityLabel={isFav ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                  >
+                    <Star
+                      size={18}
+                      color={isFav ? '#F59E0B' : colors.neutral[300]}
+                      fill={isFav ? '#F59E0B' : 'transparent'}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Nombre del producto */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  disabled={isPendingConfig}
+                  onPress={() => {
+                    if (hasMultiplePres) {
+                      setSelectedMultiProd(p);
+                    } else {
+                      handleAddSingleQuick(p);
+                    }
+                  }}
+                  style={styles.cardContentTouch}
+                >
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {p.nombre}
+                  </Text>
+
+                  {/* Precio y Disponibilidad */}
+                  <View style={styles.priceRow}>
+                    <Text style={styles.productPrice}>{formatCurrency(price)}</Text>
+                    {isPendingConfig ? (
+                      <Text style={styles.pendingBadge}>⚠️ Pendiente</Text>
+                    ) : (
+                      <Text style={styles.stockText}>
+                        Disp: {p.existencia !== undefined ? p.existencia : 0}
                       </Text>
-                    </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
 
+                {/* Controles de Acción Inferior */}
+                <View style={styles.cardBottomRow}>
+                  {isPendingConfig ? (
+                    <View style={styles.disabledActionWrap}>
+                      <Text style={styles.disabledActionText}>Requiere config.</Text>
+                    </View>
+                  ) : hasMultiplePres && !inCart ? (
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      style={styles.sugeridaAddBtn}
-                      onPress={() => handleAddProduct(sug.producto, sug.cantidadSugerida)}
+                      onPress={() => setSelectedMultiProd(p)}
+                      style={styles.multiPresBtn}
                     >
-                      <Plus size={13} color="#FFFFFF" strokeWidth={3} />
-                      <Text style={styles.sugeridaAddBtnText}>
-                        + Agregar {sug.cantidadSugerida}
-                      </Text>
+                      <Text style={styles.multiPresBtnText}>Presentaciones</Text>
+                      <ChevronRight size={13} color={colors.primary[700]} />
                     </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-        {false && (
-          <>
-            <View style={styles.sectionLabelRow}>
-              <Flame size={15} color={colors.warning[600]} />
-              <Text style={styles.sectionLabel}>Frecuentes del cliente</Text>
-            </View>
-            {productosFrecuentes.map((p) => (
-              <ProductRow
-                key={'freq-' + p.id}
-                producto={p}
-                precio={getPrecio(p)}
-                cliente={cliente}
-                onPress={() => setShowQtyModal(p)}
-              />
-            ))}
-          </>
-        )}
+                  ) : inCart ? (
+                    /* Stepper interactivo directo en tarjeta */
+                    <View style={styles.stepperContainer}>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => handleDecrementProduct(p)}
+                        style={styles.stepperBtn}
+                      >
+                        <Minus size={15} color={colors.primary[700]} strokeWidth={2.8} />
+                      </TouchableOpacity>
 
-        {/* Catálogo completo */}
-        <View style={styles.sectionLabelRow}>
-          <Clock size={15} color={colors.neutral[400]} />
-          <Text style={styles.sectionLabel}>
-            {categoriaActiva === 'Todas' ? 'Catálogo de Productos' : categoriaActiva} ({filtered.length})
-          </Text>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setQtyPromptItem({
+                            producto: p,
+                            currentQty: totalQty,
+                            cartIndex: firstIndex,
+                            presentacion: item?.presentacion,
+                          });
+                          setManualQtyInput(totalQty.toString());
+                        }}
+                        style={styles.stepperQtyTouch}
+                      >
+                        <Text style={styles.stepperQtyText}>{totalQty}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => handleAddSingleQuick(p)}
+                        style={styles.stepperBtn}
+                      >
+                        <Plus size={15} color={colors.primary[700]} strokeWidth={2.8} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    /* Botón simple de un toque para agregar */
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handleAddSingleQuick(p)}
+                      style={styles.addSingleBtn}
+                    >
+                      <Plus size={14} color={colors.neutral[0]} strokeWidth={3} />
+                      <Text style={styles.addSingleBtnText}>Agregar</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })}
         </View>
-        {viewMode === 'mosaico' ? (
-          <View style={styles.mosaicGrid}>
-            {filtered.map((p) => (
-              <ProductGridCard
-                key={p.id}
-                producto={p}
-                precio={getPrecio(p)}
-                cliente={cliente}
-                sugerido={sugeridosMap.get(p.id)}
-                onPress={() => handleOpenQtyModal(p)}
-              />
-            ))}
-          </View>
-        ) : (
-          filtered.map((p) => (
-            <ProductRow
-              key={p.id}
-              producto={p}
-              precio={getPrecio(p)}
-              cliente={cliente}
-              sugerido={sugeridosMap.get(p.id)}
-              onPress={() => handleOpenQtyModal(p)}
-            />
-          ))
-        )}
-        {/*
-          <ProductRow
-            key={p.id}
-            producto={p}
-            precio={getPrecio(p)}
-            cliente={cliente}
-            onPress={() => setShowQtyModal(p)}
-          />
-        */}
 
-        {filtered.length === 0 && (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>No se encontraron productos.</Text>
+        {displayProducts.length === 0 && (
+          <View style={styles.emptyGridWrap}>
+            <Text style={styles.emptyGridText}>No se encontraron productos en esta vista.</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* ========================================================= */}
-      {/* BARRA FLOTANTE DE CARRITO (CUANDO HAY ARTÍCULOS)          */}
-      {/* ========================================================= */}
+      {/* 3. BARRA FLOTANTE INFERIOR DE VENTA */}
       {cartCount > 0 && (
-        <TouchableOpacity
-          activeOpacity={0.92}
-          onPress={() => router.push('/(tabs)/venta/carrito')}
-          style={styles.cartBar}
-        >
-          <View style={styles.cartBarLeft}>
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
+        <View style={[styles.bottomSaleBar, shadows.floating]}>
+          <View style={styles.bottomSaleInfo}>
+            <View style={styles.bottomCartBadge}>
+              <ShoppingCart size={15} color={colors.neutral[0]} />
+              <Text style={styles.bottomCartBadgeText}>{cartCount}</Text>
             </View>
-            <Text style={styles.cartBarText}>
-              {cartCount} {cartCount === 1 ? 'producto' : 'productos'}
-            </Text>
-          </View>
-          <View style={styles.cartBarRight}>
-            <Text style={styles.cartBarTotal}>{formatCurrency(cartTotal)}</Text>
-            <View style={styles.cartBarBtn}>
-              <Text style={styles.cartBarBtnText}>Ver carrito</Text>
-              <ChevronRight size={18} color={colors.neutral[0]} />
+            <View>
+              <Text style={styles.bottomCartTotalLabel}>Total a cobrar</Text>
+              <Text style={styles.bottomCartTotalAmount}>{formatCurrency(cartTotal)}</Text>
             </View>
           </View>
-        </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push('/(tabs)/venta/carrito')}
+            style={styles.revisarBtn}
+          >
+            <Text style={styles.revisarBtnText}>Revisar ({totalPiezas})</Text>
+            <ChevronRight size={18} color={colors.neutral[0]} strokeWidth={2.6} />
+          </TouchableOpacity>
+        </View>
       )}
 
-      {/* ========================================================= */}
-      {/* MODAL DE CANTIDAD (FLUJO RÁPIDO EXACTO DE MIGUEL)         */}
-      {/* ========================================================= */}
-      {showQtyModal && (
-        <QtyModal
-          producto={showQtyModal}
-          precio={getPrecio(showQtyModal)}
-          cliente={cliente}
-          onClose={() => setShowQtyModal(null)}
-          onConfirm={handleAddProduct}
-        />
-      )}
-
-      {/* ========================================================= */}
-      {/* MODAL PARA CAMBIAR CLIENTE ACTIVO                         */}
-      {/* ========================================================= */}
+      {/* MODAL 1: SELECTOR DE PRESENTACIONES (Queso Castel, etc.) */}
       <Modal
-        visible={isClientModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsClientModalOpen(false)}
+        visible={!!selectedMultiProd}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSelectedMultiProd(null)}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setIsClientModalOpen(false)}
-          />
-          <View style={styles.clientPickerCard}>
-            <View style={styles.clientPickerHeaderRow}>
-              <Text style={styles.clientPickerTitle}>Seleccionar cliente</Text>
-              <TouchableOpacity
-                onPress={() => setIsClientModalOpen(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <X size={18} color={colors.neutral[500]} />
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {selectedMultiProd?.nombre}
+                </Text>
+                <Text style={styles.modalSub}>Selecciona la presentación a vender</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedMultiProd(null)}>
+                <X size={20} color={colors.neutral[500]} />
               </TouchableOpacity>
             </View>
 
-            {/* Buscador de Clientes */}
-            <View style={styles.clientSearchWrap}>
-              <Search size={16} color={colors.neutral[400]} />
-              <TextInput
-                style={styles.clientSearchInput}
-                placeholder="Buscar cliente, dueño, calle o ID..."
-                placeholderTextColor={colors.neutral[400]}
-                value={clientSearch}
-                onChangeText={setClientSearch}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {clientSearch.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setClientSearch('')}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <X size={14} color={colors.neutral[400]} />
-                </TouchableOpacity>
-              )}
-            </View>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {selectedMultiProd?.presentaciones?.map((pres) => {
+                const precio = getProductPrice(selectedMultiProd, pres);
+                const factor = pres.piezasEquivalentes || 1;
+                return (
+                  <TouchableOpacity
+                    key={pres.tipo + pres.nombre}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (!selectedMultiProd) return;
+                      // Validar inventario
+                      if (
+                        selectedMultiProd.existencia !== undefined &&
+                        factor > selectedMultiProd.existencia
+                      ) {
+                        Alert.alert(
+                          'Stock insuficiente',
+                          `Solo hay ${selectedMultiProd.existencia} unidades base en camioneta.`
+                        );
+                        return;
+                      }
 
-            {/* Opción Venta Mostrador */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[
-                styles.clientGeneralBtn,
-                clienteActivoId === 'general' && styles.clientGeneralBtnActive,
-              ]}
-              onPress={() => {
-                setClienteActivoId('general');
-                setIsClientModalOpen(false);
-              }}
-            >
-              <View style={styles.clientGeneralIcon}>
-                <Store size={18} color={colors.primary[700]} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.clientGeneralTitle}>Venta de Mostrador / General</Text>
-                <Text style={styles.clientGeneralSub}>Sin cuenta de crédito · Pago de contado</Text>
-              </View>
-              {clienteActivoId === 'general' && <Check size={18} color={colors.primary[600]} />}
-            </TouchableOpacity>
-
-            <ScrollView style={{ maxHeight: 350 }} keyboardShouldPersistTaps="handled">
-              {effectiveClientes
-                .filter((c) => {
-                  if (c.activo === false) return false;
-                  if (!clientSearch.trim()) return true;
-                  const q = clientSearch.toLowerCase().trim();
-                  const matchNombre = (c.nombre || '').toLowerCase().includes(q);
-                  const matchProp = (c.propietario || '').toLowerCase().includes(q);
-                  const matchDir = (c.direccion || '').toLowerCase().includes(q);
-                  const matchCol = (c.colonia || '').toLowerCase().includes(q);
-                  const matchRuta = (c.ruta || '').toLowerCase().includes(q);
-                  const matchId = String(c.id || '').toLowerCase().includes(q);
-                  return matchNombre || matchProp || matchDir || matchCol || matchRuta || matchId;
-                })
-                .map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[
-                    styles.clientItem,
-                    cliente?.id === c.id && styles.clientItemActive,
-                  ]}
-                  onPress={() => {
-                    setClienteActivoId(c.id);
-                    setIsClientModalOpen(false);
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.clientItemName}>{c.nombre}</Text>
-                    <Text style={styles.clientItemSub}>
-                      {c.propietario || 'Cliente de ruta'} · {c.direccion || c.colonia || 'León, Gto'}
-                    </Text>
-                  </View>
-                  {cliente?.id === c.id && <Check size={18} color={colors.primary[600]} />}
-                </TouchableOpacity>
-              ))}
+                      addToCarrito({
+                        producto: selectedMultiProd,
+                        cantidad: 1,
+                        unidad: pres.tipo,
+                        presentacion: pres,
+                        presentacionNombre: pres.nombre,
+                        factorConversion: factor,
+                        piezasTotales: factor,
+                        precioLista: precio,
+                        descuento: 0,
+                        precioFinal: precio,
+                        subtotal: precio,
+                      });
+                      setSelectedMultiProd(null);
+                    }}
+                    style={styles.presOptionRow}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.presOptionName}>{pres.nombre}</Text>
+                      <Text style={styles.presOptionSub}>
+                        Equivale a {factor} unidad{factor === 1 ? '' : 'es'}
+                      </Text>
+                    </View>
+                    <Text style={styles.presOptionPrice}>{formatCurrency(precio)}</Text>
+                    <View style={styles.presAddBadge}>
+                      <Plus size={14} color={colors.primary[700]} strokeWidth={2.8} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 2: INGRESO MANUAL DE CANTIDAD RÁPIDA */}
+      <Modal
+        visible={!!qtyPromptItem}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setQtyPromptItem(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 320 }]}>
+            <Text style={styles.modalTitle}>Capturar cantidad</Text>
+            <Text style={styles.modalSub}>{qtyPromptItem?.producto.nombre}</Text>
+
+            <TextInput
+              style={styles.manualQtyInput}
+              keyboardType="numeric"
+              value={manualQtyInput}
+              onChangeText={setManualQtyInput}
+              autoFocus={true}
+              selectTextOnFocus={true}
+            />
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                onPress={() => setQtyPromptItem(null)}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmManualQty}
+                style={styles.modalSubmitBtn}
+              >
+                <Text style={styles.modalSubmitText}>Aplicar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 3: ORDEN PERSONALIZADO ESTILO SPOTIFY */}
+      <Modal
+        visible={isOrderingMode}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setIsOrderingMode(false)}
+      >
+        <View style={styles.orderScreenContainer}>
+          {/* Header Ordenar */}
+          <View style={styles.orderScreenHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.orderScreenTitle}>Mi Orden Personalizado</Text>
+              <Text style={styles.orderScreenSub}>
+                Acomoda los productos en la posición exacta que desees
+              </Text>
+            </View>
+
+            <View style={styles.orderHeaderActions}>
+              <TouchableOpacity
+                onPress={() => setIsOrderingMode(false)}
+                style={styles.orderCancelBtn}
+              >
+                <Text style={styles.orderCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSaveOrder} style={styles.orderSaveBtn}>
+                <Text style={styles.orderSaveText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Lista de productos para reordenar */}
+          <ScrollView
+            style={styles.orderListScroll}
+            contentContainerStyle={{ paddingBottom: 60 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {draftOrderIds.map((pId, idx) => {
+              const prod = productosList.find((p) => p.id === pId);
+              if (!prod) return null;
+              const isFav = favoritoIds.has(prod.id);
+
+              return (
+                <View key={prod.id} style={styles.orderItemRow}>
+                  <View style={styles.orderIndexBadge}>
+                    <Text style={styles.orderIndexText}>#{idx + 1}</Text>
+                  </View>
+
+                  <GripVertical size={18} color={colors.neutral[400]} />
+
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.orderItemName} numberOfLines={1}>
+                      {prod.nombre}
+                    </Text>
+                    <Text style={styles.orderItemSub}>
+                      {prod.categoria} · {formatCurrency(prod.precioBase)}
+                    </Text>
+                  </View>
+
+                  {isFav && <Star size={14} color="#F59E0B" fill="#F59E0B" />}
+
+                  {/* Acciones de reordenamiento */}
+                  <View style={styles.orderButtonsRow}>
+                    <TouchableOpacity
+                      onPress={() => moveDraftItem(idx, 'top')}
+                      disabled={idx === 0}
+                      style={[styles.orderActionBtn, idx === 0 && styles.orderActionDisabled]}
+                      accessibilityLabel="Mover al inicio"
+                    >
+                      <ArrowUpToLine
+                        size={15}
+                        color={idx === 0 ? colors.neutral[300] : colors.primary[700]}
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => moveDraftItem(idx, 'up')}
+                      disabled={idx === 0}
+                      style={[styles.orderActionBtn, idx === 0 && styles.orderActionDisabled]}
+                      accessibilityLabel="Subir una posición"
+                    >
+                      <ChevronUp
+                        size={16}
+                        color={idx === 0 ? colors.neutral[300] : colors.primary[700]}
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => moveDraftItem(idx, 'down')}
+                      disabled={idx === draftOrderIds.length - 1}
+                      style={[
+                        styles.orderActionBtn,
+                        idx === draftOrderIds.length - 1 && styles.orderActionDisabled,
+                      ]}
+                      accessibilityLabel="Bajar una posición"
+                    >
+                      <ChevronDown
+                        size={16}
+                        color={
+                          idx === draftOrderIds.length - 1
+                            ? colors.neutral[300]
+                            : colors.primary[700]
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
       </Modal>
     </View>
   );
 }
 
-// =========================================================
-// FILA DE PRODUCTO INDIVIDUAL
-// =========================================================
-function ProductRow({
-  producto,
-  precio,
-  cliente,
-  sugerido,
-  onPress,
-}: {
-  producto: Producto;
-  precio: number;
-  cliente: Cliente | null;
-  sugerido?: { cantidadSugerida: number; frecuencia: number; esTopCliente: boolean };
-  onPress: () => void;
-}) {
-  const isMultipres = Boolean(
-    producto.manejaMultiplesPresentaciones ||
-    (producto.presentaciones && producto.presentaciones.length > 1)
-  );
-  const isWeight = !isMultipres && isProductoPorKilo(producto);
-  const stockEstado = getStockEstado(producto.existencia, isWeight);
-  const stockColor =
-    stockEstado === 'Normal'
-      ? colors.success[600]
-      : stockEstado === 'Bajo'
-      ? colors.warning[600]
-      : colors.error[500];
-
-  const displayUnit = isWeight ? 'kg' : producto.unidad || 'pieza';
-
-  const presBase = producto.presentaciones && producto.presentaciones.length > 0
-    ? producto.presentaciones[0]
-    : null;
-  const precioMostrar = presBase ? getPrecioPresentacion(producto, presBase, cliente) : precio;
-
-  return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
-      <Card style={styles.productCard}>
-        <View style={styles.productIcon}>
-          {isMultipres ? (
-            <Boxes size={22} color={colors.primary[600]} />
-          ) : (
-            <Text style={styles.productIconText}>
-              {producto.categoria ? producto.categoria.charAt(0).toUpperCase() : 'P'}
-            </Text>
-          )}
-        </View>
-        <View style={styles.productInfo}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <Text style={styles.productName}>{producto.nombre}</Text>
-            {sugerido && (
-              <View style={styles.rowSugeridoBadge}>
-                <Star size={10} color="#B45309" fill="#F59E0B" />
-                <Text style={styles.rowSugeridoBadgeText}>
-                  {sugerido.esTopCliente ? 'Top Cliente' : 'Sugerido'}
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
-            <Text style={styles.productCat}>{producto.categoria}</Text>
-            {isMultipres && (
-              <View style={styles.multipresBadge}>
-                <Layers size={10} color={colors.primary[700]} />
-                <Text style={styles.multipresBadgeText}>
-                  {producto.presentaciones?.length || 3} presentaciones
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.productMeta}>
-            <Text style={styles.productStock}>
-              <Text style={{ color: stockColor, fontWeight: fontWeight.semibold }}>
-                {isWeight ? producto.existencia.toFixed(1) : producto.existencia} {displayUnit}s
-              </Text>
-              {' · '}
-              <Text style={{ color: stockColor }}>{stockEstado}</Text>
-            </Text>
-          </View>
-        </View>
-        <View style={styles.productRight}>
-          <Text style={styles.productPrice}>{formatCurrency(precioMostrar)}</Text>
-          <Text style={styles.productUnit}>/{presBase?.nombre || displayUnit}</Text>
-        </View>
-      </Card>
-    </TouchableOpacity>
-  );
-}
-
-// =========================================================
-// TARJETA DE PRODUCTO EN MOSAICO (DISEÑO EN CUADRÍCULA)
-// =========================================================
-function ProductGridCard({
-  producto,
-  precio,
-  cliente,
-  sugerido,
-  onPress,
-}: {
-  producto: Producto;
-  precio: number;
-  cliente: Cliente | null;
-  sugerido?: { cantidadSugerida: number; frecuencia: number; esTopCliente: boolean };
-  onPress: () => void;
-}) {
-  const isMultipres = Boolean(
-    producto.manejaMultiplesPresentaciones ||
-    (producto.presentaciones && producto.presentaciones.length > 1)
-  );
-  const isWeight = !isMultipres && isProductoPorKilo(producto);
-  const stockEstado = getStockEstado(producto.existencia, isWeight);
-  const stockColor =
-    stockEstado === 'Normal'
-      ? colors.success[600]
-      : stockEstado === 'Bajo'
-      ? colors.warning[600]
-      : colors.error[500];
-
-  const displayUnit = isWeight ? 'kg' : producto.unidad || 'pza';
-  const presBase = producto.presentaciones && producto.presentaciones.length > 0
-    ? producto.presentaciones[0]
-    : null;
-  const precioMostrar = presBase ? getPrecioPresentacion(producto, presBase, cliente) : precio;
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.88}
-      onPress={onPress}
-      style={[styles.gridCard, sugerido && styles.gridCardSugerido]}
-    >
-      {sugerido && (
-        <View style={styles.gridSugeridoBadge}>
-          <Star size={10} color="#B45309" fill="#F59E0B" />
-          <Text style={styles.gridSugeridoBadgeText}>
-            {sugerido.esTopCliente ? 'Top Cliente' : 'Sugerido'}
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.gridTopMeta}>
-        <Text style={styles.gridCatText} numberOfLines={1}>
-          {producto.marca || producto.categoria}
-        </Text>
-        {isMultipres && (
-          <View style={styles.gridMultiBadge}>
-            <Layers size={9} color={colors.primary[700]} />
-            <Text style={styles.gridMultiBadgeText}>Multi</Text>
-          </View>
-        )}
-      </View>
-
-      <Text style={styles.gridNameText} numberOfLines={2}>
-        {producto.nombre}
-      </Text>
-
-      <View style={styles.gridStockRow}>
-        <View style={[styles.gridStockDot, { backgroundColor: stockColor }]} />
-        <Text style={[styles.gridStockText, { color: stockColor }]}>
-          {isWeight ? producto.existencia.toFixed(1) : producto.existencia} {displayUnit}s
-        </Text>
-      </View>
-
-      <View style={styles.gridBottomRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.gridPriceVal}>{formatCurrency(precioMostrar)}</Text>
-          <Text style={styles.gridPriceUnit}>/{presBase?.nombre || displayUnit}</Text>
-        </View>
-        <View style={styles.gridAddBtn}>
-          <Plus size={14} color="#FFFFFF" strokeWidth={2.5} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// =========================================================
-// MODAL DE VENTA DE MIGUEL (SOPORTE MULTIPRESENTACIÓN REAL)
-// =========================================================
-function QtyModal({
-  producto,
-  precio,
-  cliente,
-  onClose,
-  onConfirm,
-}: {
-  producto: Producto;
-  precio: number;
-  cliente: Cliente | null;
-  onClose: () => void;
-  onConfirm: (p: Producto, c: number, pres?: PresentacionConfig) => void;
-}) {
-  const isMultipres = Boolean(
-    producto.manejaMultiplesPresentaciones ||
-    (producto.presentaciones && producto.presentaciones.length > 1)
-  );
-  const isWeight = !isMultipres && isProductoPorKilo(producto);
-
-  // Presentaciones activas
-  const presentaciones = useMemo(() => {
-    if (producto.presentaciones && producto.presentaciones.length > 0) {
-      return [...producto.presentaciones]
-        .filter((pr) => pr.activa !== false)
-        .sort((a, b) => (a.orden || 1) - (b.orden || 1));
-    }
-    return [];
-  }, [producto.presentaciones]);
-
-  // Presentación seleccionada
-  const [selectedPres, setSelectedPres] = useState<PresentacionConfig | undefined>(
-    presentaciones.length > 0 ? presentaciones[0] : undefined
-  );
-
-  const [qty, setQty] = useState(isWeight ? 0.5 : 1);
-
-  const pesos = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5];
-  const piezas = [1, 2, 3, 5, 10, 12];
-  const opciones = isWeight ? pesos : piezas;
-
-  const displayUnit = isMultipres
-    ? (selectedPres?.nombre || selectedPres?.tipo || producto.unidad || 'paquete')
-    : (isWeight ? 'kg' : producto.unidad || 'pieza');
-
-  const precioUnitario = useMemo(() => {
-    if (isMultipres && selectedPres) {
-      return getPrecioPresentacion(producto, selectedPres, cliente);
-    }
-    return precio;
-  }, [isMultipres, selectedPres, producto, cliente, precio]);
-
-  const factor = isMultipres && selectedPres ? selectedPres.piezasEquivalentes : 1;
-  const unidadesBaseADescontar = isWeight ? qty : Math.round(qty * factor);
-  const excedeExistencia = !isWeight && unidadesBaseADescontar > producto.existencia;
-
-  const handleMinus = () => {
-    if (isWeight) {
-      setQty((q) => Math.max(0.25, Math.round((q - 0.25) * 1000) / 1000));
-    } else {
-      setQty((q) => Math.max(1, q - 1));
-    }
-  };
-
-  const handlePlus = () => {
-    if (isWeight) {
-      setQty((q) => Math.round((q + 0.25) * 1000) / 1000);
-    } else {
-      setQty((q) => q + 1);
-    }
-  };
-
-  const subtotal = Math.round(qty * precioUnitario * 100) / 100;
-
-  return (
-    <View style={modalStyles.overlay}>
-      <TouchableOpacity style={modalStyles.backdrop} onPress={onClose} activeOpacity={1} />
-      <View style={modalStyles.sheet}>
-        <View style={modalStyles.handle} />
-
-        <View style={{ marginBottom: spacing.xs }}>
-          <Text style={modalStyles.title}>{producto.nombre}</Text>
-          <Text style={modalStyles.subtitle}>
-            {formatCurrency(precioUnitario)} por {displayUnit}
-          </Text>
-        </View>
-
-        {/* Mosaico de Selección de Presentaciones */}
-        {isMultipres && presentaciones.length > 0 && (
-          <View style={{ marginBottom: spacing.sm }}>
-            <Text style={modalStyles.label}>Selecciona la presentación:</Text>
-            <View style={modalStyles.mosaicContainer}>
-              {presentaciones.map((pr) => {
-                const isSelected = selectedPres?.tipo === pr.tipo;
-                const prPrecio = getPrecioPresentacion(producto, pr, cliente);
-                return (
-                  <TouchableOpacity
-                    key={pr.tipo}
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedPres(pr)}
-                    style={[
-                      modalStyles.mosaicCard,
-                      isSelected && modalStyles.mosaicCardActive,
-                    ]}
-                  >
-                    {isSelected && (
-                      <View style={modalStyles.mosaicCheckBadge}>
-                        <Check size={10} color={colors.neutral[0]} />
-                      </View>
-                    )}
-                    <Text
-                      style={[
-                        modalStyles.mosaicTitle,
-                        isSelected && modalStyles.mosaicTitleActive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {pr.nombre.toUpperCase()}
-                    </Text>
-                    <Text style={modalStyles.mosaicPrice}>
-                      {formatCurrency(prPrecio)}
-                    </Text>
-                    <Text style={modalStyles.mosaicDeduction}>
-                      {pr.piezasEquivalentes === 1
-                        ? `1 ${producto.unidad || 'paquete'}`
-                        : `${pr.piezasEquivalentes} ${producto.unidad || 'paquete'}s`}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* Indicador de impacto en inventario unificado */}
-        <View style={modalStyles.stockDeductionBanner}>
-          <View style={{ flex: 1 }}>
-            <Text style={modalStyles.stockBannerText}>
-              Descuento de inventario:{' '}
-              <Text style={{ fontWeight: 'bold', color: colors.primary[800] }}>
-                {unidadesBaseADescontar} {producto.unidad || 'paquete'}{unidadesBaseADescontar === 1 ? '' : 's'}
-              </Text>
-            </Text>
-            <Text style={modalStyles.stockAvailText}>
-              Existencia disponible: {producto.existencia} {producto.unidad || 'paquete'}s
-            </Text>
-          </View>
-          {excedeExistencia && (
-            <Text style={modalStyles.stockWarningText}>⚠️ Stock insuficiente</Text>
-          )}
-        </View>
-
-        <Text style={modalStyles.label}>Cantidad</Text>
-
-        {/* Stepper principal */}
-        <View style={modalStyles.qtyRow}>
-          <TouchableOpacity
-            style={modalStyles.qtyBtn}
-            activeOpacity={0.7}
-            onPress={handleMinus}
-          >
-            <Text style={modalStyles.qtyBtnText}>−</Text>
-          </TouchableOpacity>
-
-          <Text style={modalStyles.qtyDisplay}>
-            {isWeight ? `${qty.toFixed(3)} kg` : `${qty} ${displayUnit}`}
-          </Text>
-
-          <TouchableOpacity
-            style={modalStyles.qtyBtn}
-            activeOpacity={0.7}
-            onPress={handlePlus}
-          >
-            <Text style={modalStyles.qtyBtnText}>+</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Opciones rápidas */}
-        <View style={modalStyles.opcionesRow}>
-          {opciones.map((o) => (
-            <TouchableOpacity
-              key={o}
-              style={[modalStyles.opcionChip, qty === o && modalStyles.opcionChipActive]}
-              onPress={() => setQty(o)}
-              activeOpacity={0.75}
-            >
-              <Text
-                style={[
-                  modalStyles.opcionText,
-                  qty === o && modalStyles.opcionTextActive,
-                ]}
-              >
-                {isWeight ? o.toFixed(3) : o}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Subtotal en tiempo real */}
-        <View style={modalStyles.totalRow}>
-          <Text style={modalStyles.totalLabel}>Subtotal</Text>
-          <Text style={modalStyles.totalValue}>{formatCurrency(subtotal)}</Text>
-        </View>
-
-        {/* Botón de confirmar */}
-        <TouchableOpacity
-          style={[modalStyles.addBtn, excedeExistencia && { backgroundColor: colors.neutral[400] }]}
-          activeOpacity={0.88}
-          disabled={excedeExistencia}
-          onPress={() => onConfirm(producto, qty, selectedPres)}
-        >
-          <ShoppingCart size={20} color={colors.neutral[0]} />
-          <Text style={modalStyles.addBtnText}>
-            {excedeExistencia ? 'Inventario insuficiente' : 'Agregar al carrito'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-// =========================================================
-// ESTILOS
-// =========================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.neutral[50],
   },
-  header: {
+
+  /* ---------------------------------------------------- */
+  /* VISTA SELECCIÓN DE CLIENTE                          */
+  /* ---------------------------------------------------- */
+  clientPickHeader: {
     backgroundColor: colors.neutral[0],
-    paddingTop: 50,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 16 : 14,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[100],
+    borderBottomColor: colors.neutral[200],
   },
-  headerTop: {
+  clientPickTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  headerTitleWrap: {
-    flex: 1,
+  backBtn: {
+    paddingRight: 10,
   },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
+  clientPickTitle: {
+    fontSize: 20,
+    fontWeight: '800',
     color: colors.neutral[900],
+    letterSpacing: -0.3,
   },
-  subtitle: {
-    fontSize: fontSize.sm,
+  clientPickSubtitle: {
+    fontSize: 12,
     color: colors.neutral[500],
     marginTop: 2,
   },
-  clientSelectorRow: {
+  nuevoClienteHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
-  clientNameHighlight: {
-    fontWeight: fontWeight.bold,
+  nuevoClienteHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.primary[700],
   },
   searchWrap: {
@@ -1224,812 +1382,730 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.neutral[100],
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 9 : 6,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.base,
+    fontSize: 14,
     color: colors.neutral[900],
   },
+  pendingSaleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.warning[50],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning[100],
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  pendingSaleTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.warning[700],
+  },
+  pendingSaleSub: {
+    fontSize: 11,
+    color: colors.warning[700],
+    marginTop: 1,
+  },
+  pendingSaleDiscardBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  pendingSaleDiscardText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.error[600],
+  },
+  clientListScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  clientCardGeneral: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: colors.primary[500],
+    marginBottom: 16,
+  },
+  clientGeneralIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  clientGeneralName: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: colors.primary[800],
+  },
+  clientGeneralSub: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  clientSectionLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    color: colors.neutral[500],
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  clientCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    marginBottom: 8,
+  },
+  clientAvatarWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  clientItemName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  clientItemDetail: {
+    fontSize: 11,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  clientItemRight: {
+    alignItems: 'flex-end',
+    marginLeft: 8,
+  },
+  clientSaldoDue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.error[600],
+  },
+  clientSaldoOk: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.success[700],
+  },
+  emptyClientsWrap: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyClientsText: {
+    fontSize: 13,
+    color: colors.neutral[500],
+    textAlign: 'center',
+  },
+  emptyClientsAddBtn: {
+    marginTop: 12,
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  emptyClientsAddBtnText: {
+    color: colors.neutral[0],
+    fontWeight: '700',
+    fontSize: 12.5,
+  },
+
+  /* ---------------------------------------------------- */
+  /* VISTA CATÁLOGO Y MOSAICO                            */
+  /* ---------------------------------------------------- */
+  catalogHeader: {
+    backgroundColor: colors.neutral[0],
+    paddingHorizontal: 14,
+    paddingTop: Platform.OS === 'ios' ? 12 : 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  catalogTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  clientSelectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    gap: 6,
+    maxWidth: '75%',
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  clientSelectedName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary[800],
+  },
+  clientSelectedChangeBtn: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary[600],
+    textDecorationLine: 'underline',
+  },
   catsRow: {
-    gap: spacing.sm,
+    paddingVertical: 6,
+    gap: 6,
   },
   catChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
   catChipActive: {
     backgroundColor: colors.primary[600],
+    borderColor: colors.primary[700],
   },
   catChipText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[600],
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.neutral[700],
   },
   catChipTextActive: {
     color: colors.neutral[0],
+    fontWeight: '700',
   },
-  list: {
-    flex: 1,
-    padding: spacing.md,
+  filterTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
   },
-  sectionLabelRow: {
+  filterTabsWrap: {
+    flexDirection: 'row',
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.full,
+    padding: 2,
+    gap: 2,
+  },
+  filterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    gap: 3,
+  },
+  filterTabActive: {
+    backgroundColor: colors.neutral[0],
+    ...shadows.card,
+  },
+  filterTabText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.neutral[600],
+  },
+  filterTabTextActive: {
+    color: colors.neutral[900],
+    fontWeight: '800',
+  },
+  sortControlsWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: spacing.sm,
-    marginTop: spacing.xs,
   },
-  sectionLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[700],
+  sortModeBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
-  productCard: {
+  sortModeBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.neutral[600],
+  },
+  ordenarBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  productIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+    gap: 4,
     backgroundColor: colors.primary[50],
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
-  productIconText: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
+  ordenarBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: colors.primary[700],
   },
-  productInfo: {
+
+  /* Grid Mosaico (2 columnas) */
+  gridScroll: {
     flex: 1,
   },
-  productName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[900],
+  gridScrollContent: {
+    padding: 10,
+    paddingBottom: 90,
   },
-  productCat: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
-    marginTop: 1,
-  },
-  productMeta: {
+  gridContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  productCard: {
+    width: '48.5%',
+    backgroundColor: colors.neutral[0],
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    justifyContent: 'space-between',
+  },
+  productCardActive: {
+    borderColor: colors.primary[600],
+    borderWidth: 1.5,
+    backgroundColor: '#F0F7FF',
+  },
+  productCardDisabled: {
+    opacity: 0.65,
+    backgroundColor: colors.neutral[50],
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  unitBadge: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    maxWidth: '75%',
+  },
+  unitBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.neutral[600],
+    textTransform: 'uppercase',
+  },
+  starTouchArea: {
+    padding: 2,
+  },
+  cardContentTouch: {
+    marginBottom: 8,
+  },
+  productName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.neutral[900],
+    lineHeight: 17,
+    minHeight: 34,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 4,
   },
-  productStock: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
-  },
-  productRight: {
-    alignItems: 'flex-end',
-  },
   productPrice: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary[700],
   },
-  productUnit: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
+  stockText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: colors.neutral[500],
   },
-  emptyWrap: {
-    padding: spacing.xl,
+  pendingBadge: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.warning[700],
+  },
+
+  /* Acciones inferiores de tarjeta */
+  cardBottomRow: {
+    marginTop: 'auto',
+  },
+  addSingleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.primary[600],
+    borderRadius: 8,
+    paddingVertical: 7,
+  },
+  addSingleBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.neutral[0],
+  },
+  multiPresBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: colors.primary[50],
+    borderRadius: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  multiPresBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary[700],
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.neutral[0],
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.primary[600],
+    overflow: 'hidden',
+  },
+  stepperBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    backgroundColor: colors.primary[50],
+  },
+  stepperQtyTouch: {
+    flex: 1.2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  stepperQtyText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: colors.primary[800],
+  },
+  disabledActionWrap: {
+    backgroundColor: colors.neutral[200],
+    borderRadius: 6,
+    paddingVertical: 6,
     alignItems: 'center',
   },
-  emptyText: {
-    fontSize: fontSize.base,
-    color: colors.neutral[400],
+  disabledActionText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.neutral[500],
   },
-  cartBar: {
+  emptyGridWrap: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    width: '100%',
+  },
+  emptyGridText: {
+    fontSize: 13,
+    color: colors.neutral[500],
+  },
+
+  /* Barra Flotante de Venta */
+  bottomSaleBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.neutral[900],
+    backgroundColor: colors.neutral[0],
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    paddingBottom: 22,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    ...shadows.floating,
   },
-  cartBarLeft: {
+  bottomSaleInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
   },
-  cartBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
+  bottomCartBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.primary[600],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cartBadgeText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
-  },
-  cartBarText: {
-    fontSize: fontSize.base,
-    color: colors.neutral[300],
-  },
-  cartBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  cartBarTotal: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
-  },
-  cartBarBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.full,
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
   },
-  cartBarBtnText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
+  bottomCartBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
     color: colors.neutral[0],
   },
-  modalOverlay: {
+  bottomCartTotalLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.neutral[500],
+    textTransform: 'uppercase',
+  },
+  bottomCartTotalAmount: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.neutral[900],
+  },
+  revisarBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  revisarBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.neutral[0],
+  },
+
+  /* Modales Genéricos */
+  modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
+    justifyContent: 'flex-end',
   },
-  clientPickerCard: {
+  modalCard: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.lg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 18,
     width: '100%',
-    maxWidth: 420,
-    ...shadows.floating,
   },
-  clientPickerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
-    marginBottom: spacing.md,
-  },
-  clientItem: {
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  modalSub: {
+    fontSize: 11.5,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  presOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[100],
   },
-  clientItemActive: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.md,
-  },
-  clientItemName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[900],
-  },
-  clientItemSub: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
-    marginTop: 2,
-  },
-  multipresBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  multipresBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: colors.primary[700],
-  },
-  cambiarBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    marginLeft: 6,
-  },
-  cambiarBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary[700],
-  },
-  controlsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  viewModeToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.neutral[100],
-    borderRadius: radius.md,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-  },
-  viewModeBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
-  },
-  viewModeBtnActive: {
-    backgroundColor: '#FFFFFF',
-    ...shadows.card,
-  },
-  selectClientBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary[50],
-    borderWidth: 1.5,
-    borderColor: colors.primary[300],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  selectClientIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  selectClientTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '800',
-    color: colors.primary[900],
-  },
-  selectClientSub: {
-    fontSize: 11,
-    color: colors.primary[700],
-    marginTop: 2,
-  },
-  selectClientActionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.primary[300],
-  },
-  selectClientActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary[800],
-  },
-  sugeridaSection: {
-    marginBottom: spacing.md,
-    backgroundColor: '#FFFBEB',
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  sugeridaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  sugeridaTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  sugeridaBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  sugeridaBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B45309',
-  },
-  sugeridaScroll: {
-    gap: spacing.sm,
-    paddingVertical: 4,
-  },
-  sugeridaCard: {
-    width: 170,
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    ...shadows.card,
-  },
-  sugeridaCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  sugeridaStarBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  sugeridaStarText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#B45309',
-  },
-  sugeridaCardPrice: {
-    fontSize: fontSize.xs,
-    fontWeight: '800',
-    color: colors.neutral[800],
-  },
-  sugeridaCardName: {
-    fontSize: fontSize.xs,
+  presOptionName: {
+    fontSize: 13.5,
     fontWeight: '700',
     color: colors.neutral[900],
-    height: 32,
-    marginBottom: 2,
   },
-  sugeridaCardQty: {
+  presOptionSub: {
     fontSize: 11,
     color: colors.neutral[500],
-    marginBottom: 6,
+    marginTop: 1,
   },
-  sugeridaAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.sm,
-    paddingVertical: 5,
-    gap: 4,
-  },
-  sugeridaAddBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  mosaicGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  gridCard: {
-    width: '48.5%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-    ...shadows.card,
-  },
-  gridCardSugerido: {
-    borderColor: '#F59E0B',
-    borderWidth: 1.5,
-    backgroundColor: '#FFFDF5',
-  },
-  gridSugeridoBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    zIndex: 1,
-  },
-  gridSugeridoBadgeText: {
-    fontSize: 9,
+  presOptionPrice: {
+    fontSize: 14,
     fontWeight: '800',
-    color: '#B45309',
-  },
-  gridTopMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-    paddingRight: 20,
-  },
-  gridCatText: {
-    fontSize: 10,
-    fontWeight: '700',
     color: colors.primary[700],
-    textTransform: 'uppercase',
+    marginRight: 10,
   },
-  gridMultiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-  gridMultiBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: colors.primary[700],
-  },
-  gridNameText: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.neutral[900],
-    height: 38,
-    marginBottom: 4,
-  },
-  gridStockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-  },
-  gridStockDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  gridStockText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  gridBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[100],
-    paddingTop: 6,
-  },
-  gridPriceVal: {
-    fontSize: fontSize.sm,
-    fontWeight: '800',
-    color: colors.neutral[900],
-  },
-  gridPriceUnit: {
-    fontSize: 10,
-    color: colors.neutral[500],
-  },
-  gridAddBtn: {
+  presAddBadge: {
     width: 28,
     height: 28,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primary[600],
+    borderRadius: 14,
+    backgroundColor: colors.primary[50],
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  rowSugeridoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radius.sm,
-    marginLeft: 4,
-  },
-  rowSugeridoBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B45309',
-  },
-  clientPickerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  clientSearchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.neutral[100],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.neutral[300],
-  },
-  clientSearchInput: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    color: colors.neutral[900],
-    paddingVertical: Platform.OS === 'web' ? 8 : 4,
-    paddingHorizontal: 4,
-    minHeight: 36,
-    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
-  },
-  clientGeneralBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.primary[200],
   },
-  clientGeneralBtnActive: {
-    borderColor: colors.primary[600],
+  manualQtyInput: {
     borderWidth: 1.5,
-  },
-  clientGeneralIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  clientGeneralTitle: {
-    fontSize: fontSize.xs + 1,
-    fontWeight: '800',
-    color: colors.primary[900],
-  },
-  clientGeneralSub: {
-    fontSize: 10,
-    color: colors.primary[700],
-    marginTop: 1,
-  },
-});
-
-const modalStyles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-end',
-    zIndex: 100,
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    maxHeight: '90%',
-  },
-  handle: {
-    width: 40,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: colors.neutral[300],
-    alignSelf: 'center',
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
+    borderColor: colors.primary[600],
+    borderRadius: 10,
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+    paddingVertical: 10,
+    marginVertical: 14,
     color: colors.neutral[900],
   },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.neutral[500],
-    marginTop: 2,
-    marginBottom: spacing.sm,
-  },
-  label: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[700],
-    marginBottom: spacing.xs + 2,
-  },
-  mosaicContainer: {
+  modalActionsRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: 2,
-    marginBottom: spacing.xs,
+    gap: 10,
+    marginTop: 12,
   },
-  mosaicCard: {
+  modalCancelBtn: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[50],
-    borderWidth: 1.5,
-    borderColor: colors.neutral[200],
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.neutral[100],
     alignItems: 'center',
-    position: 'relative',
   },
-  mosaicCardActive: {
-    backgroundColor: colors.primary[50],
-    borderColor: colors.primary[600],
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.neutral[600],
   },
-  mosaicCheckBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+  modalSubmitBtn: {
+    flex: 1.4,
+    paddingVertical: 10,
+    borderRadius: 10,
     backgroundColor: colors.primary[600],
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  mosaicTitle: {
-    fontSize: 11,
-    fontWeight: fontWeight.bold,
+  modalSubmitText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.neutral[0],
+  },
+
+  /* Formulario modal nuevo cliente */
+  formField: {
+    marginBottom: 10,
+  },
+  formLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
     color: colors.neutral[700],
-    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  mosaicTitleActive: {
-    color: colors.primary[700],
-  },
-  mosaicPrice: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
-    color: colors.primary[800],
-    marginVertical: 2,
-  },
-  mosaicDeduction: {
-    fontSize: 10,
-    color: colors.neutral[500],
-    textAlign: 'center',
-  },
-  stockDeductionBanner: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
+  formInput: {
     borderWidth: 1,
-    borderColor: colors.primary[100],
+    borderColor: colors.neutral[300],
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.neutral[900],
+    backgroundColor: colors.neutral[50],
+  },
+
+  /* Pantalla Completa Ordenar (Spotify) */
+  orderScreenContainer: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+  },
+  orderScreenHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 48 : 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  orderScreenTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.neutral[900],
+  },
+  orderScreenSub: {
+    fontSize: 11.5,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  orderHeaderActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  orderCancelBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: colors.neutral[100],
+  },
+  orderCancelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.neutral[600],
+  },
+  orderSaveBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: colors.primary[600],
+  },
+  orderSaveText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.neutral[0],
+  },
+  orderListScroll: {
+    flex: 1,
+    paddingHorizontal: 14,
+  },
+  orderItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  orderIndexBadge: {
+    width: 26,
     alignItems: 'center',
   },
-  stockBannerText: {
-    fontSize: fontSize.xs,
-    color: colors.primary[900],
-  },
-  stockAvailText: {
+  orderIndexText: {
     fontSize: 11,
+    fontWeight: '800',
+    color: colors.neutral[400],
+  },
+  orderItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  orderItemSub: {
+    fontSize: 10.5,
     color: colors.neutral[500],
     marginTop: 1,
   },
-  stockWarningText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.error[600],
-  },
-  qtyRow: {
+  orderButtonsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    marginBottom: spacing.md,
+    gap: 4,
+    marginLeft: 8,
   },
-  qtyBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+  orderActionBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qtyBtnText: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[700],
-  },
-  qtyDisplay: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
-    minWidth: 140,
-    textAlign: 'center',
-  },
-  opcionesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  opcionChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
-  },
-  opcionChipActive: {
-    backgroundColor: colors.primary[600],
-  },
-  opcionText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[600],
-  },
-  opcionTextActive: {
-    color: colors.neutral[0],
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md - 2,
-    marginBottom: spacing.md,
-  },
-  totalLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.neutral[600],
-  },
-  totalValue: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
-  },
-  addBtn: {
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  addBtnText: {
-    color: colors.neutral[0],
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
+  orderActionDisabled: {
+    opacity: 0.3,
   },
 });

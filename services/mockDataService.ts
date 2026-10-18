@@ -451,19 +451,147 @@ export const DataService = {
 
   getDashboardResumen: async (rutaId?: string) => {
     try {
-      return await apiService.getDashboardResumen(rutaId);
+      const live = await apiService.getDashboardResumen(rutaId);
+      if (live) return live;
     } catch {
-      return {
-        ventasHoy: 0,
-        cobranzaHoy: 0,
-        creditoColocadoHoy: 0,
-        efectivoEnCaja: 0,
-        clientesVisitados: 0,
-        clientesTotalRuta: 0,
-        totalPiezasVendidas: 0,
-        clienteCercano: undefined,
-      };
+      // Fallback local
     }
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('miguel_mock_ventas');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) mockVentas = parsed;
+        }
+      }
+    } catch {}
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const ventasHoyList = mockVentas.filter((v: any) => {
+      const fecha = v.fechaHora || v.fecha || '';
+      return fecha.startsWith(todayStr) && v.estado !== 'Cancelada';
+    });
+
+    const ventasHoy = ventasHoyList.reduce((s: number, v: any) => s + (v.total || 0), 0);
+    let cobranzaHoy = 0;
+    let creditoColocadoHoy = 0;
+    let piezasVendidas = 0;
+
+    ventasHoyList.forEach((v: any) => {
+      if (Array.isArray(v.pagos) && v.pagos.length > 0) {
+        v.pagos.forEach((p: any) => {
+          if (p.metodo === 'Crédito') {
+            creditoColocadoHoy += p.monto || 0;
+          } else {
+            cobranzaHoy += p.monto || 0;
+          }
+        });
+      } else {
+        cobranzaHoy += v.total || 0;
+      }
+      if (Array.isArray(v.detalles)) {
+        v.detalles.forEach((d: any) => {
+          piezasVendidas += d.piezasTotales || d.cantidadPresentaciones || d.cantidad || 0;
+        });
+      }
+    });
+
+    return {
+      ventasHoy,
+      cobranzaHoy,
+      creditoColocadoHoy,
+      efectivoEnCaja: cobranzaHoy,
+      clientesVisitados: 0,
+      clientesTotalRuta: mockClientes.filter((c) => c.activo !== false).length,
+      totalPiezasVendidas: piezasVendidas,
+      clienteCercano: undefined,
+    };
+  },
+
+  // Gestión de Favoritos por Usuario y Dispositivo
+  getFavoritos: (userId = 'default'): string[] => {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    try {
+      const saved = window.localStorage.getItem(`miguel_favoritos_${userId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  toggleFavorito: (productoId: string, userId = 'default'): string[] => {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    try {
+      const current = DataService.getFavoritos(userId);
+      const exists = current.includes(productoId);
+      const updated = exists ? current.filter((id) => id !== productoId) : [...current, productoId];
+      window.localStorage.setItem(`miguel_favoritos_${userId}`, JSON.stringify(updated));
+      return updated;
+    } catch {
+      return [];
+    }
+  },
+
+  // Gestión de Orden Personalizado ("Mi Orden" como Spotify)
+  getOrdenPersonalizado: (userId = 'default'): string[] => {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    try {
+      const saved = window.localStorage.getItem(`miguel_orden_${userId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveOrdenPersonalizado: (ordenIds: string[], userId = 'default'): void => {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(`miguel_orden_${userId}`, JSON.stringify(ordenIds));
+    } catch {}
+  },
+
+  // Preferencia de Orden Activo (mi_orden, az, frecuentes)
+  getSortPreference: (userId = 'default'): 'mi_orden' | 'az' | 'frecuentes' => {
+    if (typeof window === 'undefined' || !window.localStorage) return 'mi_orden';
+    try {
+      const saved = window.localStorage.getItem(`miguel_sort_pref_${userId}`);
+      return (saved as any) || 'mi_orden';
+    } catch {
+      return 'mi_orden';
+    }
+  },
+
+  saveSortPreference: (pref: 'mi_orden' | 'az' | 'frecuentes', userId = 'default'): void => {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(`miguel_sort_pref_${userId}`, pref);
+    } catch {}
+  },
+
+  // Frecuencia real de productos vendidos en los últimos 30 días (excluyendo canceladas)
+  getFrecuenciaVentas: (dias = 30): Record<string, number> => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - dias);
+    const cutoffIso = cutoff.toISOString();
+
+    const counts: Record<string, number> = {};
+    if (!Array.isArray(mockVentas)) return counts;
+
+    mockVentas.forEach((v: any) => {
+      const fecha = v.fechaHora || v.fecha || '';
+      if (fecha >= cutoffIso && v.estado !== 'Cancelada') {
+        const items = v.detalles || v.items || [];
+        items.forEach((it: any) => {
+          const key = it.productoId ? String(it.productoId) : '';
+          if (key) {
+            counts[key] = (counts[key] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    return counts;
   },
 
   getVentas: async (limit = 50) => {

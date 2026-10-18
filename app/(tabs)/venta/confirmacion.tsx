@@ -286,238 +286,190 @@ export default function ConfirmacionScreen() {
         </View>
 
         {/* ========================================================= */}
-        {/* TARJETA DE COMPROBANTE EN IMAGEN (PNG)                     */}
+        {/* BOTONES PRINCIPALES DE ACCIÓN                            */}
         {/* ========================================================= */}
-        <View style={[styles.ticketImageCard, shadows.card]}>
-          <View style={styles.ticketImageHeader}>
-            <View style={styles.ticketBadge}>
-              <ImageIcon size={14} color={colors.primary[700]} />
-              <Text style={styles.ticketBadgeText}>COMPROBANTE EN IMAGEN</Text>
-            </View>
-            <Text style={styles.ticketImageSub}>
-              Listo para enviar por WhatsApp o guardar en fotos
-            </Text>
-          </View>
-
-          {/* Vista previa gráfica del ticket */}
-          {ticketImgUrl ? (
-            <View style={styles.imagePreviewWrapper}>
-              <Image
-                source={{ uri: ticketImgUrl }}
-                style={styles.renderedImage}
-                resizeMode="contain"
-              />
-            </View>
-          ) : (
-            <View style={styles.loadingImageBox}>
-              <Text style={styles.loadingImageText}>Generando comprobante en imagen...</Text>
-            </View>
-          )}
-
-          {/* Botones de acción del comprobante en imagen */}
-          <View style={styles.imageActionsWrap}>
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={handleShareImageWhatsApp}
-              style={styles.btnShareWhatsAppImage}
-            >
-              <Share2 size={20} color="#FFFFFF" />
-              <Text style={styles.btnShareWhatsAppImageText}>
-                Compartir Imagen por WhatsApp
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.secondaryImageRow}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={handleDownloadImage}
-                style={styles.btnSecondaryImage}
-              >
-                <Download size={16} color={colors.primary[700]} />
-                <Text style={styles.btnSecondaryImageText}>Descargar PNG</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={handleCopyImage}
-                style={styles.btnSecondaryImage}
-              >
-                {isCopied ? (
-                  <>
-                    <Check size={16} color={colors.success[600]} />
-                    <Text style={[styles.btnSecondaryImageText, { color: colors.success[600] }]}>
-                      ¡Copiado!
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Copy size={16} color={colors.neutral[700]} />
-                    <Text style={styles.btnSecondaryImageText}>Copiar Imagen</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Acciones complementarias */}
-        <View style={styles.actionsContainer}>
+        <View style={styles.primaryActionsContainer}>
+          {/* Acción Principal: COMPARTIR COMPROBANTE */}
           <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handlePrintPdf}
-            style={styles.btnPdf}
+            activeOpacity={0.88}
+            onPress={handleShareImageWhatsApp}
+            style={[styles.btnCompartirHero, shadows.card]}
+            accessibilityLabel="Compartir comprobante de venta"
           >
-            <FileText size={18} color={colors.primary[700]} />
-            <Text style={styles.btnPdfText}>Imprimir / Guardar en PDF</Text>
+            <Share2 size={22} color="#FFFFFF" strokeWidth={2.4} />
+            <Text style={styles.btnCompartirHeroText}>Compartir comprobante</Text>
           </TouchableOpacity>
 
+          {/* Acción Secundaria: NUEVA VENTA */}
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={handleNuevaVenta}
-            style={styles.btnPrimary}
+            style={[styles.btnNuevaVenta, shadows.card]}
+            accessibilityLabel="Iniciar una nueva venta"
           >
-            <ShoppingBag size={20} color={colors.neutral[0]} />
-            <Text style={styles.btnPrimaryText}>Nueva venta</Text>
+            <ShoppingBag size={20} color={colors.neutral[800]} strokeWidth={2.2} />
+            <Text style={styles.btnNuevaVentaText}>Nueva venta</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setShowTicketModal(true)}
-            style={styles.btnSecondary}
-          >
-            <Printer size={18} color={colors.neutral[700]} />
-            <Text style={styles.btnSecondaryText}>Ver ticket térmico digital (ESC/POS)</Text>
-          </TouchableOpacity>
+          {/* Accesos Discretos: Ver comprobante / Descargar / Ir al Inicio */}
+          <View style={styles.discreteLinksRow}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowTicketModal(true)}
+              style={styles.discreteLink}
+            >
+              <FileText size={15} color={colors.primary[700]} />
+              <Text style={styles.discreteLinkText}>Ver comprobante</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={handleIrInicio}
-            style={styles.btnTertiary}
-          >
-            <Home size={18} color={colors.neutral[600]} />
-            <Text style={styles.btnTertiaryText}>Volver al inicio</Text>
-          </TouchableOpacity>
+            <Text style={styles.discreteLinkDivider}>·</Text>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleDownloadImage}
+              style={styles.discreteLink}
+            >
+              <Download size={15} color={colors.primary[700]} />
+              <Text style={styles.discreteLinkText}>Guardar imagen</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.discreteLinkDivider}>·</Text>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleIrInicio}
+              style={styles.discreteLink}
+            >
+              <Home size={15} color={colors.neutral[600]} />
+              <Text style={[styles.discreteLinkText, { color: colors.neutral[600] }]}>Inicio</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </ScrollView>
 
-      {/* MODAL DE TICKET TÉRMICO (58mm / 80mm) */}
-      <TicketModal
-        visible={showTicketModal}
-        onClose={() => setShowTicketModal(false)}
-        title="Ticket de Venta en Ruta"
-        ticketText58={ticketText58}
-        ticketText80={ticketText80}
-        onShareWhatsApp={handleShareImageWhatsApp}
-        onPrintPdf={handlePrintPdf}
-      />
+        {/* Modal de Ticket Térmico Completo */}
+        <TicketModal
+          visible={showTicketModal}
+          onClose={() => setShowTicketModal(false)}
+          title="Comprobante de Venta"
+          ticketText58={ticketText58}
+          ticketText80={ticketText80}
+          onShareWhatsApp={handleShareImageWhatsApp}
+          onPrintPdf={handlePrintPdf}
+        />
+      </ScrollView>
     </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: spacing.xxl,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
   successHeader: {
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
+    marginVertical: 14,
   },
   successIconCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.full,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.success[50],
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: colors.success[100],
   },
   successTitle: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
+    fontSize: 22,
+    fontWeight: '900',
     color: colors.neutral[900],
+    letterSpacing: -0.3,
   },
   successSubtitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.primary[700],
     marginTop: 2,
   },
   dateText: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
+    fontSize: 11.5,
+    color: colors.neutral[500],
     marginTop: 2,
   },
   mainCard: {
     backgroundColor: colors.neutral[0],
-    marginHorizontal: spacing.md,
-    borderRadius: radius.xxl,
-    padding: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: colors.neutral[100],
-    marginBottom: spacing.lg,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    marginBottom: 16,
   },
   clientRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
   },
   clientAvatar: {
     width: 36,
     height: 36,
-    borderRadius: radius.md,
+    borderRadius: 18,
     backgroundColor: colors.primary[50],
     alignItems: 'center',
     justifyContent: 'center',
   },
   clientName: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
+    fontSize: 15,
+    fontWeight: '800',
     color: colors.neutral[900],
   },
   clientOwner: {
-    fontSize: fontSize.xs,
+    fontSize: 11.5,
     color: colors.neutral[500],
+    marginTop: 1,
   },
   divider: {
     height: 1,
     backgroundColor: colors.neutral[100],
-    marginVertical: spacing.md,
+    marginVertical: 12,
   },
   amountBlock: {
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: 4,
   },
   amountLabel: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[400],
-    fontWeight: fontWeight.semibold,
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'uppercase',
+    color: colors.neutral[500],
     letterSpacing: 0.5,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   pagosSection: {
-    marginTop: spacing.md,
+    marginTop: 8,
     backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.xs + 2,
+    borderRadius: 10,
+    padding: 10,
   },
   sectionSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
-    fontWeight: fontWeight.bold,
-    marginBottom: 2,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral[600],
+    marginBottom: 6,
+    textTransform: 'uppercase',
   },
   pagoItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
   },
   pagoMethodName: {
-    fontSize: fontSize.sm,
-    color: colors.neutral[700],
-    fontWeight: fontWeight.medium,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: colors.neutral[800],
   },
   saldoRow: {
     flexDirection: 'row',
@@ -525,173 +477,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saldoLabel: {
-    fontSize: fontSize.xs - 1,
-    color: colors.neutral[400],
+    fontSize: 10.5,
+    color: colors.neutral[500],
     marginBottom: 2,
   },
-  ticketImageCard: {
-    backgroundColor: colors.neutral[0],
-    marginHorizontal: spacing.md,
-    borderRadius: radius.xxl,
-    padding: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: colors.primary[100],
-    marginBottom: spacing.lg,
+
+  /* Acciones Principales */
+  primaryActionsContainer: {
+    gap: 10,
   },
-  ticketImageHeader: {
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  ticketBadge: {
+  btnCompartirHero: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.primary[600],
+    borderRadius: 14,
+    paddingVertical: 15,
   },
-  ticketBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    color: colors.primary[800],
-    letterSpacing: 0.5,
+  btnCompartirHeroText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.neutral[0],
   },
-  ticketImageSub: {
-    fontSize: fontSize.xs,
-    color: colors.neutral[500],
-    marginTop: 6,
-  },
-  imagePreviewWrapper: {
+  btnNuevaVenta: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.xl,
-    padding: spacing.sm,
+    gap: 8,
+    backgroundColor: colors.neutral[100],
+    borderRadius: 14,
+    paddingVertical: 13,
     borderWidth: 1,
     borderColor: colors.neutral[200],
-    marginBottom: spacing.md,
   },
-  renderedImage: {
-    width: '100%',
-    height: 420,
-    borderRadius: radius.lg,
+  btnNuevaVentaText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: colors.neutral[800],
   },
-  loadingImageBox: {
-    height: 200,
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  loadingImageText: {
-    fontSize: fontSize.sm,
-    color: colors.neutral[500],
-  },
-  imageActionsWrap: {
-    gap: spacing.sm,
-  },
-  btnShareWhatsAppImage: {
-    backgroundColor: '#25D366',
-    borderRadius: radius.xl,
-    paddingVertical: spacing.md + 2,
+  discreteLinksRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    shadowColor: '#25D366',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+    marginTop: 10,
+    gap: 10,
   },
-  btnShareWhatsAppImageText: {
-    color: '#FFFFFF',
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-  },
-  secondaryImageRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  btnSecondaryImage: {
-    flex: 1,
+  discreteLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.neutral[100],
-    paddingVertical: spacing.sm + 4,
-    borderRadius: radius.lg,
+    gap: 4,
+    paddingVertical: 6,
   },
-  btnSecondaryImageText: {
-    fontSize: fontSize.xs + 1,
-    fontWeight: fontWeight.bold,
-    color: colors.neutral[700],
-  },
-  actionsContainer: {
-    marginHorizontal: spacing.md,
-    gap: spacing.sm + 2,
-  },
-  btnPdf: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.xl,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    borderWidth: 1.5,
-    borderColor: colors.primary[200],
-  },
-  btnPdfText: {
+  discreteLinkText: {
+    fontSize: 12.5,
+    fontWeight: '700',
     color: colors.primary[700],
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
   },
-  btnPrimary: {
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.xl,
-    paddingVertical: spacing.md + 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  btnPrimaryText: {
-    color: colors.neutral[0],
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
-  },
-  btnSecondary: {
-    backgroundColor: colors.neutral[100],
-    borderRadius: radius.xl,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  btnSecondaryText: {
-    color: colors.neutral[700],
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  btnTertiary: {
-    backgroundColor: 'transparent',
-    borderRadius: radius.xl,
-    paddingVertical: spacing.sm + 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  btnTertiaryText: {
-    color: colors.neutral[500],
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
+  discreteLinkDivider: {
+    color: colors.neutral[300],
+    fontSize: 14,
   },
 });
+

@@ -16,6 +16,7 @@
 | **AUD-008** | **P0** | Surtido / PDF | Carga infinita con `DecompressionStream` y bloqueo al surtir inventario en PR | **CORREGIDO Y VERIFICADO** |
 | **AUD-009** | **P1** | Carga Matutina / Inventario | Duplicación indebida de existencias en `ConfirmarCargaInicial` por sumar el stock actual | **CORREGIDO Y VERIFICADO** |
 | **AUD-010** | **P1** | Catálogo / Importación CSV | Inexistencia de importación masiva real, riesgo de duplicados, números contables y sobreescritura de presentaciones | **CORREGIDO Y VERIFICADO** |
+| **AUD-011** | **P1** | UX Móvil / Inicio & Venta | Inicio sobrecargado, flujo de venta con excesivos pasos/pantallas y ausencia de favoritos/orden personalizado | **CORREGIDO Y VERIFICADO** |
 
 ---
 
@@ -104,5 +105,21 @@
   6. Bloqueo en pantalla de venta (`app/(tabs)/venta/index.tsx`) para impedir vender productos con configuración pendiente.
   7. Interfaz en `app/(tabs)/mas/productos.tsx` con 4 etapas: selección de archivo o demo 1-clic, previsualización paginada con filtros por clasificación (Nuevo, Existente, Ambiguo, Inválido), resolución de coincidencias y confirmación transaccional con persistencia real.
 - **Verificación:** Ejecución de `node scripts/verify_import_pipeline.js` (456 filas procesadas, 27 grupos ambiguos detectados, números españoles validados al 100%), `dotnet build` sin advertencias y `npm run build:web` exitoso.
+
+### AUD-011 [P1]: Optimización UX de Inicio y Flujo de Venta Ágil para Miguel
+- **Archivos:** `app/(tabs)/index.tsx`, `app/(tabs)/venta/index.tsx`, `app/(tabs)/venta/carrito.tsx`, `app/(tabs)/venta/confirmacion.tsx`, `services/mockDataService.ts`
+- **Evidencia original:**
+  1. Pantalla de Inicio sobrecargada con textos explicativos ("Módulos de Operación", "PRIORIDAD #1", avance de ruta), botones y mosaicos duplicados que forzaban scroll vertical innecesario para iniciar la venta.
+  2. Flujo de venta requería múltiples pasos y pantallas separadas (elegir cliente -> confirmar cliente -> lista de productos -> pantalla de carrito -> pantalla separada de pago -> confirmación).
+  3. Ausencia de favoritos independientes y orden personalizado (estilo Spotify), obligando al vendedor a buscar manualmente entre cientos de productos en cada visita.
+  4. Modales de confirmación redundantes por cada producto añadido.
+- **Acción aplicada:**
+  1. **Inicio Compacto:** Encabezado minimalista con saludo ("Hola, Miguel"), chip de conectividad dinámico ("En línea" / "Offline"), selector compacto de rol ("Admin" / "Vendedor") y botón de salida. Botón hero grande **VENDER** (`#2563EB`, altura 56px, badge de carrito) y 3 KPIs compactos: **Ventas hoy**, **Cobrado hoy** y **Crédito hoy**, visibles sin scroll en iPhone.
+  2. **Selección Inmediata de Cliente:** Buscador insensible a acentos/mayúsculas por nombre, negocio o teléfono. Acceso a "Venta de Mostrador / General" en 1 toque y acceso a "+ Nuevo cliente" con campos mínimos. Tocar un cliente abre el catálogo de inmediato sin confirmación intermedia.
+  3. **Mosaico Táctil en 2 Columnas:** Tarjetas compactas con nombre destacado, presentación, precio unitario grande y estrella de favorito independiente. Tocar la tarjeta añade 1 unidad si es presentación única. Si está en carrito, se transforma en stepper interactivo `[−] [Cantidad] [+]`, y tocar la cantidad permite digitación directa para pedidos grandes. Productos multipresentación abren bottom sheet compacto con opciones y precios visibles.
+  4. **Favoritos y Orden Personalizado (Estilo Spotify):** Pestañas "Todos" · "Favoritos" · "Frecuentes" (últimos 30 días, ventas confirmadas). Botón "Ordenar" con modal de lista completa, asa de arrastre, botones "Al inicio" (🔝), "Subir" (⬆️) y "Bajar" (⬇️). Persistencia desacoplada por usuario e ID estable (`miguel_orden_catalogo_v1`), sin perder el carrito ni reiniciar con altas nuevas.
+  5. **Resumen y Cobro Integrado:** Carrito unificado con selección de método de pago rápida (Efectivo predeterminado, Transferencia, Tarjeta, Crédito, Combinado) y botón único **Confirmar venta** protegido contra doble envío.
+  6. **Comprobante y Compartir Rápido:** Pantalla de confirmación con folio, total, cliente, acción hero **Compartir comprobante** vía Web Share API / descarga / WhatsApp directo, y acción secundaria **Nueva venta** lista para el siguiente pedido.
+- **Verificación:** Ejecución de `tsc --noEmit` limpia, `npm run build:web` exitoso, pruebas móviles en emulador de viewport 390x844 (iPhone 13/14) con 7 capturas verificadas en vivo en el servidor de pruebas local.
 
 

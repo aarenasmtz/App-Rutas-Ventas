@@ -139,6 +139,86 @@
 
 ---
 
+---
+
+### TC-UX-01: Inicio Compacto sin Scroll en iPhone y 3 KPIs Oficiales
+- **Objetivo:** Verificar que el Inicio muestre el saludo, estado de conexión, selector de rol compacto, botón hero "Vender" y los 3 indicadores de negocio (Ventas hoy, Cobrado hoy, Crédito hoy) visibles de inmediato sin necesidad de scroll en viewport estándar de 390x844.
+- **Pasos:**
+  1. Acceder a `/` en viewport móvil.
+  2. Verificar visibilidad directa de los 3 KPIs y el botón de Vender.
+  3. Verificar que se retiraron referencias de ruta, avance y módulos duplicados sin romper rutas directas.
+- **Resultado Obtenido:** Presentación compacta y limpia con datos actualizados en tiempo real.
+- **Estado:** **APROBADO (Captura `inicio_compacto_1792364361415.png`)**.
+
+---
+
+### TC-UX-02: Selección Directa de Cliente y Venta de Mostrador
+- **Objetivo:** Iniciar venta sin confirmaciones redundantes.
+- **Pasos:**
+  1. Presionar "Vender".
+  2. Buscar por nombre, negocio o teléfono (tolerando acentos y mayúsculas).
+  3. O tocar "Venta de Mostrador / General" en 1 toque.
+- **Resultado Obtenido:** Navegación inmediata al mosaico de productos con el cliente seleccionado.
+- **Estado:** **APROBADO (Captura `seleccion_cliente_1792364469883.png`)**.
+
+---
+
+### TC-UX-03: Mosaico Compacto y Stepper Interactivo en Tarjeta
+- **Objetivo:** Añadir productos y modificar cantidades directamente desde el mosaico de 2 columnas sin modales por cada producto.
+- **Pasos:**
+  1. Tocar una tarjeta de producto simple.
+  2. Verificar incremento inmediato a 1 unidad y transformación de la tarjeta a control `[−] [1] [+]`.
+  3. Pulsar `[+]` para subir a 2.
+  4. Tocar el número para ingresar una cantidad alta directamente.
+- **Resultado Obtenido:** Actualización visual y en barra flotante inmediata.
+- **Estado:** **APROBADO (Capturas `mosaico_productos_1792364477739.png` y `mosaico_con_carrito_1792364493504.png`)**.
+
+---
+
+### TC-UX-04: Gestión de Favoritos Desacoplada del Orden
+- **Objetivo:** Comprobar que marcar la estrella en un producto no altere su posición ni modifique el carrito.
+- **Pasos:**
+  1. Tocar la estrella de un producto.
+  2. Cambiar a la pestaña "Favoritos".
+  3. Verificar que solo aparecen los marcados, manteniendo su orden relativo.
+- **Resultado Obtenido:** Los favoritos persisten por usuario en `localStorage` sin mover posiciones del catálogo general.
+- **Estado:** **APROBADO**.
+
+---
+
+### TC-UX-05: Reordenamiento de Catálogo Estilo Spotify ("Mi orden")
+- **Objetivo:** Personalizar la posición de cualquier producto y reflejarla de izquierda a derecha y arriba hacia abajo.
+- **Pasos:**
+  1. Presionar botón discreto "Ordenar" en el encabezado de productos.
+  2. Mover un producto al inicio con "🔝" o subirlo con "⬆️".
+  3. Guardar el orden.
+- **Resultado Obtenido:** El mosaico refleja inmediatamente el nuevo orden. El carrito de compras se conserva intacto.
+- **Estado:** **APROBADO (Captura `modo_ordenar_spotify_1792364501009.png`)**.
+
+---
+
+### TC-UX-06: Resumen Unificado con Cobro en 1 Toque
+- **Objetivo:** Revisar pedido, elegir método de pago (Efectivo predeterminado) y confirmar la venta en una sola pantalla.
+- **Pasos:**
+  1. Presionar "Revisar" desde la barra inferior flotante.
+  2. Verificar items, cliente y total.
+  3. Presionar "Confirmar venta".
+- **Resultado Obtenido:** Transacción registrada con decremento de inventario y protección contra doble envío.
+- **Estado:** **APROBADO (Captura `resumen_carrito_1792364520417.png`)**.
+
+---
+
+### TC-UX-07: Comprobante y Compartición Rápida
+- **Objetivo:** Confirmar venta con folio generado, botón principal "Compartir comprobante" y botón secundario "Nueva venta".
+- **Pasos:**
+  1. Visualizar pantalla de confirmación con folio y total.
+  2. Presionar "Compartir comprobante" (Web Share API o descarga/WhatsApp según soporte del dispositivo).
+  3. Presionar "Nueva venta" para limpiar carrito y tomar el siguiente pedido.
+- **Resultado Obtenido:** Flujo ágil completado en menos de 5 toques para venta estándar.
+- **Estado:** **APROBADO (Captura `confirmacion_comprobante_1792364533973.png`)**.
+
+---
+
 ## 2. REGISTRO DE VERIFICACIONES EJECUTADAS
 
 | Caso de Prueba | Fecha / Hora | Tipo de Ejecución | Resultado | Evidencia / Notas |
@@ -155,5 +235,7 @@
 | TC-IMP-03 (Idempotencia SHA-256) | 2026-10-18 | API Controller | **Aprobado** | Hash SHA-256 en `ImportacionesCatalogo`, respuesta `409 Conflict` ante confirmaciones duplicadas. |
 | TC-CAR-01 (Carga Matutina) | 2026-10-18 | API Controller / Frontend | **Aprobado** | `EsEntradaMercancia = false` previene duplicación del stock en checklist matutino. |
 | TC-VEN-02 (Bloqueo Productos Pendientes) | 2026-10-18 | Frontend (`venta/index.tsx`) | **Aprobado** | Productos con `estadoConfiguracion === 'Pendiente'` bloqueados para adición al carrito. |
-| Build Web Expo | 2026-10-18 | `npm run build:web` | **Aprobado** | Metro Bundler completó exportación en `dist/` en 1504ms sin errores. |
+| TC-UX-01 a TC-UX-07 (Inicio y Flujo Venta Rápido) | 2026-10-18 | Browser E2E / Viewport iPhone 390x844 | **Aprobado** | 7 capturas generadas: Inicio compacto, cliente directo, mosaico 2 col con stepper, favoritos, reordenar tipo Spotify, cobro 1 toque y comprobante. |
+| Build Web Expo | 2026-10-18 | `npm run build:web` | **Aprobado** | Metro Bundler completó exportación en `dist/` en 8140ms sin errores. |
 | Build Backend .NET | 2026-10-18 | `dotnet build` | **Aprobado** | 0 advertencias, 0 errores en `RutaVentas.Api.dll` (.NET 9.0). |
+
