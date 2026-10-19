@@ -219,6 +219,26 @@
 - **Estado:** **APROBADO (Captura `confirmacion_comprobante_1792364533973.png`)**.
 
 ---
+ 
+### TC-MAP-01: Optimización de Pantalla "Mapa de Ruta" Móvil (0 Desbordamiento)
+- **Objetivo:** Garantizar que el mapa y los controles principales se ajusten dentro del alto del celular sin scroll vertical inicial, sin globos duplicados, con lista de paradas colapsable y navegación GPS clara.
+- **Precondiciones:**
+  - Viewports móviles evaluados: 360x740 (Android compacto), 390x844 (iPhone estándar), 430x932 (iPhone Pro Max) y 390x640 (pantalla corta con barras de navegación).
+- **Pasos:**
+  1. Ingresar a "Mapa de Ruta" desde Más > Rutas y Mapa > Mapa.
+  2. Verificar que en el estado inicial se visualicen: cabecera compacta, mapa completo con todos sus controles, ficha compacta del cliente y barra de navegación inferior (Tabs) sin colisión ni scroll (`scrollHeight <= clientHeight`).
+  3. Verificar que los marcadores en el mapa sean tipo gota numerada con punta exacta y que no se abra ningún globo de texto sobre el pin.
+  4. Presionar el botón "Paradas (N)" para abrir el panel inferior con altura limitada.
+  5. Seleccionar la parada #2 ("Cremería El Coecillo"): comprobar que el panel se contrae, el mapa se centra en la parada, el marcador se resalta con anillo ámbar/dorado y la ficha inferior se actualiza.
+  6. Presionar "Vender": comprobar la transición directa a la pantalla de Venta con el cliente seleccionado como activo.
+- **Resultado Obtenido:**
+  - Cero scroll vertical en todas las resoluciones evaluadas.
+  - Comunicación bidireccional React Native Web <-> Leaflet iframe por `postMessage`.
+  - Sin globos sobre marcadores ni valores de distancia inventados ("500 m" erradicado).
+  - Atribución a OpenStreetMap visible en la esquina inferior derecha.
+- **Estado:** **APROBADO (Capturas `mapa_initial_390x844_1792379769449.png`, `mapa_paradas_panel_open_1792379776869.png`, `mapa_stop_2_selected_1792379785353.png`, `mapa_compact_360x740_1792379789816.png`, `mapa_large_430x932_1792379795616.png`, `mapa_short_390x640_1792379800664.png`, `venta_screen_with_client_1792380005846.png`)**.
+
+---
 
 ## 2. REGISTRO DE VERIFICACIONES EJECUTADAS
 
@@ -237,6 +257,7 @@
 | TC-CAR-01 (Carga Matutina) | 2026-10-18 | API Controller / Frontend | **Aprobado** | `EsEntradaMercancia = false` previene duplicación del stock en checklist matutino. |
 | TC-VEN-02 (Bloqueo Productos Pendientes) | 2026-10-18 | Frontend (`venta/index.tsx`) | **Aprobado** | Productos con `estadoConfiguracion === 'Pendiente'` bloqueados para adición al carrito. |
 | TC-UX-01 a TC-UX-07 (Inicio y Flujo Venta Rápido) | 2026-10-18 | Browser E2E / Viewport iPhone 390x844 | **Aprobado** | 7 capturas generadas: Inicio compacto, cliente directo, mosaico 2 col con stepper, favoritos, reordenar tipo Spotify, cobro 1 toque y comprobante. |
+| TC-MAP-01 (Mapa de Ruta Móvil Adaptable) | 2026-10-18 | Browser E2E (360, 390, 430px) | **Aprobado** | Cero scroll inicial, sin globos emergentes, marcador con halo ámbar, panel de paradas modal y venta directa. |
 | Build Web Expo | 2026-10-18 | `npm run build:web` | **Aprobado** | Metro Bundler completó exportación en `dist/` en 8140ms sin errores. |
 | Build Backend .NET | 2026-10-18 | `dotnet build` | **Aprobado** | 0 advertencias, 0 errores en `RutaVentas.Api.dll` (.NET 9.0). |
 

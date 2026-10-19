@@ -17,6 +17,7 @@
 | **AUD-009** | **P1** | Carga Matutina / Inventario | Duplicación indebida de existencias en `ConfirmarCargaInicial` por sumar el stock actual | **CORREGIDO Y VERIFICADO** |
 | **AUD-010** | **P1** | Catálogo / Importación CSV | Inexistencia de importación masiva real, riesgo de duplicados, números contables y sobreescritura de presentaciones | **CORREGIDO Y VERIFICADO** |
 | **AUD-011** | **P1** | UX Móvil / Inicio & Venta | Inicio sobrecargado, flujo de venta con excesivos pasos/pantallas y ausencia de favoritos/orden personalizado | **CORREGIDO Y VERIFICADO** |
+| **AUD-012** | **P1** | UX Móvil / Mapa de Ruta | Desbordamiento vertical en mapa, globo redundante sobre marcadores, lista de paradas permanentemente abierta y botones GPS duplicados | **CORREGIDO Y VERIFICADO** |
 
 ---
 
@@ -121,5 +122,23 @@
   5. **Resumen y Cobro Integrado:** Carrito unificado con selección de método de pago rápida (Efectivo predeterminado, Transferencia, Tarjeta, Crédito, Combinado) y botón único **Confirmar venta** protegido contra doble envío.
   6. **Comprobante y Compartir Rápido:** Pantalla de confirmación con folio, total, cliente, acción hero **Compartir comprobante** vía Web Share API / descarga / WhatsApp directo, y acción secundaria **Nueva venta** lista para el siguiente pedido.
 - **Verificación:** Ejecución de `tsc --noEmit` limpia, `npm run build:web` exitoso, pruebas móviles en emulador de viewport 390x844 (iPhone 13/14) con 7 capturas verificadas en vivo en el servidor de pruebas local.
+ 
+### AUD-012 [P1]: Optimización Integral de la Pantalla "Mapa de Ruta" para Operación Móvil
+- **Archivo:** `app/(tabs)/ruta/mapa.tsx`
+- **Evidencia original:**
+  1. La pantalla superaba el alto de la pantalla del celular en el estado inicial, requiriendo desplazamiento vertical para visualizar controles y paradas.
+  2. Al tocar una parada en el mapa, se abría un globo grande emergente dentro de Leaflet que duplicaba exactamente la información ya mostrada en la tarjeta inferior (nombre, dirección, saldo, botón de navegación).
+  3. La lista completa de paradas permanecía permanentemente desplegada en el tercio inferior de la pantalla (`bottomSheet` de 330px fijos), reduciendo el espacio útil del mapa a una franja estrecha.
+  4. Dos botones grandes de GPS competían visualmente (botón flotante "Navegar Ruta en GPS" sobre el mapa y botón "GPS" en la tarjeta del cliente).
+  5. Etiqueta decorativa "GPS en vivo" sin funcionalidad real de tracking.
+  6. Valores de distancia de ejemplo falsos como "500 m".
+- **Acción aplicada:**
+  1. **Distribución Adaptable (0 Scroll Inicial):** Cabecera compacta de 48px con retroceso, título, día y contador de paradas. Contenedor flexible con `flex: 1`, `height: 100%`, `overflow: hidden` respetando las barras del navegador y la barra inferior de navegación (Tabs). El mapa ocupa el 100% del espacio restante.
+  2. **Información en un Solo Lugar:** Se eliminó por completo el popup grande de Leaflet. Al tocar cualquier parada en el mapa o en la lista, se resalta su marcador con un anillo ámbar/dorado de alto contraste (`box-shadow: 0 0 0 3.5px #f59e0b`) y se actualiza una única ficha compacta (~85px) debajo del mapa.
+  3. **Ficha Compacta Unificada:** Muestra número de parada, nombre del cliente, saldo deudor si existe, dirección o distancia real calculada únicamente vía GPS (`navigator.geolocation`). Botón principal hero **Vender** (`#2563EB`) que transfiere al cliente directamente al catálogo de venta; botones secundarios **Cómo llegar** (Google Maps) y llamada telefónica directa.
+  4. **Panel Desplegable de Paradas ("Ver paradas (N)"):** Se sustituyó la lista fija por un control compacto tipo chip. Al abrirlo, se despliega un panel modal inferior (`maxHeight: '62%'`) con asa de arrastre, título, contador y lista con scroll interno. Al seleccionar una parada, el mapa se centra automáticamente, el marcador se resalta, la ficha compacta se actualiza y el panel se contrae de inmediato.
+  5. **Integración Visual de Leaflet & OSM:** Marcadores numerados tipo gota con punta orientada a coordenadas exactas, trazado de polilínea de ruta, controles flotantes compactos e independientes (Zoom a la izquierda; Ajustar Paradas y Mi Ubicación a la derecha), retiro de la etiqueta decorativa "GPS en vivo", conservación obligatoria de atribución a OpenStreetMap e invalidación automática de dimensiones (`map.invalidateSize()`) tras redimensionamiento o cierre de paneles.
+  6. **Navegación Secundaria de Ruta Completa:** Botón compacto en la cabecera "Ruta GPS" que lanza la secuencia completa de waypoints en Google Maps sin superponer botones gigantes sobre el mapa.
+- **Verificación:** Ejecución de `tsc --noEmit` limpia (código 0), pruebas automáticas en viewports de 360x740, 390x844, 430x932 y altura reducida (390x640) verificando 0 desbordamiento vertical, apertura/cierre de paradas, selección interactiva de marcadores, cálculo de distancia real sin mocks y transición fluida a la pantalla de Venta con cliente activo.
 
 
