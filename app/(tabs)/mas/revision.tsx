@@ -197,7 +197,7 @@ export default function RevisionInventarioScreen() {
         onBack={handleBack}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Barra de Progreso: X / Y revisados */}
         <View style={[styles.progressCard, shadows.card]}>
           <View style={styles.progressTop}>
@@ -414,7 +414,9 @@ export default function RevisionInventarioScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   progressCard: {
     backgroundColor: colors.neutral[0],
@@ -575,6 +577,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   stepBtnPlus: {
     backgroundColor: colors.primary[600],
@@ -628,6 +632,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   finishBtnText: {
     color: colors.neutral[0],
@@ -668,6 +674,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 6,
     marginTop: spacing.xs,
+    minHeight: 44,
+    minWidth: 44,
   },
   quickCuadrarBtnText: {
     fontSize: 12,
@@ -704,6 +712,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   devsLinkText: {
     fontSize: 10,
@@ -725,6 +735,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   devChipText: {
     fontSize: 11,

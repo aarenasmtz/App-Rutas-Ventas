@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
+import { KeyboardAvoidingView, Platform,
   View,
   Text,
   StyleSheet,
@@ -164,7 +164,7 @@ export default function GastosScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* KPIs */}
         <View style={styles.kpisRow}>
           <View style={[styles.kpiCard, { borderLeftColor: colors.error[500], borderLeftWidth: 4 }]}>
@@ -243,19 +243,19 @@ export default function GastosScreen() {
         animationType="fade"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, shadows.floating]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Registrar Gasto de Ruta</Text>
-                <Text style={styles.modalSubtitle}>Resta del efectivo de caja física</Text>
+                <Text style={styles.modalSubtitle}>Comprobante y forma de pago</Text>
               </View>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
                 <X size={20} color={colors.neutral[600]} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Categoría */}
               <Text style={styles.inputLabel}>Categoría:</Text>
               <View style={styles.catsRow}>
@@ -347,7 +347,7 @@ export default function GastosScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </AppShell>
   );
@@ -355,16 +355,22 @@ export default function GastosScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   createBtnHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.md,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   createBtnHeaderText: {
     color: '#FFFFFF',
@@ -373,7 +379,7 @@ const styles = StyleSheet.create({
   },
   kpisRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 8,
     paddingHorizontal: spacing.md,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -381,25 +387,26 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.sm + 2,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minWidth: 0,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: fontWeight.bold,
     color: colors.neutral[500],
-    textTransform: 'uppercase',
+    textTransform: 'none',
   },
   kpiValue: {
-    fontSize: fontSize.md,
+    fontSize: 20,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
     marginTop: 2,
   },
   kpiSub: {
-    fontSize: 9,
+    fontSize: 11,
     color: colors.neutral[400],
     marginTop: 1,
   },
@@ -446,8 +453,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.neutral[200],
@@ -505,9 +512,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderRadius: radius.xxl,
     width: '100%',
-    maxWidth: 480,
-    maxHeight: '90%',
+    maxWidth: 680,
+    maxHeight: '88%',
     overflow: 'hidden',
+    alignSelf: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -535,6 +545,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalBody: {
     paddingHorizontal: spacing.lg,
@@ -558,6 +570,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   catBtnActive: {
     backgroundColor: colors.primary[600],
@@ -574,13 +588,14 @@ const styles = StyleSheet.create({
   },
   textInput: {
     backgroundColor: colors.neutral[50],
-    borderRadius: radius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.neutral[200],
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
   },
   modalFooter: {
     flexDirection: 'row',
@@ -596,6 +611,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   cancelBtnText: {
     fontSize: fontSize.sm,
@@ -609,6 +626,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary[600],
+    minHeight: 44,
+    minWidth: 44,
   },
   saveBtnText: {
     fontSize: fontSize.sm,

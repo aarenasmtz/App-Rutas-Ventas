@@ -33,10 +33,15 @@ import {
   Edit2,
   Trash2,
   CheckCircle2,
+  Navigation,
 } from 'lucide-react-native';
-import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
+import { colors, spacing, radius, fontSize, fontWeight, shadows, layout } from '@/constants/theme';
 import { formatCurrency } from '@/utils/helpers';
 import type { Producto, Cliente, PresentacionConfig, PresentacionTipo } from '@/types';
+
+export function FormSectionTitle({ children }: { children: ReactNode }) {
+  return <Text style={{ fontSize: 15, fontWeight: '700', color: colors.primary[700], marginTop: 18, marginBottom: 10 }}>{children}</Text>;
+}
 
 // ==========================================
 // 1. APP SHELL (Responsive container)
@@ -52,13 +57,13 @@ export function AppShell({ children, style }: { children: ReactNode; style?: Sty
 const shellStyles = StyleSheet.create({
   outer: {
     flex: 1,
-    backgroundColor: '#0f172a', // Fondo oscuro en los bordes para desktop/tablet
+    backgroundColor: colors.neutral[50],
     alignItems: 'center',
   },
   inner: {
     flex: 1,
     width: '100%',
-    maxWidth: 520, // Mobile-first centered frame on desktop
+    maxWidth: layout.maxWidth,
     backgroundColor: colors.neutral[50],
   },
 });
@@ -97,7 +102,7 @@ export function PageHeader({
     <View style={headerStyles.container}>
       <View style={headerStyles.leftRow}>
         {onBack && (
-          <TouchableOpacity activeOpacity={0.7} onPress={handleBackPress} style={headerStyles.backBtn}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Regresar" activeOpacity={0.7} onPress={handleBackPress} style={headerStyles.backBtn}>
             <Text style={headerStyles.backIcon}>‹</Text>
           </TouchableOpacity>
         )}
@@ -124,11 +129,12 @@ const headerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'ios' ? 44 : spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.sm + 4,
-    backgroundColor: colors.neutral[0],
+    backgroundColor: colors.primary[600],
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[100],
+    minHeight: 64,
   },
   leftRow: {
     flexDirection: 'row',
@@ -137,16 +143,18 @@ const headerStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.primary[700],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   backIcon: {
     fontSize: 26,
-    color: colors.neutral[800],
+    color: colors.neutral[0],
     marginTop: -3,
     fontWeight: '700',
   },
@@ -159,9 +167,10 @@ const headerStyles = StyleSheet.create({
     gap: spacing.xs + 2,
   },
   title: {
-    fontSize: fontSize.lg,
+    fontSize: 18,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
+    color: colors.neutral[0],
+    flexShrink: 1,
   },
   badge: {
     backgroundColor: colors.primary[50],
@@ -175,8 +184,8 @@ const headerStyles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   subtitle: {
-    fontSize: fontSize.xs + 1,
-    color: colors.neutral[500],
+    fontSize: 11,
+    color: colors.primary[100],
     marginTop: 2,
   },
   right: {
@@ -346,14 +355,18 @@ const searchStyles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: fontSize.base,
+    fontSize: 15,
     color: colors.neutral[900],
     padding: 0,
+    minHeight: 44,
+    borderRadius: 10,
   },
   clearBtn: {
     padding: 4,
     backgroundColor: colors.neutral[100],
     borderRadius: radius.full,
+    minHeight: 44,
+    minWidth: 44,
   },
 });
 
@@ -447,7 +460,7 @@ const catStyles = StyleSheet.create({
 // ==========================================
 // 6. STOCK BADGE
 // ==========================================
-export function StockBadge({ stockPiezas }: { stockPiezas: number }) {
+export function StockBadge({ stockPiezas, unidad = 'pzas' }: { stockPiezas: number; unidad?: string }) {
   if (stockPiezas <= 0) {
     return (
       <View style={[stockStyles.badge, { backgroundColor: colors.error[50] }]}>
@@ -458,13 +471,13 @@ export function StockBadge({ stockPiezas }: { stockPiezas: number }) {
   if (stockPiezas <= 10) {
     return (
       <View style={[stockStyles.badge, { backgroundColor: colors.warning[50] }]}>
-        <Text style={[stockStyles.text, { color: colors.warning[700] }]}>Stock bajo: {stockPiezas} pzas</Text>
+        <Text style={[stockStyles.text, { color: colors.warning[700] }]}>Stock bajo: {stockPiezas} {unidad}</Text>
       </View>
     );
   }
   return (
     <View style={[stockStyles.badge, { backgroundColor: colors.success[50] }]}>
-      <Text style={[stockStyles.text, { color: colors.success[700] }]}>{stockPiezas} pzas disponibles</Text>
+      <Text style={[stockStyles.text, { color: colors.success[700] }]}>{stockPiezas} {unidad} disponibles</Text>
     </View>
   );
 }
@@ -557,7 +570,7 @@ export function ProductCard({
 
       {/* Stock en piezas */}
       <View style={productStyles.stockRow}>
-        <StockBadge stockPiezas={producto.existencia} />
+        <StockBadge stockPiezas={producto.existencia} unidad={producto.unidad} />
       </View>
 
       {/* Presentaciones disponibles chips */}
@@ -624,6 +637,8 @@ const productStyles = StyleSheet.create({
   },
   favBtn: {
     padding: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   middle: {
     marginVertical: spacing.xs,
@@ -687,6 +702,8 @@ const productStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,
+    minHeight: 44,
+    minWidth: 44,
   },
   addBtnDisabled: {
     backgroundColor: colors.neutral[300],
@@ -706,6 +723,7 @@ export function ClientCard({
   onVender,
   onCobrar,
   onVerDetalle,
+  onNavigate,
   onEdit,
   onDelete,
   isCurrent = false,
@@ -714,6 +732,7 @@ export function ClientCard({
   onVender: () => void;
   onCobrar: () => void;
   onVerDetalle: () => void;
+  onNavigate?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   isCurrent?: boolean;
@@ -796,6 +815,12 @@ export function ClientCard({
           </TouchableOpacity>
         )}
 
+                {onNavigate && (
+          <TouchableOpacity activeOpacity={0.85} onPress={onNavigate} style={clientStyles.btnNav} accessibilityLabel="Navegar con Google Maps">
+            <Navigation size={15} color={colors.primary[700]} />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity activeOpacity={0.85} onPress={onVerDetalle} style={clientStyles.btnVer}>
           <Text style={clientStyles.btnVerText}>Detalle</Text>
           <ChevronRight size={13} color={colors.neutral[500]} />
@@ -816,7 +841,7 @@ const clientStyles = StyleSheet.create({
   },
   currentCard: {
     borderColor: colors.primary[500],
-    backgroundColor: '#f8faff',
+    backgroundColor: colors.neutral[50],
   },
   headerRow: {
     flexDirection: 'row',
@@ -918,9 +943,13 @@ const clientStyles = StyleSheet.create({
   },
   topEditBtn: {
     padding: 3,
+    minHeight: 44,
+    minWidth: 44,
   },
   topDeleteBtn: {
     padding: 3,
+    minHeight: 44,
+    minWidth: 44,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -960,6 +989,17 @@ const clientStyles = StyleSheet.create({
     color: colors.success[700],
     fontWeight: '700',
     fontSize: fontSize.sm,
+  },
+  btnNav: {
+    minWidth: 44,
+    minHeight: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
   },
   btnVer: {
     flex: 1,
@@ -1238,7 +1278,7 @@ const presModalStyles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.neutral[900],
     letterSpacing: -0.3,
   },
   priceSubtitle: {
@@ -1259,6 +1299,8 @@ const presModalStyles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 10,
+    minHeight: 44,
+    minWidth: 44,
   },
   modeTabActive: {
     backgroundColor: '#FFFFFF',
@@ -1270,7 +1312,7 @@ const presModalStyles = StyleSheet.create({
     color: '#64748B',
   },
   modeTabTextActive: {
-    color: '#1E293B',
+    color: colors.neutral[800],
   },
   optionsList: {
     marginBottom: 16,
@@ -1290,11 +1332,11 @@ const presModalStyles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.neutral[50],
   },
   presOptionActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50],
   },
   presLeft: {
     flexDirection: 'row',
@@ -1312,21 +1354,21 @@ const presModalStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioActive: {
-    borderColor: '#2563EB',
+    borderColor: colors.primary[600],
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary[600],
   },
   presName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1E293B',
+    color: colors.neutral[800],
   },
   presNameActive: {
-    color: '#1D4ED8',
+    color: colors.primary[700],
   },
   presDesc: {
     fontSize: 11,
@@ -1362,7 +1404,7 @@ const presModalStyles = StyleSheet.create({
   stepperLargeValue: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.neutral[900],
     letterSpacing: -0.5,
   },
   chipsWrap: {
@@ -1376,9 +1418,11 @@ const presModalStyles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     backgroundColor: '#F1F5F9',
+    minHeight: 44,
+    minWidth: 44,
   },
   chipBtnActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary[600],
   },
   chipBtnText: {
     fontSize: 14,
@@ -1392,7 +1436,7 @@ const presModalStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.neutral[50],
     borderRadius: 18,
     paddingVertical: 18,
     paddingHorizontal: 20,
@@ -1408,21 +1452,23 @@ const presModalStyles = StyleSheet.create({
   subtotalBigAmount: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#0F172A',
+    color: colors.neutral[900],
   },
   addToCartBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary[600],
     borderRadius: 16,
     paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary[600],
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   addToCartBtnText: {
     color: '#FFFFFF',

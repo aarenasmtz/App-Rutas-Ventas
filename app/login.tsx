@@ -96,7 +96,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primary[700],
+    backgroundColor: colors.neutral[0],
   },
   scroll: {
     flexGrow: 1,
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: radius.xl,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.primary[600],
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -119,11 +119,11 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: fontSize.xxxl,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[0],
+    color: colors.primary[800],
   },
   tagline: {
     fontSize: fontSize.base,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.neutral[600],
     marginTop: spacing.xs,
   },
   form: {
@@ -149,12 +149,13 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
-    borderRadius: radius.md,
+    borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md - 2,
-    fontSize: fontSize.base,
+    fontSize: 15,
     color: colors.neutral[900],
     fontFamily: 'Inter-Regular',
+    minHeight: 44,
   },
   passwordWrap: {
     flexDirection: 'row',
@@ -173,6 +174,8 @@ const styles = StyleSheet.create({
   },
   eyeBtn: {
     padding: spacing.md - 2,
+    minHeight: 44,
+    minWidth: 44,
   },
   error: {
     color: colors.error[600],
@@ -185,6 +188,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md + 2,
     alignItems: 'center',
     marginTop: spacing.xs,
+    minHeight: 44,
+    minWidth: 44,
   },
   loginBtnText: {
     color: colors.neutral[0],
@@ -204,6 +209,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
+    minHeight: 44,
+    minWidth: 44,
   },
   connText: {
     fontSize: fontSize.sm,
@@ -211,6 +218,6 @@ const styles = StyleSheet.create({
   },
   version: {
     fontSize: fontSize.xs,
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.neutral[600],
   },
 });

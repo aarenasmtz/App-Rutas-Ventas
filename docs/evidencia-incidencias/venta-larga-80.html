@@ -1,0 +1,172 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="receipt-paper-width" content="80"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comprobante de venta</title><style>
+    @page {
+      size: 80mm auto;
+      margin: 2mm 1mm;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      background: #fff;
+      margin: 0;
+      color: #1d2418;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    body {
+      width: 100%;
+      max-width: 80mm;
+      margin: auto;
+      padding: 3mm 2mm;
+    }
+    h1 {
+      font-size: 18px;
+      color: #46522b;
+      border-bottom: 2px solid #556133;
+      margin: 0 0 8px;
+      padding-bottom: 6px;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    .row {
+      padding: 5px 0;
+      border-bottom: 1px dashed #d8dccf;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      overflow-wrap: anywhere;
+    }
+    .line {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .label {
+      flex: 1;
+      min-width: 0;
+    }
+    .value {
+      max-width: 48%;
+      text-align: right;
+      font-weight: bold;
+      overflow-wrap: anywhere;
+      white-space: nowrap;
+    }
+    .detail {
+      color: #414b36;
+      font-size: 0.9em;
+      margin-top: 2px;
+    }
+    .strong {
+      font-weight: bold;
+      color: #354020;
+      border-top: 1.5px solid #556133;
+      border-bottom: 1.5px solid #556133;
+      padding: 6px 0;
+      background: rgba(85,97,51,0.04);
+    }
+    @media print {
+      @page {
+        size: 80mm auto;
+        margin: 1mm 1mm;
+      }
+      body {
+        width: 80mm !important;
+        max-width: 80mm !important;
+        padding: 1mm 2mm !important;
+        margin: 0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .row {
+        border-color: #888;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .strong, h1 {
+        color: #000;
+        border-color: #000;
+      }
+    }
+  </style>
+  <script>
+    function triggerPrint() {
+      window.focus();
+      setTimeout(function() { window.print(); }, 200);
+    }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      triggerPrint();
+    } else {
+      window.addEventListener('DOMContentLoaded', triggerPrint);
+    }
+  </script>
+  </head><body><h1>Comprobante de venta</h1><div class="row"><div class="line"><span class="label">DISTRIBUIDORA DON MIGUEL</span></div></div><div class="row"><div class="line"><span class="label">RFC: MIGD750412AB1</span></div></div><div class="row"><div class="line"><span class="label">Tel: 477-123-4567</span></div></div><div class="row"><div class="line"><span class="label">León, Guanajuato</span></div></div><div class="row"><div class="line"><span class="label">Folio</span><span class="value">QA-LOCAL</span></div></div><div class="row"><div class="line"><span class="label">Fecha</span><span class="value">08/11/2026</span></div></div><div class="row"><div class="line"><span class="label">Vendedor</span><span class="value">Usuario de prueba</span></div></div><div class="row strong"><div class="line"><span class="label">Cliente de prueba</span></div></div><div class="row"><div class="line"><span class="label">1. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">2. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">3. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">4. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">5. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">6. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">7. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">8. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">9. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">10. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">11. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">12. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">13. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">14. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">15. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">16. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">17. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">18. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">19. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">20. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">21. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">22. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">23. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">24. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">25. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">26. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">27. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">28. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">29. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">30. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">31. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">32. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">33. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">34. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">35. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">36. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">37. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">38. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">39. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">40. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">41. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">42. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">43. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">44. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">45. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">46. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">47. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">48. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">49. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">50. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">51. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">52. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">53. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">54. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">55. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">56. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">57. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">58. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">59. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">60. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">61. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">62. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">63. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">64. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">65. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">66. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">67. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">68. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">69. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 paquete × $8</div></div><div class="row"><div class="line"><span class="label">70. Queso &quot;Especial&quot;; edición
+con acentos y nombre completo para comprobar todas las líneas de la descripción</span><span class="value">$8</span></div><div class="detail">1 Caja × $8</div></div><div class="row"><div class="line"><span class="label">Subtotal</span><span class="value">$560</span></div></div><div class="row strong"><div class="line"><span class="label">Total</span><span class="value">$560</span></div></div><div class="row"><div class="line"><span class="label">Efectivo</span><span class="value">$560</span></div></div><div class="row"><div class="line"><span class="label">Comprobante no fiscal</span></div><div class="detail">Gracias por su compra.</div></div></body></html>

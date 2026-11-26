@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
+import { KeyboardAvoidingView, Platform,
   View,
   Text,
   StyleSheet,
@@ -79,6 +79,11 @@ export default function VentasScreen() {
         matchesFecha = fechaVenta === new Date().toDateString();
       }
 
+      if (filtroPeriodo === 'Semana') {
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+        matchesFecha = new Date(v.fechaHora) >= start;
+      }
       return matchesSearch && matchesVendedor && matchesFecha;
     });
   }, [ventas, search, filtroPeriodo, filtroVendedor]);
@@ -166,7 +171,7 @@ export default function VentasScreen() {
         onBack={() => router.replace('/(tabs)/mas' as any)}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* KPIs Financieros */}
         <View style={styles.kpiGrid}>
           <View style={[styles.kpiCard, { borderLeftColor: colors.primary[600], borderLeftWidth: 4 }]}>
@@ -214,8 +219,8 @@ export default function VentasScreen() {
             ))}
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRowVendedores}>
-            {(['Todos', 'Miguel', 'Juan Pérez', 'Pedro Ramírez'] as const).map((vend) => (
+          <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRowVendedores}>
+            {(['Todos', ...Array.from(new Set(ventas.map(v => v.usuario?.nombre).filter(Boolean)))]).map((vend) => (
               <TouchableOpacity
                 key={vend}
                 onPress={() => setFiltroVendedor(vend)}
@@ -277,7 +282,7 @@ export default function VentasScreen() {
 
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={styles.totalText}>{formatCurrency(v.total)}</Text>
-                      <Text style={styles.horaText}>{fechaStr}</Text>
+                      <Text style={styles.horaText}>{fechaStr}</Text><Text style={{ fontSize: 12, color: colors.primary[700], marginTop: 4 }}>{v.estado === 'Cancelada' ? 'Cancelada' : (v.pagos || []).some((p: any) => p.metodo === 'Crédito' && p.monto > 0) ? 'Con crédito' : 'Pagado'}</Text>
                     </View>
                   </View>
 
@@ -329,7 +334,7 @@ export default function VentasScreen() {
           animationType="fade"
           onRequestClose={() => setSelectedVenta(null)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
             <View style={[styles.modalCard, shadows.floating]}>
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
@@ -341,7 +346,7 @@ export default function VentasScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalBody}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={styles.modalBody}>
                 {/* Metadatos de la venta */}
                 <View style={styles.ticketMetaRow}>
                   <Text style={styles.ticketMetaLabel}>Fecha y hora:</Text>
@@ -411,7 +416,7 @@ export default function VentasScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
     </AppShell>
@@ -420,46 +425,49 @@ export default function VentasScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   kpiGrid: {
     flexDirection: 'row',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.sm,
+    paddingHorizontal: 0,
+    marginTop: 0,
     marginBottom: spacing.md,
   },
   kpiCard: {
     flex: 1,
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.sm + 2,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minWidth: 0,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: fontWeight.bold,
     color: colors.neutral[500],
-    textTransform: 'uppercase',
+    textTransform: 'none',
   },
   kpiValue: {
-    fontSize: fontSize.md,
+    fontSize: 20,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
     marginTop: 2,
   },
   kpiSub: {
-    fontSize: 9,
+    fontSize: 11,
     color: colors.neutral[400],
     marginTop: 1,
   },
   searchWrap: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 0,
     marginBottom: spacing.sm,
   },
   filterSection: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 0,
     gap: spacing.xs + 2,
     marginBottom: spacing.md,
   },
@@ -472,6 +480,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   filterChipActive: {
     backgroundColor: colors.primary[700],
@@ -499,6 +509,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[50],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   vendChipActive: {
     backgroundColor: colors.primary[600],
@@ -547,8 +559,8 @@ const styles = StyleSheet.create({
   },
   ventaCard: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: colors.neutral[200],
   },
@@ -649,9 +661,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderRadius: radius.xxl,
     width: '100%',
-    maxWidth: 480,
-    maxHeight: '85%',
+    maxWidth: 680,
+    maxHeight: '88%',
     overflow: 'hidden',
+    alignSelf: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -681,6 +696,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalBody: {
     paddingHorizontal: spacing.lg,
@@ -789,6 +806,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: spacing.sm + 4,
     borderRadius: radius.lg,
+    minHeight: 44,
+    minWidth: 44,
   },
   actionBtnText: {
     color: '#FFFFFF',

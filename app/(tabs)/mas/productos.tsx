@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, TextInput, Modal, Pressable, Alert, Platform, ActivityIndicator } from 'react-native';
+import { KeyboardAvoidingView,  View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, TextInput, Modal, Pressable, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Boxes,
@@ -28,7 +28,7 @@ import {
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { mockProductos, mockCategorias, DataService } from '@/services/mockDataService';
-import { AppShell, PageHeader, SearchBar, MoneyDisplay, StockBadge } from '@/components/DesignSystem';
+import { FormSectionTitle, AppShell, PageHeader, SearchBar, MoneyDisplay, StockBadge } from '@/components/DesignSystem';
 import { formatCurrency } from '@/utils/helpers';
 import { desglosarInventario } from '@/utils/multipresentacion';
 import { useApp } from '@/context/AppContext';
@@ -60,12 +60,12 @@ export default function ProductosAdminScreen() {
   const [formNombre, setFormNombre] = useState('');
   const [formNombreAlmacen, setFormNombreAlmacen] = useState('');
   const [formMarca, setFormMarca] = useState('');
-  const [formCategoria, setFormCategoria] = useState<Categoria>('Jamón');
+  const [formCategoria, setFormCategoria] = useState<Categoria>('');
   const [formUnidad, setFormUnidad] = useState<Unidad>('kg');
   const [formPorPeso, setFormPorPeso] = useState(true);
-  const [formPrecioBase, setFormPrecioBase] = useState('185');
-  const [formPrecioCompra, setFormPrecioCompra] = useState('130');
-  const [formExistencia, setFormExistencia] = useState('20');
+  const [formPrecioBase, setFormPrecioBase] = useState('');
+  const [formPrecioCompra, setFormPrecioCompra] = useState('');
+  const [formExistencia, setFormExistencia] = useState('0');
   const [formCodigo, setFormCodigo] = useState('');
   const [formSku, setFormSku] = useState('');
 
@@ -79,7 +79,7 @@ export default function ProductosAdminScreen() {
   const [presFormNombre, setPresFormNombre] = useState('');
   const [presFormTipo, setPresFormTipo] = useState<PresentacionTipo>('paquete');
   const [presFormFactor, setPresFormFactor] = useState('1');
-  const [presFormPrecio, setPresFormPrecio] = useState('8');
+  const [presFormPrecio, setPresFormPrecio] = useState('');
   const [presFormCodigo, setPresFormCodigo] = useState('');
   const [presFormActiva, setPresFormActiva] = useState(true);
   const [presFormOrden, setPresFormOrden] = useState('1');
@@ -316,12 +316,12 @@ export default function ProductosAdminScreen() {
     setFormNombre('');
     setFormNombreAlmacen('');
     setFormMarca('');
-    setFormCategoria('Jamón');
+    setFormCategoria(categoriasList[0]?.nombre || '');
     setFormUnidad('kg');
     setFormPorPeso(true);
-    setFormPrecioBase('185');
-    setFormPrecioCompra('130');
-    setFormExistencia('20');
+    setFormPrecioBase('');
+    setFormPrecioCompra('');
+    setFormExistencia('0');
     setFormCodigo('');
     setFormSku('');
     setFormManejaMultipres(false);
@@ -593,7 +593,7 @@ export default function ProductosAdminScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Buscador */}
         <View style={styles.searchSection}>
           <SearchBar
@@ -605,7 +605,7 @@ export default function ProductosAdminScreen() {
         </View>
 
         {/* Filtros de Categorías */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setCategoria('Todas')}
@@ -627,7 +627,7 @@ export default function ProductosAdminScreen() {
         </ScrollView>
 
         {/* Filtros de Marcas */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marcaRow}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marcaRow}>
           {marcas.map((m) => (
             <TouchableOpacity
               key={m}
@@ -716,10 +716,7 @@ export default function ProductosAdminScreen() {
                     </View>
 
                     <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                      <StockBadge stockPiezas={p.existencia} />
-                      <Text style={styles.cleanStockSub}>
-                        {p.existencia} {p.unidad === 'kg' ? 'kg' : (p.unidad === 'paquete' ? 'paquetes' : 'piezas')} disponibles
-                      </Text>
+                      <StockBadge stockPiezas={p.existencia} unidad={p.unidad} />
                     </View>
                   </View>
 
@@ -772,7 +769,7 @@ export default function ProductosAdminScreen() {
 
       {/* MODAL DE ALTA / EDICIÓN DE PRODUCTO */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -783,7 +780,8 @@ export default function ProductosAdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              <FormSectionTitle>Identidad del producto</FormSectionTitle>
               {/* Nombre */}
               <Text style={styles.inputLabel}>1. Nombre en la App (Venta y Catálogo) *</Text>
               <TextInput
@@ -824,7 +822,7 @@ export default function ProductosAdminScreen() {
                   <Text style={styles.catLinkText}>+ Gestionar familias</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
                 {categoriasList.map((c) => (
                   <TouchableOpacity
                     key={c.id}
@@ -837,6 +835,7 @@ export default function ProductosAdminScreen() {
                 ))}
               </ScrollView>
 
+              <FormSectionTitle>Unidad y presentaciones de venta</FormSectionTitle>
               {/* SWITCH MANEJA MÚLTIPLES PRESENTACIONES (REQUERIMIENTO 4) */}
               <View style={[styles.switchBox, formManejaMultipres && styles.switchBoxActive]}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
@@ -1024,6 +1023,7 @@ export default function ProductosAdminScreen() {
                 </View>
               )}
 
+              <FormSectionTitle>Precios e inventario</FormSectionTitle>
               {/* Precios Row */}
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
@@ -1032,7 +1032,7 @@ export default function ProductosAdminScreen() {
                   </Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="185"
+                    placeholder="0.00"
                     keyboardType="numeric"
                     value={formPrecioBase}
                     onChangeText={setFormPrecioBase}
@@ -1043,7 +1043,7 @@ export default function ProductosAdminScreen() {
                   <Text style={styles.inputLabel}>Precio Compra ($)</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="130"
+                    placeholder="0.00"
                     keyboardType="numeric"
                     value={formPrecioCompra}
                     onChangeText={setFormPrecioCompra}
@@ -1058,7 +1058,7 @@ export default function ProductosAdminScreen() {
               </Text>
               <TextInput
                 style={styles.input}
-                placeholder="20"
+                placeholder="0"
                 keyboardType="numeric"
                 value={formExistencia}
                 onChangeText={setFormExistencia}
@@ -1097,12 +1097,12 @@ export default function ProductosAdminScreen() {
               </Text>
             </TouchableOpacity>
           </Pressable>
-        </Pressable>
+        </Pressable></KeyboardAvoidingView>
       </Modal>
 
       {/* SUBMODAL CONFIGURAR PRESENTACIÓN INDIVIDUAL */}
       <Modal visible={presModalVisible} transparent animationType="fade" onRequestClose={() => setPresModalVisible(false)}>
-        <Pressable style={styles.presModalOverlay} onPress={() => setPresModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Pressable style={styles.presModalOverlay} onPress={() => setPresModalVisible(false)}>
           <Pressable style={styles.presModalCard} onPress={(e) => e.stopPropagation()}>
             <View style={styles.presModalHeader}>
               <Text style={styles.presModalTitle}>
@@ -1113,7 +1113,7 @@ export default function ProductosAdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               <Text style={styles.inputLabel}>Nombre de la Presentación *</Text>
               <TextInput
                 style={styles.input}
@@ -1208,7 +1208,7 @@ export default function ProductosAdminScreen() {
               <Text style={styles.savePresBtnText}>Guardar Presentación</Text>
             </TouchableOpacity>
           </Pressable>
-        </Pressable>
+        </Pressable></KeyboardAvoidingView>
       </Modal>
 
       {/* ========================================================= */}
@@ -1222,7 +1222,7 @@ export default function ProductosAdminScreen() {
           if (!importIsLoading) setImportModalVisible(false);
         }}
       >
-        <Pressable
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Pressable
           style={styles.importModalOverlay}
           onPress={() => {
             if (!importIsLoading) setImportModalVisible(false);
@@ -1265,7 +1265,7 @@ export default function ProductosAdminScreen() {
 
             {/* STAGE 1: SELECCION DE ARCHIVO */}
             {importStage === 'select' && (
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
                 <Text style={styles.importInstructionText}>
                   Carga el catálogo comercial real de Miguel. El sistema mapeará nombres, costos y precios oficiales, clasificará coincidencias y protegerá las existencias y presentaciones actuales.
                 </Text>
@@ -1395,7 +1395,7 @@ export default function ProductosAdminScreen() {
 
                 {/* Tabs de Filtro y Botón rápido */}
                 <View style={styles.filterAndActionsRow}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                  <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
                       {(['Todas', 'Nuevo', 'Existente', 'Ambiguo', 'Invalido'] as const).map((tab) => {
                         const count =
@@ -1445,7 +1445,7 @@ export default function ProductosAdminScreen() {
                 </View>
 
                 {/* Lista de Filas Pagina */}
-                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: 8 }}>
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: 8 }}>
                   {importPaginatedFilas.map((f) => {
                     const resolucion = importResoluciones[f.numeroFila] || {
                       numeroFila: f.numeroFila,
@@ -1711,7 +1711,7 @@ export default function ProductosAdminScreen() {
 
             {/* STAGE 3: CONFIRMACIÓN DE CAMBIOS */}
             {importStage === 'confirm' && (
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
                 <View style={styles.confirmBox}>
                   <View style={styles.confirmHeaderRow}>
                     <AlertCircle size={26} color={colors.primary[700]} />
@@ -1853,7 +1853,7 @@ export default function ProductosAdminScreen() {
               </View>
             )}
           </Pressable>
-        </Pressable>
+        </Pressable></KeyboardAvoidingView>
       </Modal>
     </AppShell>
   );
@@ -1861,7 +1861,9 @@ export default function ProductosAdminScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   searchSection: {
     paddingHorizontal: spacing.md,
@@ -1910,6 +1912,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radius.sm,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   marcaChipActive: {
     backgroundColor: colors.neutral[900],
@@ -2053,10 +2057,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.lg,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   createBtnHeaderText: {
     color: '#FFFFFF',
@@ -2097,10 +2105,13 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
-    maxHeight: '92%',
+    maxHeight: '88%',
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2117,6 +2128,8 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   inputLabel: {
     fontSize: fontSize.xs,
@@ -2128,12 +2141,13 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
-    borderRadius: radius.lg,
+    borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
     backgroundColor: colors.neutral[50],
+    minHeight: 44,
   },
   catHeaderRow: {
     flexDirection: 'row',
@@ -2155,6 +2169,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
     marginRight: 6,
+    minHeight: 44,
+    minWidth: 44,
   },
   catPickChipActive: {
     backgroundColor: colors.primary[600],
@@ -2205,13 +2221,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     marginTop: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   saveBtnText: {
     color: '#FFFFFF',
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
   },
-  // Multipresentación estilos
   multiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2323,6 +2340,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: 6,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   addPresBtnText: {
     color: '#FFFFFF',
@@ -2354,6 +2373,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[300],
+    minHeight: 44,
+    minWidth: 44,
   },
   unidadChipActive: {
     backgroundColor: colors.primary[600],
@@ -2482,11 +2503,15 @@ const styles = StyleSheet.create({
   },
   presModalCard: {
     width: '100%',
-    maxWidth: 440,
-    backgroundColor: '#FFFFFF',
+    maxWidth: 680,
+    backgroundColor: colors.neutral[0],
     borderRadius: radius.xl,
     padding: spacing.lg,
     ...shadows.floating,
+    alignSelf: 'center',
+    maxHeight: '88%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   presModalHeader: {
     flexDirection: 'row',
@@ -2507,6 +2532,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.neutral[300],
+    minHeight: 44,
+    minWidth: 44,
   },
   presTipoChipActive: {
     backgroundColor: colors.primary[600],
@@ -2551,6 +2578,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     marginTop: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   savePresBtnText: {
     color: '#FFFFFF',
@@ -2562,11 +2591,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: colors.primary[700],
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 10,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.primary[300],
+    minHeight: 44,
+    flexShrink: 0,
   },
   importBtnHeaderText: {
     color: '#FFFFFF',
@@ -2598,12 +2629,15 @@ const styles = StyleSheet.create({
   },
   importModalSheet: {
     width: '100%',
-    maxWidth: 720,
-    backgroundColor: '#FFFFFF',
+    maxWidth: 680,
+    backgroundColor: colors.neutral[0],
     borderRadius: radius.xl,
     padding: spacing.lg,
-    maxHeight: '92%',
+    maxHeight: '88%',
     ...shadows.floating,
+    alignSelf: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   importModalHeader: {
     flexDirection: 'row',
@@ -2741,6 +2775,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     marginTop: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   primaryActionBtnDisabled: {
     opacity: 0.5,
@@ -2768,12 +2804,13 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     backgroundColor: colors.neutral[50],
-    borderRadius: radius.md,
-    padding: spacing.xs + 2,
+    borderRadius: 12,
+    padding: 10,
     alignItems: 'center',
     borderLeftWidth: 3,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minWidth: 0,
   },
   metricVal: {
     fontSize: fontSize.sm,
@@ -2804,6 +2841,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   importFilterTabActive: {
     backgroundColor: colors.primary[600],
@@ -2828,6 +2867,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[50],
     borderWidth: 1,
     borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   applySuggestionsBtnText: {
     fontSize: 10,
@@ -2982,6 +3023,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   linkCandidateBtnText: {
     fontSize: 9,
@@ -3012,6 +3055,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[300],
+    minHeight: 44,
+    minWidth: 44,
   },
   actionChipActiveCrear: {
     backgroundColor: colors.success[600],
@@ -3050,6 +3095,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   unidadPickChipActive: {
     backgroundColor: colors.neutral[800],
@@ -3080,6 +3127,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[300],
+    minHeight: 44,
+    minWidth: 44,
   },
   pageBtnDisabled: {
     opacity: 0.35,
@@ -3116,6 +3165,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   secondaryBtnText: {
     fontSize: fontSize.xs,

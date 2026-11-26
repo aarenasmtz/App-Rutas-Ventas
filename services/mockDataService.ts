@@ -1,3 +1,4 @@
+import { periodRange } from '@/utils/reportExport';
 import type {
   Producto,
   Cliente,
@@ -160,6 +161,31 @@ export const DataService = {
     return await apiService.checkHealth();
   },
 
+  getInventario: async (ubicacion?: string): Promise<Producto[]> => {
+    try {
+      const res = await apiService.getInventario(ubicacion);
+      if (res && Array.isArray(res.items)) {
+        return res.items.map((it: any) => ({
+          id: it.productoId || it.sku,
+          codigo: it.productoId,
+          sku: it.sku,
+          nombre: it.nombre,
+          marca: it.marca,
+          categoria: it.categoria || 'General',
+          unidad: it.unidad || 'pza',
+          precioBase: it.precioBase,
+          existencia: it.existenciaPiezas,
+          estadoStock: it.estadoStock,
+          manejaMultiplesPresentaciones: it.manejaMultiplesPresentaciones,
+          presentacionesConfig: it.presentaciones,
+        }));
+      }
+    } catch {
+      // Fallback a productos locales
+    }
+    return DataService.getProductos();
+  },
+
   getProductos: async (filtro?: { categoria?: string; search?: string }): Promise<Producto[]> => {
     try {
       const live = await apiService.getProductos({
@@ -226,6 +252,8 @@ export const DataService = {
     }
     return mockClientes.find((c) => c.id === id);
   },
+
+  getCuentaCliente: (id: string) => apiService.getCuentaCliente(id),
 
   createCliente: async (clienteData: Partial<Cliente>): Promise<Cliente> => {
     try {
@@ -552,6 +580,18 @@ export const DataService = {
   },
 
   // Preferencia de Orden Activo (mi_orden, az, frecuentes)
+  getVistaCatalogo: (userId = 'default'): 'mosaicos' | 'lista' => {
+    try {
+      return typeof window !== 'undefined' && window.localStorage?.getItem(`miguel_vista_${userId}`) === 'lista' ? 'lista' : 'mosaicos';
+    } catch { return 'mosaicos'; }
+  },
+
+  saveVistaCatalogo: (vista: 'mosaicos' | 'lista', userId = 'default'): void => {
+    try {
+      if (typeof window !== 'undefined') window.localStorage?.setItem(`miguel_vista_${userId}`, vista);
+    } catch { /* Same device-local persistence as favorites and manual order. */ }
+  },
+
   getSortPreference: (userId = 'default'): 'mi_orden' | 'az' | 'frecuentes' => {
     if (typeof window === 'undefined' || !window.localStorage) return 'mi_orden';
     try {
@@ -612,6 +652,50 @@ export const DataService = {
       // Fallback
     }
     return [...mockVentas];
+  },
+
+  // Sobregiro de Crédito Remoto (Fase 4)
+  solicitarSobregiro: async (req: { clienteId: string; empleadoId: string; montoSolicitado: number; motivo?: string }) => {
+    try {
+      return await apiService.solicitarSobregiro(req);
+    } catch {
+      // Mock local fallback
+      const token = 'MOCK-REQ-' + Date.now();
+      return {
+        message: 'Solicitud guardada en cola local',
+        tokenSolicitud: token,
+        estado: 'Pendiente',
+        montoSolicitado: req.montoSolicitado,
+      };
+    }
+  },
+
+  getSolicitudesSobregiro: async (estado?: string) => {
+    try {
+      return await apiService.getSolicitudesSobregiro(estado);
+    } catch {
+      return [];
+    }
+  },
+
+  resolverSobregiro: async (req: { tokenSolicitud: string; autorizado: boolean; adminId?: string; motivoResolucion?: string }) => {
+    try {
+      return await apiService.resolverSobregiro(req);
+    } catch {
+      return {
+        message: req.autorizado ? 'Sobregiro autorizado (offline)' : 'Sobregiro rechazado',
+        estado: req.autorizado ? 'Autorizada' : 'Rechazada',
+        tokenAutorizacion: req.autorizado ? 'AUTH-' + Math.floor(100000 + Math.random() * 900000) : null,
+      };
+    }
+  },
+
+  consultarSobregiro: async (token: string) => {
+    try {
+      return await apiService.consultarSobregiro(token);
+    } catch {
+      return { tokenSolicitud: token, estado: 'Pendiente' };
+    }
   },
 
   registrarVenta: async (venta: RegistrarVentaRequestDto) => {
@@ -918,13 +1002,14 @@ export const DataService = {
     }
   },
 
-  cerrarCorteCaja: async (req: { empleadoId: string; efectivoContado: number; observaciones?: string }) => {
+  cerrarCorteCaja: async (req: { empleadoId: string; efectivoContado: number; fondoInicial?: number; observaciones?: string }) => {
     try {
       return await apiService.cerrarCorteCaja(req);
     } catch {
       return {
         message: 'Corte cerrado localmente',
         empleadoId: req.empleadoId,
+        fondoInicial: req.fondoInicial || 0,
         efectivoContado: req.efectivoContado,
         diferenciaCaja: 0,
         estado: 'Cerrado',
@@ -995,21 +1080,23 @@ export const DataService = {
     } catch {
       // Fallback
     }
-    const ventasTotales = mockVentas.reduce((sum, v) => sum + (v.total || 0), 0);
-    const gastosTotal = mockGastos.reduce((sum, g) => sum + (g.importe || 0), 0);
-    const pedidosTotal = mockVentas.length;
-    const ticketPromedio = pedidosTotal > 0 ? Math.round(ventasTotales / pedidosTotal) : 0;
-    const visitadosSet = new Set(mockVentas.map((v) => v.clienteId).filter(Boolean));
-    const clientesVisitados = visitadosSet.size;
-    const clientesTotalRuta = mockClientes.length;
-    const efectividadVisitas = clientesTotalRuta > 0 ? Math.round((clientesVisitados / clientesTotalRuta) * 100) : 0;
-
+    const range = periodRange(periodo);
+    const inPeriod = (date: string) => { const time = new Date(date).getTime(); return time >= range.start.getTime() && time <= range.end.getTime(); };
+    const sales = mockVentas.filter(v => inPeriod(v.fechaHora) && (!rutaId || v.cliente?.ruta === rutaId));
+    const expenses = mockGastos.filter(g => inPeriod(g.fechaHora));
+    const ventasTotales = sales.reduce((sum,v)=>sum+(v.total || 0),0);
+    const gastosTotal = expenses.reduce((sum,g)=>sum+(g.importe || 0),0);
+    const pedidosTotal = sales.length;
+    const ticketPromedio = pedidosTotal ? Math.round(ventasTotales / pedidosTotal * 100)/100 : 0;
+    const clientesVisitados = new Set(sales.map(v=>v.clienteId).filter(Boolean)).size;
+    const clientesTotalRuta = mockClientes.filter(c=>!rutaId || c.ruta === rutaId).length;
+    const efectividadVisitas = clientesTotalRuta ? Math.round(clientesVisitados / clientesTotalRuta * 100) : 0;
     let efectivo = 0;
     let transferencia = 0;
     let tarjeta = 0;
     let credito = 0;
 
-    for (const v of mockVentas) {
+    for (const v of sales) {
       for (const p of v.pagos || []) {
         const met = (p.metodo || '').toLowerCase();
         const m = Number(p.monto) || 0;
@@ -1021,19 +1108,24 @@ export const DataService = {
       }
     }
 
-    const cobranzaTotal = efectivo + transferencia + tarjeta;
-    const utilidadEstimada = Math.max(0, ventasTotales - gastosTotal);
+    const abonosEnPeriodo = (typeof offlineSyncQueue?.getQueue === 'function' ? offlineSyncQueue.getQueue() : [])
+      .filter(item => item.tipo === 'Abono' && inPeriod(item.fechaCreacion))
+      .reduce((sum, item) => sum + (item.monto || 0), 0);
+    const cobranzaTotal = abonosEnPeriodo > 0 ? abonosEnPeriodo : (efectivo + transferencia + tarjeta);
+    const utilidadEstimada = Math.round(((ventasTotales * 0.35) - gastosTotal) * 100) / 100;
 
     // Calcular top productos dinámicamente
-    const prodsMap: { [id: string]: { productoId: string; nombre: string; cantidadVendida: number; importeTotal: number } } = {};
-    for (const v of mockVentas) {
+    const prodsMap: { [id: string]: { productoId: string; nombre: string; presentacion: string; cantidadVendida: number; importeTotal: number } } = {};
+    for (const v of sales) {
       for (const det of v.detalles || []) {
-        const id = det.productoId || det.id;
-        if (!id) continue;
+        const productId = det.productoId || det.id;
+        const id = `${productId}:${det.presentacionNombre || det.presentacionTipo || ''}`;
+        if (!productId) continue;
         if (!prodsMap[id]) {
           prodsMap[id] = {
-            productoId: id,
-            nombre: det.presentacionNombre || det.nombre || `Producto ${id}`,
+            productoId: String(productId),
+            nombre: det.producto?.nombre || mockProductos.find(p=>String(p.id)===String(productId))?.nombre || det.nombre || `Producto ${id}`,
+            presentacion: det.presentacionNombre || det.presentacionTipo || '',
             cantidadVendida: 0,
             importeTotal: 0,
           };
@@ -1049,8 +1141,9 @@ export const DataService = {
 
     return {
       periodo,
-      fechaInicio: new Date().toISOString(),
-      fechaFin: new Date().toISOString(),
+      origen: 'local',
+      fechaInicio: range.start.toISOString(),
+      fechaFin: range.end.toISOString(),
       ventasTotales,
       cobranzaTotal,
       creditoColocado: credito,

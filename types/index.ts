@@ -254,6 +254,7 @@ export interface CorteTrabajador {
   empleadoId: string;
   nombre: string;
   ruta: string;
+  fondoInicial?: number;
   ventasTotales: number;
   efectivo: number;
   transferencias: number;

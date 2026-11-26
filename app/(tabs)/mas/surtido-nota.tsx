@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
+import { KeyboardAvoidingView,
   View,
   Text,
   StyleSheet,
@@ -40,7 +40,7 @@ import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/consta
 import { DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader } from '@/components/DesignSystem';
 import type { Producto, ItemNotaPdf } from '@/types';
-import { parsePdfNotaCompleta } from '@/utils/pdfNoteParser';
+import { readSupplyPdf } from '@/utils/readSupplyPdf';
 
 // Helper seguro para extraer el ID numérico de productos (ej. "p1" -> 1, "p12" -> 12, 1 -> 1)
 const parseNumericId = (rawId: string | number | undefined): number | undefined => {
@@ -50,341 +50,6 @@ const parseNumericId = (rawId: string | number | undefined): number | undefined 
   const parsed = parseInt(digits, 10);
   return isNaN(parsed) || parsed <= 0 ? undefined : parsed;
 };
-
-// Datos pre-extraídos de la nota real de Miguel "notacompramiguelejemplo.pdf" (Folio 292534)
-const NOTA_EJEMPLO_ITEMS: ItemNotaPdf[] = [
-  {
-    productoAlmacen: 'Catsup Ortega 20 Kl.',
-    um: 'PZA',
-    cantidadNota: 1,
-    equivalencias: '( Kilo: 0.05 )',
-    piezasCalculadas: 1,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Champimex Rebanado',
-    um: 'PZA',
-    cantidadNota: 1,
-    equivalencias: '( Kilo: 0.39 )',
-    piezasCalculadas: 1,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Jamon Americano Mandolina Capistrano',
-    um: 'KG',
-    cantidadNota: 12.18,
-    equivalencias: '( Pieza: 0.34 )',
-    piezasCalculadas: 12.18,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Jamon Clasico Capistrano',
-    um: 'KG',
-    cantidadNota: 25.79,
-    equivalencias: '( Pieza: 0.16 )',
-    piezasCalculadas: 25.79,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Jamon Economico Kir',
-    um: 'KG',
-    cantidadNota: 25.26,
-    equivalencias: '( Pieza: 0.40 )',
-    piezasCalculadas: 25.26,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Jamon Pavo y Cerdo Fud',
-    um: 'KG',
-    cantidadNota: 24.08,
-    equivalencias: '( Pieza: 0.17 )',
-    piezasCalculadas: 24.08,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Jamon Virginia Pavo Zwan',
-    um: 'KG',
-    cantidadNota: 23.94,
-    equivalencias: '( Pieza: 0.17 )',
-    piezasCalculadas: 23.94,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Mayonesa McCormick 3.4 Kg.',
-    um: 'PZA',
-    cantidadNota: 1,
-    equivalencias: '( Caja: 0.25 ) ( Kilo: 0.29 )',
-    piezasCalculadas: 1,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Pechuga Clasica Capistrano',
-    um: 'KG',
-    cantidadNota: 11.97,
-    equivalencias: '( Pieza: 0.33 )',
-    piezasCalculadas: 11.97,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Queso Amarillo Castell',
-    um: 'PZA',
-    cantidadNota: 60,
-    equivalencias: '( Exhibidor: 0.17 ) ( Pieza: 0.02 )',
-    piezasCalculadas: 60,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Queso Manchego Caperucita',
-    um: 'KG',
-    cantidadNota: 11.37,
-    equivalencias: '( Pieza: 0.44 )',
-    piezasCalculadas: 11.37,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Queso Molido Doble Crema Cuadrado',
-    um: 'KG',
-    cantidadNota: 50,
-    equivalencias: '( Pieza: 0.10 )',
-    piezasCalculadas: 50,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Salchicha Asar Chimex',
-    um: 'KG',
-    cantidadNota: 10,
-    equivalencias: '( Caja: 0.10 ) ( Pieza: 1.25 )',
-    piezasCalculadas: 10,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Salchicha Hot Dog San Antonio 3K.',
-    um: 'PZA',
-    cantidadNota: 5,
-    equivalencias: '( Caja: 0.17 ) ( Kilo: 0.07 )',
-    piezasCalculadas: 5,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Salchicha Ideal Hot-Dog 3K.',
-    um: 'PZA',
-    cantidadNota: 5,
-    equivalencias: '( Caja: 0.17 ) ( Kilo: 0.07 )',
-    piezasCalculadas: 5,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Salchicha Pavo San Rafael',
-    um: 'KG',
-    cantidadNota: 12.18,
-    equivalencias: '( Pieza: 0.41 )',
-    piezasCalculadas: 12.18,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Tocino Ahumado Bafar',
-    um: 'KG',
-    cantidadNota: 10,
-    equivalencias: '( Caja: 0.10 ) ( Pieza: 1.00 )',
-    piezasCalculadas: 10,
-    recordarVinculacion: true,
-  },
-];
-
-// Datos pre-extraídos de la nota de compra de ejemplo 2 "nota2Ejemplo.pdf" (Folio 292535)
-const NOTA2_EJEMPLO_ITEMS: ItemNotaPdf[] = [
-  {
-    productoAlmacen: 'Jamon Virginia Pavo Zwan',
-    um: 'KG',
-    cantidadNota: 24.5,
-    equivalencias: '( Pieza: 0.17 )',
-    piezasCalculadas: 24.5,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Salchicha Pavo San Rafael',
-    um: 'KG',
-    cantidadNota: 15,
-    equivalencias: '( Pieza: 0.40 )',
-    piezasCalculadas: 15,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Queso Manchego Caperucita',
-    um: 'KG',
-    cantidadNota: 14.8,
-    equivalencias: '( Pieza: 0.45 )',
-    piezasCalculadas: 14.8,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Tocino Ahumado Bafar',
-    um: 'KG',
-    cantidadNota: 12,
-    equivalencias: '( Caja: 0.10 )',
-    piezasCalculadas: 12,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Salchicha Hot Dog San Antonio 3K.',
-    um: 'PZA',
-    cantidadNota: 6,
-    equivalencias: '( Caja: 0.20 )',
-    piezasCalculadas: 6,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Mayonesa McCormick 3.4 Kg.',
-    um: 'PZA',
-    cantidadNota: 2,
-    equivalencias: '( Caja: 0.50 )',
-    piezasCalculadas: 2,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Pechuga Clasica Capistrano',
-    um: 'KG',
-    cantidadNota: 10.5,
-    equivalencias: '( Pieza: 0.30 )',
-    piezasCalculadas: 10.5,
-    recordarVinculacion: true,
-  },
-  {
-    productoAlmacen: 'Queso Molido Doble Crema Cuadrado',
-    um: 'KG',
-    cantidadNota: 25,
-    equivalencias: '( Pieza: 0.10 )',
-    piezasCalculadas: 25,
-    recordarVinculacion: true,
-  },
-];
-
-// Colección completa de la Nota de Compra Folio #294207 (31 productos de almacén)
-export const NOTA_294207_ITEMS: ItemNotaPdf[] = [
-  { productoAlmacen: 'Aceite Ave 10 Lt', um: 'PZA', cantidadNota: 14, equivalencias: '', piezasCalculadas: 14, recordarVinculacion: true },
-  { productoAlmacen: 'Agua Cactus 500ML', um: 'PCK', cantidadNota: 2, equivalencias: '( Paquete: 2.00 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Arrachera Bresco  500GR', um: 'PZA', cantidadNota: 10, equivalencias: '', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Carne Hamburguesa Estrella', um: 'CJ', cantidadNota: 2, equivalencias: '( Caja: 2.00 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Chicharron Prensado 4 Milpas', um: 'KG', cantidadNota: 15, equivalencias: '( Kilo: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Campirano 11x11 El Mexicano', um: 'PZA', cantidadNota: 6, equivalencias: '( Kilo: 1.77 )', piezasCalculadas: 6, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Campirano 11x11 Reb. 1Kg El Mexicano', um: 'KG', cantidadNota: 6, equivalencias: '( Pieza: 6.00 )', piezasCalculadas: 6, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Espaldilla Redondo Vacio 1 Kg Ideal', um: 'KG', cantidadNota: 15, equivalencias: '( Pieza: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Super Lunch Lad. Vacio 1Kl', um: 'KG', cantidadNota: 5, equivalencias: '( Kilo: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Tradicional Lad. Gus Reb. 1kl', um: 'KG', cantidadNota: 35, equivalencias: '( Kilo: 35.00 )', piezasCalculadas: 35, recordarVinculacion: true },
-  { productoAlmacen: 'Margarina 90GR. Iberia', um: 'CJ', cantidadNota: 2, equivalencias: '( Pieza: 0.09 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Mayonesa McCormick', um: 'CJ', cantidadNota: 1, equivalencias: '( Pieza: 0.25 )', piezasCalculadas: 1, recordarVinculacion: true },
-  { productoAlmacen: 'Papa McCain 3/8 Cascara 12.3 Kl.', um: 'CJ', cantidadNota: 6, equivalencias: '', piezasCalculadas: 6, recordarVinculacion: true },
-  { productoAlmacen: 'Papa Mydibel 3/8 10 Kg', um: 'CJ', cantidadNota: 4, equivalencias: '', piezasCalculadas: 4, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Amarillo La Hacienda', um: 'EX', cantidadNota: 3, equivalencias: '( Caja: 18.00 )', piezasCalculadas: 3, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Delicioso Rallado 1Kl Vacio', um: 'KG', cantidadNota: 10, equivalencias: '( Kilo: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Panela La Franja', um: 'PZA', cantidadNota: 4, equivalencias: '( Pieza: 4.00 )', piezasCalculadas: 4, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Parmesano Parma 85gr', um: 'PZA', cantidadNota: 10, equivalencias: '( Caja: 240.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Salami Rebanado 1Kg Vacio El Mexicano', um: 'KG', cantidadNota: 2, equivalencias: '', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Any Pavo', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Frankfurt Bafar De linea', um: 'PZA', cantidadNota: 4, equivalencias: '( Pieza: 4.00 )', piezasCalculadas: 4, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Go-Jochos 3KG El Mexicano', um: 'PZA', cantidadNota: 2, equivalencias: '( Pieza: 2.00 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Ideal Hot-Dog 3K.', um: 'PZA', cantidadNota: 2, equivalencias: '( Pieza: 2.00 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Millan 2.5 kg', um: 'PZA', cantidadNota: 12, equivalencias: '( Pieza: 12.00 )', piezasCalculadas: 12, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Pavo 266GR.Fud', um: 'PZA', cantidadNota: 16, equivalencias: '( Pieza: 16.00 )', piezasCalculadas: 16, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha San Antonio Premium', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Viva 3 kg', um: 'PZA', cantidadNota: 15, equivalencias: '( Pieza: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
-  { productoAlmacen: 'Salchirica de Pavo Chimex', um: 'PZA', cantidadNota: 3, equivalencias: '( Pieza: 3.00 )', piezasCalculadas: 3, recordarVinculacion: true },
-  { productoAlmacen: 'Tocino Bresco Vacio 1/2 Kl.', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Tocino Loyval 1KL. Vacio', um: 'KG', cantidadNota: 10, equivalencias: '( Kilo: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Yakult', um: 'PCK', cantidadNota: 1, equivalencias: '( Pieza: 0.04 )', piezasCalculadas: 1, recordarVinculacion: true },
-];
-
-// Colección completa de la Nota de Compra Folio #295584 (ViernesConError.pdf - 32 productos reales de almacén)
-export const NOTA_295584_VIERNES_ITEMS: ItemNotaPdf[] = [
-  { productoAlmacen: 'Arrachera Bresco  500GR', um: 'PZA', cantidadNota: 10, equivalencias: '', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Champimex Rebanado', um: 'PZA', cantidadNota: 6, equivalencias: '( Caja: 36.00 )', piezasCalculadas: 6, recordarVinculacion: true },
-  { productoAlmacen: 'Chicharron Duro Chico 1Kl.', um: 'KG', cantidadNota: 4, equivalencias: '( Kilo: 4.00 )', piezasCalculadas: 4, recordarVinculacion: true },
-  { productoAlmacen: 'Chicharron Prensado 4 Milpas', um: 'KG', cantidadNota: 6, equivalencias: '( Kilo: 6.00 )', piezasCalculadas: 6, recordarVinculacion: true },
-  { productoAlmacen: 'Chorizo Ranchero 2.5 KG Mexicano', um: 'PCK', cantidadNota: 1, equivalencias: '( Paquete: 1.00 )', piezasCalculadas: 1, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Americano Ladrillo Vacio 1kg Ideal', um: 'KG', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Americano Mandolina Capistrano', um: 'PZA', cantidadNota: 3, equivalencias: '( Kilo: 0.59 )', piezasCalculadas: 3, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Delicia Ladrillo El Mexicano', um: 'PZA', cantidadNota: 1, equivalencias: '( Kilo: 0.16 )', piezasCalculadas: 1, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Espaldilla Redondo Reb. 1Kg Ideal', um: 'KG', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Espaldilla Redondo Vacio 1 Kg Ideal', um: 'KG', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Pavo San Antonio "PROMO"', um: 'PZA', cantidadNota: 15, equivalencias: '', piezasCalculadas: 15, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Super Lunch Lad. Vacio 1Kl', um: 'KG', cantidadNota: 5, equivalencias: '( Kilo: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Jamon Tradicional Lad. Gus Reb. 1kl', um: 'KG', cantidadNota: 20, equivalencias: '( Kilo: 20.00 )', piezasCalculadas: 20, recordarVinculacion: true },
-  { productoAlmacen: 'Margarina 90GR. Iberia', um: 'CJ', cantidadNota: 3, equivalencias: '( Pieza: 0.13 )', piezasCalculadas: 3, recordarVinculacion: true },
-  { productoAlmacen: 'Media Crema 2Kg.', um: 'PZA', cantidadNota: 2, equivalencias: '( Kilo: 1.00 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Peperoni Food Service 5KG', um: 'PZA', cantidadNota: 2, equivalencias: '', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Piña Trozo Bolsa San Juan', um: 'PZA', cantidadNota: 4, equivalencias: '', piezasCalculadas: 4, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Amarillo La Hacienda', um: 'EX', cantidadNota: 2, equivalencias: '( Caja: 12.00 )', piezasCalculadas: 2, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Delicioso Rallado 1Kl Vacio', um: 'KG', cantidadNota: 5, equivalencias: '( Kilo: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Fresco Chico Arturo 150Gr.', um: 'PZA', cantidadNota: 30, equivalencias: '( Pieza: 30.00 )', piezasCalculadas: 30, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Fresco Grande Arturo 400 Gr.', um: 'PZA', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Fresco Mediano Arturo 250 Gr.', um: 'PZA', cantidadNota: 15, equivalencias: '( Pieza: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
-  { productoAlmacen: 'Queso Molido Jaguey 1Kg', um: 'KG', cantidadNota: 30, equivalencias: '', piezasCalculadas: 30, recordarVinculacion: true },
-  { productoAlmacen: 'Salami Reb. 1Kg Bafar De Linea', um: 'KG', cantidadNota: 1, equivalencias: '( Pieza: 1.00 )', piezasCalculadas: 1, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Any Pavo', um: 'PZA', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Millan 2.5 kg', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Pavo 266GR.Fud', um: 'PZA', cantidadNota: 10, equivalencias: '( Pieza: 10.00 )', piezasCalculadas: 10, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha San Antonio Premium', um: 'PZA', cantidadNota: 5, equivalencias: '( Pieza: 5.00 )', piezasCalculadas: 5, recordarVinculacion: true },
-  { productoAlmacen: 'Salchicha Viva 3 kg', um: 'PZA', cantidadNota: 13, equivalencias: '( Pieza: 13.00 )', piezasCalculadas: 13, recordarVinculacion: true },
-  { productoAlmacen: 'Tortilla Harina Ideal', um: 'PZA', cantidadNota: 15, equivalencias: '( Pieza: 15.00 )', piezasCalculadas: 15, recordarVinculacion: true },
-  { productoAlmacen: 'Tostada Gruesa Ideal', um: 'PZA', cantidadNota: 20, equivalencias: '( Caja: 400.00 )', piezasCalculadas: 20, recordarVinculacion: true },
-  { productoAlmacen: 'Tostada Suave Ideal', um: 'PZA', cantidadNota: 80, equivalencias: '( Caja: 1600.00 )', piezasCalculadas: 80, recordarVinculacion: true },
-];
-
-// Función de análisis y descompresión 100% dinámica de notas PDF
-async function parsePdfClient(
-  file: File | Blob
-): Promise<{ folio: string; fecha: string; items: ItemNotaPdf[]; advertencias?: string[] }> {
-  try {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout de lectura')), 4500)
-    );
-    const parsed = await Promise.race([parsePdfNotaCompleta(file), timeoutPromise]);
-    if (parsed.items && parsed.items.length > 0) {
-      return {
-        folio: parsed.folio && parsed.folio !== 'SinFolio' ? parsed.folio : '295584',
-        fecha: parsed.fecha,
-        items: parsed.items,
-        advertencias: parsed.advertencias,
-      };
-    }
-  } catch (err) {
-    console.warn('Advertencia en parsePdfNotaCompleta, intentando fallback:', err);
-  }
-
-  // Fallback seguro si el archivo no contiene streams válidos o está dañado
-  const fileName = (('name' in file && typeof file.name === 'string') ? file.name : '').toLowerCase();
-  if (
-    fileName.includes('viernes') ||
-    fileName.includes('295584') ||
-    fileName.includes('1eraprueba') ||
-    fileName.includes('prueba')
-  ) {
-    return {
-      folio: '295584',
-      fecha: '16/10/2026, 14:08:19',
-      items: NOTA_295584_VIERNES_ITEMS,
-    };
-  }
-  if (fileName.includes('nota2') || fileName.includes('2ejemplo')) {
-    return {
-      folio: '292535',
-      fecha: '21/09/2026, 08:45:00',
-      items: NOTA2_EJEMPLO_ITEMS,
-    };
-  }
-  if (fileName.includes('notacompramiguelejemplo')) {
-    return {
-      folio: '292534',
-      fecha: '20/09/2026, 12:17:57',
-      items: NOTA_EJEMPLO_ITEMS,
-    };
-  }
-  return {
-    folio: '294207',
-    fecha: '12/10/2026, 12:17:38',
-    items: NOTA_294207_ITEMS,
-  };
-}
 
 // Estructura de registro para el Histórico de Cargas de Notas PDF
 export interface HistoricoCarga {
@@ -398,59 +63,15 @@ export interface HistoricoCarga {
   items: ItemNotaPdf[];
 }
 
-// Histórico inicial de cargas reales
-const DEFAULT_HISTORICO: HistoricoCarga[] = [
-  {
-    id: 'hist-295584',
-    folio: '295584',
-    fechaHora: '16/10/2026, 14:08:19',
-    nombreArchivo: 'ViernesConError.pdf',
-    totalProductos: 32,
-    totalPiezas: 325,
-    estado: 'Cargado en Borrador',
-    items: NOTA_295584_VIERNES_ITEMS,
-  },
-  {
-    id: 'hist-294207',
-    folio: '294207',
-    fechaHora: '12/10/2026, 17:35:00',
-    nombreArchivo: 'nota_compra_294207.pdf',
-    totalProductos: 31,
-    totalPiezas: 250,
-    estado: 'Surtido Aplicado',
-    items: NOTA_294207_ITEMS,
-  },
-  {
-    id: 'hist-292535',
-    folio: '292535',
-    fechaHora: '21/09/2026, 08:45:00',
-    nombreArchivo: 'nota2Ejemplo.pdf',
-    totalProductos: 8,
-    totalPiezas: 109.8,
-    estado: 'Surtido Aplicado',
-    items: NOTA2_EJEMPLO_ITEMS,
-  },
-  {
-    id: 'hist-292534',
-    folio: '292534',
-    fechaHora: '20/09/2026, 12:17:57',
-    nombreArchivo: 'notacompramiguelejemplo.pdf',
-    totalProductos: 17,
-    totalPiezas: 246.3,
-    estado: 'Surtido Aplicado',
-    items: NOTA_EJEMPLO_ITEMS,
-  },
-];
-
 export default function SurtidoNotaScreen() {
   const router = useRouter();
   const [productosApp, setProductosApp] = useState<Producto[]>([]);
   const [loadingProds, setLoadingProds] = useState(true);
 
   // Estado de la nota cargada
-  const [folioNota, setFolioNota] = useState('295584');
-  const [fechaNota, setFechaNota] = useState('16/10/2026, 14:08:19');
-  const [nombreArchivoCargado, setNombreArchivoCargado] = useState('ViernesConError.pdf');
+  const [folioNota, setFolioNota] = useState('');
+  const [fechaNota, setFechaNota] = useState('');
+  const [nombreArchivoCargado, setNombreArchivoCargado] = useState('');
   const [itemsNota, setItemsNota] = useState<ItemNotaPdf[]>([]);
   const [procesando, setProcesando] = useState(false);
   const [procesandoPdf, setProcesandoPdf] = useState(false);
@@ -458,8 +79,8 @@ export default function SurtidoNotaScreen() {
   const [resumenExito, setResumenExito] = useState<any | null>(null);
 
   // Histórico de Cargas de Notas PDF
-  const [historicoCargas, setHistoricoCargas] = useState<HistoricoCarga[]>(DEFAULT_HISTORICO);
-  const [cargaExpandidaId, setCargaExpandidaId] = useState<string | null>('hist-295584');
+  const [historicoCargas, setHistoricoCargas] = useState<HistoricoCarga[]>([]);
+  const [cargaExpandidaId, setCargaExpandidaId] = useState<string | null>(null);
 
   // Mensaje / Toast de confirmación
   const [bannerMensaje, setBannerMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
@@ -506,15 +127,7 @@ export default function SurtidoNotaScreen() {
       }
     } catch {}
 
-    loadCatalogo().then((prods) => {
-      // Auto-cargar por defecto los items de la nota 294207
-      const notaInicial = DEFAULT_HISTORICO[0];
-      if (notaInicial && notaInicial.items.length > 0) {
-        handleCargarItemsNota(notaInicial.items, prods);
-      } else {
-        handleCargarItemsNota(NOTA2_EJEMPLO_ITEMS, prods);
-      }
-    });
+    loadCatalogo();
   }, []);
 
   // Función para vincular items con productos de la app por Nombre de Almacén o Nombre App
@@ -640,7 +253,7 @@ export default function SurtidoNotaScreen() {
             await new Promise((resolve) => setTimeout(resolve, 850));
 
             // 3. Extraer contenido real del PDF
-            const parsed = await parsePdfClient(file);
+            const parsed = await readSupplyPdf(file);
 
             setFolioNota(parsed.folio);
             setFechaNota(parsed.fecha);
@@ -693,19 +306,7 @@ export default function SurtidoNotaScreen() {
       };
       input.click();
     } else {
-      setProcesandoPdf(true);
-      setMensajeCargaPdf('Eliminando lista anterior y cargando nota...');
-      setItemsNota([]);
-      await new Promise((resolve) => setTimeout(resolve, 850));
-      setFolioNota('294207');
-      setFechaNota(new Date().toLocaleDateString('es-MX') + ' ' + new Date().toLocaleTimeString('es-MX'));
-      setNombreArchivoCargado('nota_compra_294207.pdf');
-      handleCargarItemsNota(NOTA2_EJEMPLO_ITEMS, productosApp);
-      setBannerMensaje({
-        tipo: 'exito',
-        texto: '✓ Nueva Nota PDF cargada (Folio #294207 - 8 productos nuevos).',
-      });
-      setProcesandoPdf(false);
+      setBannerMensaje({ tipo: 'error', texto: 'La carga PDF está disponible en la versión web. Puedes capturar los productos manualmente en este dispositivo.' });
     }
   };
 
@@ -923,6 +524,7 @@ export default function SurtidoNotaScreen() {
     }
   };
 
+  const [soloPendientes, setSoloPendientes] = useState(false);
   const totalDetectados = itemsNota.length;
   const totalVinculados = itemsNota.filter((i) => i.productoId).length;
   const totalPendientes = totalDetectados - totalVinculados;
@@ -942,7 +544,7 @@ export default function SurtidoNotaScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Banner de Mensaje / Notificación Activo */}
         {bannerMensaje && (
           <View style={[styles.bannerMsgBox, bannerMensaje.tipo === 'exito' ? styles.bannerExito : styles.bannerError]}>
@@ -956,18 +558,6 @@ export default function SurtidoNotaScreen() {
           </View>
         )}
 
-        {/* Banner Explicativo de la Relación de Nombres */}
-        <View style={styles.conceptBanner}>
-          <Sparkles size={20} color={colors.primary[600]} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.conceptTitle}>Mapeo Inteligente: 2 Nombres por Producto</Text>
-            <Text style={styles.conceptText}>
-              <Text style={{ fontWeight: '700' }}>1. Nombre App:</Text> Cómo se vende en ruta (ej. <Text style={{ fontStyle: 'italic' }}>"Queso Castel"</Text>).{'\n'}
-              <Text style={{ fontWeight: '700' }}>2. Nombre Almacén:</Text> Como viene en la nota PDF (ej. <Text style={{ fontStyle: 'italic' }}>"Queso Amarillo Castell"</Text>). Al vincularlo, la app lo recuerda automáticamente.
-            </Text>
-          </View>
-        </View>
-
         {/* Tarjeta de la Nota Cargada (Diseño 100% móvil sin desbordes) */}
         <View style={[styles.card, shadows.card]}>
           <View style={styles.notaCardTop}>
@@ -978,9 +568,9 @@ export default function SurtidoNotaScreen() {
             <View style={styles.notaCardInfoCol}>
               <View style={styles.notaFolioBadgeRow}>
                 <Text style={styles.notaFolioText}>
-                  {folioNota && folioNota !== 'Sin nota' ? `Nota de Compra #${folioNota}` : 'Sin Nota Activa'}
+                  {folioNota && folioNota !== 'Sin nota' ? `Nota de Compra #${folioNota}` : itemsNota.length ? 'Captura manual' : 'Sin nota activa'}
                 </Text>
-                {folioNota && folioNota !== 'Sin nota' ? (
+                {itemsNota.length > 0 ? (
                   <View style={styles.folioBadgeActive}>
                     <Text style={styles.folioBadgeActiveText}>Borrador Activo</Text>
                   </View>
@@ -991,9 +581,9 @@ export default function SurtidoNotaScreen() {
                 )}
               </View>
 
-              <Text style={styles.notaFechaText}>
+              {!!fechaNota && <Text style={styles.notaFechaText}>
                 📅 {fechaNota}
-              </Text>
+              </Text>}
               <Text style={styles.notaArchivoText} numberOfLines={1}>
                 📄 Archivo: {nombreArchivoCargado || 'Ninguno'}
               </Text>
@@ -1002,14 +592,9 @@ export default function SurtidoNotaScreen() {
 
           {/* Fila de Acciones en su propia línea inferior para evitar compresión */}
           <View style={styles.notaCardActionsRow}>
-            <TouchableOpacity onPress={handlePickPdf} style={styles.btnSubirPdfCard}>
-              <Upload size={14} color={colors.neutral[0]} />
-              <Text style={styles.btnSubirPdfCardText}>Subir / Cambiar PDF</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity onPress={handleOpenManual} style={styles.btnManualSmall}>
               <Plus size={13} color={colors.primary[700]} />
-              <Text style={styles.btnManualSmallText}>+1 Manual</Text>
+              <Text style={styles.btnManualSmallText}>Captura manual</Text>
             </TouchableOpacity>
 
             {itemsNota.length > 0 && (
@@ -1035,10 +620,7 @@ export default function SurtidoNotaScreen() {
                 <Text style={[styles.statVal, { color: colors.warning[600] }]}>{totalPendientes}</Text>
                 <Text style={styles.statLabel}>Por Vincular</Text>
               </View>
-              <View style={[styles.statBox, { borderLeftColor: colors.primary[500], borderLeftWidth: 3 }]}>
-                <Text style={[styles.statVal, { color: colors.primary[700] }]}>{sumaUnidades.toFixed(1)}</Text>
-                <Text style={styles.statLabel}>Total Piezas</Text>
-              </View>
+
             </View>
           )}
         </View>
@@ -1066,16 +648,22 @@ export default function SurtidoNotaScreen() {
           <View style={[styles.emptyNoticeBox, shadows.card]}>
             <Boxes size={28} color={colors.neutral[500]} />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.emptyNoticeTitle}>Lista actual sin productos activos</Text>
+              <Text style={styles.emptyNoticeTitle}>Sin productos para surtir</Text>
               <Text style={styles.emptyNoticeSubtitle}>
-                Los productos anteriores fueron retirados. Sube una nota PDF arriba para iniciar un nuevo surtido o consulta el detalle del histórico abajo.
+                Sube una nota PDF, agrega productos manualmente o consulta el histórico.
               </Text>
             </View>
           </View>
         )}
 
+        <View style={{ flexDirection: 'row', gap: 8, marginVertical: 12 }}>
+          <TouchableOpacity onPress={() => setSoloPendientes(true)} style={[styles.btnManualSmall, soloPendientes && { backgroundColor: colors.primary[100] }]}><Text style={styles.btnManualSmallText}>Pendientes ({totalPendientes})</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => setSoloPendientes(false)} style={[styles.btnManualSmall, !soloPendientes && { backgroundColor: colors.primary[100] }]}><Text style={styles.btnManualSmallText}>Todos ({totalDetectados})</Text></TouchableOpacity>
+        </View>
+        <Text style={{ fontSize: 12, color: colors.neutral[600], marginBottom: 8 }}>Vincula el nombre de almacén con el producto de la app y revisa su entrada.</Text>
         <View style={styles.itemsList}>
           {itemsNota.map((item, idx) => {
+            if (soloPendientes && item.productoId) return null;
             const isVinculado = Boolean(item.productoId);
 
             return (
@@ -1102,7 +690,7 @@ export default function SurtidoNotaScreen() {
                       <TouchableOpacity onPress={() => handleOpenVincular(idx)} style={styles.vincularBtnPending}>
                         <AlertCircle size={13} color={colors.warning[700]} />
                         <Text style={styles.vincularBtnPendingText}>
-                          ⚠️ Sin vincular • Toca aquí para relacionar con producto de App
+                          Sin vincular
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -1135,7 +723,7 @@ export default function SurtidoNotaScreen() {
 
                   {/* Input de cantidad a surtir */}
                   <View style={[styles.dataCol, { flex: 1.5, alignItems: 'flex-end' }]}>
-                    <Text style={styles.dataColLabel}>+ Aumentar Stock</Text>
+                    <Text style={styles.dataColLabel}>Entrada a inventario</Text>
                     <View style={styles.inputSurtidoRow}>
                       <TextInput
                         style={styles.inputSurtido}
@@ -1193,7 +781,7 @@ export default function SurtidoNotaScreen() {
               <>
                 <CheckCircle2 size={20} color={colors.neutral[0]} />
                 <Text style={styles.btnConfirmarText}>
-                  Aumentar Inventario ({itemsNota.length} productos listos)
+                  Aplicar surtido ({itemsNota.length})
                 </Text>
               </>
             )}
@@ -1269,7 +857,7 @@ export default function SurtidoNotaScreen() {
                       📄 {carga.nombreArchivo}
                     </Text>
                     <Text style={styles.historicoTotalesText}>
-                      📦 {carga.totalProductos} productos • ⚖️ {carga.totalPiezas.toFixed(1)} unidades/kg
+                      📦 {carga.totalProductos} productos
                     </Text>
                   </View>
 
@@ -1414,7 +1002,7 @@ export default function SurtidoNotaScreen() {
             </View>
 
             {/* Lista de productos para seleccionar */}
-            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
               {productosApp
                 .filter((p) =>
                   p.nombre.toLowerCase().includes(filtroVincular.toLowerCase()) ||
@@ -1455,7 +1043,7 @@ export default function SurtidoNotaScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               <Text style={styles.inputLabel}>Seleccionar Producto del Catálogo:</Text>
               <View style={styles.searchBox}>
                 <Search size={16} color={colors.neutral[400]} />
@@ -1468,7 +1056,7 @@ export default function SurtidoNotaScreen() {
                 />
               </View>
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 {productosApp
                   .filter((p) => p.nombre.toLowerCase().includes(manualBusqueda.toLowerCase()))
                   .map((p) => {
@@ -1558,7 +1146,7 @@ export default function SurtidoNotaScreen() {
       {/* MODAL ÉXITO DE SURTIDO */}
       {resumenExito && (
         <Modal visible={true} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
             <View style={[styles.exitoCard, shadows.card]}>
               <View style={styles.exitoIconCircle}>
                 <CheckCircle2 size={40} color={colors.secondary[600]} />
@@ -1597,7 +1185,7 @@ export default function SurtidoNotaScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
 
@@ -1627,16 +1215,23 @@ export default function SurtidoNotaScreen() {
 const styles = StyleSheet.create({
   scroll: {
     padding: spacing.md,
-    paddingBottom: 60,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   uploadHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.secondary[600],
+    backgroundColor: colors.primary[700],
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   uploadHeaderBtnText: {
     color: colors.neutral[0],
@@ -1653,6 +1248,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   addManualHeaderBtnText: {
     color: colors.primary[700],
@@ -1713,8 +1310,8 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: spacing.md,
   },
   notaCardTop: {
@@ -1824,7 +1421,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
     paddingTop: spacing.sm,
@@ -1834,6 +1431,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[50],
     borderRadius: radius.md,
     padding: 8,
+    minWidth: 0,
   },
   statVal: {
     fontSize: fontSize.md,
@@ -1865,14 +1463,14 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.md,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 12,
     borderLeftWidth: 4,
     borderLeftColor: colors.secondary[500],
   },
   itemCardPending: {
     borderLeftColor: colors.warning[500],
-    backgroundColor: '#fffdf9',
+    backgroundColor: colors.neutral[0],
   },
   itemTopRow: {
     flexDirection: 'row',
@@ -1894,10 +1492,11 @@ const styles = StyleSheet.create({
     color: colors.neutral[600],
   },
   almacenNombreText: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
     flex: 1,
+    flexShrink: 1,
   },
   vinculoBadge: {
     flexDirection: 'row',
@@ -1935,6 +1534,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.sm,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   editVinculoBtnText: {
     fontSize: fontSize.xs,
@@ -1944,13 +1545,15 @@ const styles = StyleSheet.create({
   itemDataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     paddingTop: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
+    flexWrap: 'wrap',
   },
   dataCol: {
     flex: 1,
+    minWidth: 80,
   },
   dataColLabel: {
     fontSize: 10,
@@ -1979,6 +1582,8 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
     width: 55,
     textAlign: 'center',
+    minHeight: 44,
+    minWidth: 64,
   },
   inputSurtidoUnit: {
     fontSize: 10,
@@ -2021,10 +1626,13 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
     maxHeight: '88%',
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2044,6 +1652,8 @@ const styles = StyleSheet.create({
   },
   modalCloseBtn: {
     padding: 6,
+    minHeight: 44,
+    minWidth: 44,
   },
   crearRapidoBtn: {
     flexDirection: 'row',
@@ -2055,6 +1665,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.sm,
     marginBottom: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   crearRapidoTitle: {
     fontSize: fontSize.xs,
@@ -2086,8 +1698,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.xs,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
+    borderRadius: 10,
   },
   prodSelectItem: {
     flexDirection: 'row',
@@ -2115,6 +1729,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[200],
     marginRight: 8,
+    minHeight: 44,
+    minWidth: 44,
   },
   manualPickChipActive: {
     backgroundColor: colors.primary[50],
@@ -2132,17 +1748,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[50],
     borderWidth: 1,
     borderColor: colors.neutral[200],
-    borderRadius: radius.md,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    fontSize: fontSize.xs,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
   },
   umChip: {
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: radius.sm,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   umChipActive: {
     backgroundColor: colors.primary[600],
@@ -2170,6 +1789,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[300],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalCancelText: {
     fontSize: fontSize.sm,
@@ -2182,6 +1803,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.primary[600],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalSaveText: {
     fontSize: fontSize.sm,
@@ -2225,13 +1848,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     width: '100%',
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   exitoBtnText: {
     color: colors.neutral[0],
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
   },
-  // Estilos del Modal de Carga con GIF
   loadingOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.70)',
@@ -2281,7 +1905,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: colors.primary[800],
   },
-  // Barra de Selección Rápida de Notas
   quickBar: {
     backgroundColor: colors.neutral[50],
     borderRadius: radius.md,
@@ -2311,6 +1934,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderWidth: 1,
     borderColor: colors.neutral[300],
+    minHeight: 44,
+    minWidth: 44,
   },
   quickChipActive: {
     backgroundColor: colors.primary[50],
@@ -2367,6 +1992,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error[50],
     borderWidth: 1,
     borderColor: colors.error[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   limpiarSmallBtnText: {
     fontSize: 11,
@@ -2387,13 +2014,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.sm,
     backgroundColor: colors.error[50],
+    minHeight: 44,
+    minWidth: 44,
   },
   vaciarHeaderBtnText: {
     fontSize: 11,
     color: colors.error[700],
     fontWeight: fontWeight.semibold,
   },
-  // Estado Vacío Informativo (Sin botones invasivos)
   emptyNoticeBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2416,7 +2044,6 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     lineHeight: 16,
   },
-  // Sección del Histórico de Cargas de Notas PDF
   historicoSection: {
     marginTop: spacing.md,
     marginBottom: spacing.xl,
@@ -2503,17 +2130,17 @@ const styles = StyleSheet.create({
     color: colors.primary[800],
   },
   badgeActivaEnLista: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: colors.primary[50],
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: colors.primary[200],
   },
   badgeTextActiva: {
     fontSize: 9,
     fontWeight: fontWeight.bold,
-    color: '#1d4ed8',
+    color: colors.primary[700],
   },
   historicoMetaText: {
     fontSize: 11,
@@ -2650,4 +2277,3 @@ const styles = StyleSheet.create({
     color: colors.secondary[800],
   },
 });
-

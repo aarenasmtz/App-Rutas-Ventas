@@ -62,12 +62,13 @@ public class CortesController : ControllerBase
                 .Where(d => ventaIds.Contains(d.VentaId))
                 .SumAsync(d => (int?)d.PiezasTotales) ?? 0;
 
-            var efectivoEsperado = (efectivo + abonos) - gastos;
-
             // Revisar si existe corte registrado guardado
             var dateOnly = DateOnly.FromDateTime(targetDate);
             var corteRegistrado = await _db.CortesCaja
                 .FirstOrDefaultAsync(c => c.UsuarioId == u.Id && c.FechaJornada == dateOnly);
+
+            var fondoInicial = corteRegistrado?.FondoInicial ?? 500m;
+            var efectivoEsperado = fondoInicial + (efectivo + abonos) - gastos;
 
             var totalVentas = ventasUsuario.Sum(v => v.Total);
 
@@ -79,6 +80,7 @@ public class CortesController : ControllerBase
                     EmpleadoId = u.Id.ToString(),
                     Nombre = u.Nombre,
                     Ruta = corteRegistrado.Ruta,
+                    FondoInicial = corteRegistrado.FondoInicial,
                     VentasTotales = corteRegistrado.VentasTotales,
                     Efectivo = corteRegistrado.Efectivo,
                     Transferencias = corteRegistrado.Transferencias,
@@ -101,6 +103,7 @@ public class CortesController : ControllerBase
                     EmpleadoId = u.Id.ToString(),
                     Nombre = u.Nombre,
                     Ruta = u.RutaAsignada ?? "Ruta General",
+                    FondoInicial = fondoInicial,
                     VentasTotales = totalVentas,
                     Efectivo = efectivo,
                     Transferencias = transferencias,
@@ -163,7 +166,8 @@ public class CortesController : ControllerBase
             .Where(d => ventaIds.Contains(d.VentaId))
             .SumAsync(d => (int?)d.PiezasTotales) ?? 0;
 
-        var efectivoEsperado = (efectivo + abonos) - gastos;
+        var fondoInicial = req.FondoInicial > 0 ? req.FondoInicial : 500m;
+        var efectivoEsperado = fondoInicial + (efectivo + abonos) - gastos - devoluciones;
         var diferenciaCaja = req.EfectivoContado - efectivoEsperado;
 
         var dateOnly = DateOnly.FromDateTime(targetDate);
@@ -177,6 +181,7 @@ public class CortesController : ControllerBase
                 UsuarioId = usuario.Id,
                 FechaJornada = dateOnly,
                 Ruta = usuario.RutaAsignada ?? "Ruta Centro",
+                FondoInicial = fondoInicial,
                 VentasTotales = ventas.Sum(v => v.Total),
                 Efectivo = efectivo,
                 Transferencias = transferencias,
@@ -197,6 +202,7 @@ public class CortesController : ControllerBase
         }
         else
         {
+            corte.FondoInicial = fondoInicial;
             corte.VentasTotales = ventas.Sum(v => v.Total);
             corte.Efectivo = efectivo;
             corte.Transferencias = transferencias;
@@ -221,6 +227,7 @@ public class CortesController : ControllerBase
             empleadoId = usuario.Id,
             empleadoNombre = usuario.Nombre,
             fechaJornada = dateOnly.ToString("yyyy-MM-dd"),
+            fondoInicial,
             efectivoEsperado,
             efectivoContado = req.EfectivoContado,
             diferenciaCaja,

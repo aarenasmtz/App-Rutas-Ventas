@@ -8,6 +8,8 @@ import {
   Linking,
   Platform,
   Modal,
+  ActivityIndicator,
+  Alert,
   Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,6 +22,8 @@ import {
   Phone,
   ShoppingCart,
   Maximize2,
+  Plus,
+  Minus,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -27,7 +31,7 @@ import {
 } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { DataService } from '@/services/mockDataService';
-import { getRutaDiaActual } from '@/utils/helpers';
+import { buildMapsUrl, validCoordinates } from '@/utils/location';
 import { useApp } from '@/context/AppContext';
 import type { Cliente } from '@/types';
 
@@ -53,109 +57,6 @@ function calculateRealDistanceKm(lat1: number, lon1: number, lat2: number, lon2:
   return R * c;
 }
 
-// Paradas de ruta predeterminadas en León, Gto (usadas como ruta base cuando no hay clientes en la BD)
-const DEFAULT_PARADAS_LEON: Cliente[] = [
-  {
-    id: 'cli_leon_1',
-    nombre: 'Abarrotes La Lupita',
-    propietario: 'María Elena Morales',
-    direccion: 'San Juan de Dios #104',
-    colonia: 'San Juan de Dios',
-    ciudad: 'León, Gto',
-    ruta: 'Ruta León',
-    diasVisita: ['Lun', 'Mié', 'Vie'],
-    saldo: 450,
-    limiteCredito: 3000,
-    estado: 'Pendiente',
-    ultimaVisita: '2026-10-15',
-    telefono: '4771234567',
-    latitud: 21.1162,
-    longitud: -101.6811,
-    activo: true,
-    historial: [],
-    sugerido: [],
-  },
-  {
-    id: 'cli_leon_2',
-    nombre: 'Cremería El Coecillo',
-    propietario: 'Roberto Hernández',
-    direccion: 'Calle Vicente Guerrero #210',
-    colonia: 'El Coecillo',
-    ciudad: 'León, Gto',
-    ruta: 'Ruta León',
-    diasVisita: ['Lun', 'Mié'],
-    saldo: 0,
-    limiteCredito: 2500,
-    estado: 'Pendiente',
-    ultimaVisita: '2026-10-14',
-    telefono: '4779876543',
-    latitud: 21.1275,
-    longitud: -101.6685,
-    activo: true,
-    historial: [],
-    sugerido: [],
-  },
-  {
-    id: 'cli_leon_3',
-    nombre: 'Carnicería Los Compadres',
-    propietario: 'Ignacio Vega',
-    direccion: 'Blvd. Mariano Escobedo #502',
-    colonia: 'León Moderno',
-    ciudad: 'León, Gto',
-    ruta: 'Ruta León',
-    diasVisita: ['Lun', 'Jue'],
-    saldo: 1200,
-    limiteCredito: 5000,
-    estado: 'Visitado',
-    ultimaVisita: '2026-10-17',
-    telefono: '4774567890',
-    latitud: 21.1090,
-    longitud: -101.6690,
-    activo: true,
-    historial: [],
-    sugerido: [],
-  },
-  {
-    id: 'cli_leon_4',
-    nombre: 'Mini Súper Obregón',
-    propietario: 'Guadalupe Rocha',
-    direccion: 'Calle Álvaro Obregón #320',
-    colonia: 'Obrera',
-    ciudad: 'León, Gto',
-    ruta: 'Ruta León',
-    diasVisita: ['Lun', 'Mar', 'Mié'],
-    saldo: 0,
-    limiteCredito: 2000,
-    estado: 'Pendiente',
-    ultimaVisita: '2026-10-12',
-    latitud: 21.1350,
-    longitud: -101.6870,
-    activo: true,
-    historial: [],
-    sugerido: [],
-  },
-  {
-    id: 'cli_leon_5',
-    nombre: 'Tienda La Esperanza',
-    propietario: 'Carmen Salgado',
-    direccion: 'Blvd. San Pedro #1405',
-    colonia: 'San Pedro',
-    ciudad: 'León, Gto',
-    ruta: 'Ruta León',
-    diasVisita: ['Lun', 'Vie'],
-    saldo: 320,
-    limiteCredito: 1500,
-    estado: 'Pendiente',
-    ultimaVisita: '2026-10-16',
-    telefono: '4773456789',
-    latitud: 21.1020,
-    longitud: -101.6520,
-    activo: true,
-    historial: [],
-    sugerido: [],
-  },
-];
-
 export default function MapaScreen() {
   const router = useRouter();
   const { clienteId } = useLocalSearchParams<{ clienteId?: string }>();
@@ -163,6 +64,8 @@ export default function MapaScreen() {
 
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
+  const [mapState, setMapState] = useState<'loading'|'ready'|'error'>('loading');
+  const [mapAttempt, setMapAttempt] = useState(0);
   const [showStopsSheet, setShowStopsSheet] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -195,7 +98,7 @@ export default function MapaScreen() {
         const list = await DataService.getClientes();
         if (!isMounted) return;
         const active = (list ?? []).filter((c) => c.activo !== false);
-        const resolved = active.length > 0 ? active : DEFAULT_PARADAS_LEON;
+        const resolved = active.length > 0 ? active : [];
         setClientesList(resolved);
 
         if (clienteId) {
@@ -208,8 +111,8 @@ export default function MapaScreen() {
         setSelectedClient(resolved[0] || null);
       } catch {
         if (isMounted) {
-          setClientesList(DEFAULT_PARADAS_LEON);
-          setSelectedClient(DEFAULT_PARADAS_LEON[0]);
+          setClientesList([]);
+          setSelectedClient(null);
         }
       }
     };
@@ -228,18 +131,18 @@ export default function MapaScreen() {
     if (!selectedClient) return 0;
     const idx = leonClientes.findIndex((c) => String(c.id) === String(selectedClient.id));
     return idx >= 0 ? idx : 0;
-  }, [leonClientes, selectedClient]);
+  }, [leonClientes, mapAttempt]);
 
   // Distancia real calculada (solo si hay coordenadas reales de usuario y cliente)
   const realDistanceLabel = useMemo(() => {
-    if (!userLocation || !selectedClient?.latitud || !selectedClient?.longitud) {
+    if (!userLocation || !validCoordinates(selectedClient?.latitud, selectedClient?.longitud)) {
       return null; // NUNCA mostrar distancias inventadas como "500 m"
     }
     const distKm = calculateRealDistanceKm(
       userLocation.lat,
       userLocation.lng,
-      selectedClient.latitud,
-      selectedClient.longitud
+      selectedClient!.latitud!,
+      selectedClient!.longitud!
     );
     if (distKm < 1) {
       return `${Math.round(distKm * 1000)} m`;
@@ -261,6 +164,9 @@ export default function MapaScreen() {
     const handleWindowMessage = (event: MessageEvent) => {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (event.source !== iframeRef.current?.contentWindow) return;
+        if (data?.type === 'MAP_READY') setMapState('ready');
+        if (data?.type === 'MAP_ERROR') setMapState('error');
         if (data?.type === 'CLIENT_CLICKED') {
           const match = leonClientes.find((c) => String(c.id) === String(data.clientId));
           if (match) {
@@ -285,24 +191,20 @@ export default function MapaScreen() {
 
   // Abrir GPS en Google Maps para parada individual
   const handleOpenGps = (cliente: Cliente) => {
-    const lat = cliente.latitud;
-    const lng = cliente.longitud;
-    if (lat && lng) {
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
-    } else {
-      const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}, León, Guanajuato`);
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-    }
+    const url = buildMapsUrl(cliente);
+    if (url) Linking.openURL(url).catch(()=>Alert.alert('Maps no disponible', 'Intenta de nuevo.'));
+    else Alert.alert('Falta ubicación', 'Captura la dirección del cliente para navegar.', [{text:'Cancelar'}, {text:'Editar dirección', onPress:()=>router.push({pathname:'/(tabs)/clientes',params:{editar:cliente.id,origen:'mapa'}})}]);
   };
 
   // Abrir ruta completa en Google Maps (Acción secundaria identificada)
   const handleOpenFullRouteGps = () => {
     if (leonClientes.length === 0) return;
-    const stops = leonClientes.slice(0, 8);
+    const stops = leonClientes.filter(c => validCoordinates(c.latitud, c.longitud)).slice(0, 8);
+    if (!stops.length) { Alert.alert('Sin coordenadas', 'Captura ubicaciones antes de navegar la ruta.'); return; }
     const last = stops[stops.length - 1];
-    const destination = `${last.latitud || 21.1090},${last.longitud || -101.6750}`;
-    const waypoints = stops.slice(0, -1).map((s) => `${s.latitud || 21.1221},${s.longitud || -101.6828}`).join('|');
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&waypoints=${waypoints}&travelmode=driving`;
+    const destination = `${last.latitud},${last.longitud}`;
+    const waypoints = stops.slice(0, -1).map((s) => `${s.latitud},${s.longitud}`).join('|');
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`;
     Linking.openURL(url);
   };
 
@@ -321,9 +223,15 @@ export default function MapaScreen() {
           setUserLocation(loc);
           sendToMap({ type: 'LOCATE_USER', lat: loc.lat, lng: loc.lng });
         },
-        () => {
+        (error) => {
+          let msg = 'No se pudo obtener tu ubicación actual.';
+          if (error.code === 1) msg = 'Permiso de ubicación denegado. Actívalo en los ajustes de tu dispositivo o navegador.';
+          else if (error.code === 2) msg = 'Señal de GPS no disponible en este momento.';
+          else if (error.code === 3) msg = 'Tiempo de espera de GPS agotado.';
+          Alert.alert('Ubicación no disponible', msg);
           sendToMap({ type: 'FIT_ALL' });
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
       );
     } else {
       sendToMap({ type: 'FIT_ALL' });
@@ -331,13 +239,6 @@ export default function MapaScreen() {
   };
 
   const handleIniciarVenta = async (cliente: Cliente) => {
-    try {
-      const list = await DataService.getClientes();
-      const exists = (list || []).some((c) => String(c.id) === String(cliente.id));
-      if (!exists) {
-        await DataService.createCliente(cliente);
-      }
-    } catch {}
     setClienteActivoId(cliente.id);
     router.push('/(tabs)/venta');
   };
@@ -368,28 +269,14 @@ export default function MapaScreen() {
     const defaultCenterLng = -101.6828;
 
     const focused = selectedClient || (leonClientes.length > 0 ? leonClientes[0] : null);
-    const centerLat = focused?.latitud || defaultCenterLat;
-    const centerLng = focused?.longitud || defaultCenterLng;
-    const initialZoom = focused?.latitud && focused?.longitud ? 15.5 : 13.5;
+    const centerLat = validCoordinates(focused?.latitud, focused?.longitud) ? focused!.latitud : defaultCenterLat;
+    const centerLng = validCoordinates(focused?.latitud, focused?.longitud) ? focused!.longitud : defaultCenterLng;
+    const initialZoom = validCoordinates(focused?.latitud, focused?.longitud) ? 15.5 : 13.5;
 
     const markersData = leonClientes.map((c, i) => {
       let lat = c.latitud;
       let lng = c.longitud;
       const isTarget = focused ? String(c.id) === String(focused.id) : i === 0;
-
-      // Respetar estrictamente coordenadas reales o georreferenciación aproximada
-      if (lat === undefined || lat === null || lng === undefined || lng === null) {
-        const col = (c.colonia || '').toLowerCase();
-        if (col.includes('coecillo')) { lat = 21.1275; lng = -101.6685; }
-        else if (col.includes('san juan') || col.includes('dios')) { lat = 21.1162; lng = -101.6811; }
-        else if (col.includes('moderno')) { lat = 21.1090; lng = -101.6690; }
-        else if (col.includes('echeveste')) { lat = 21.1680; lng = -101.6890; }
-        else if (col.includes('obrera')) { lat = 21.1350; lng = -101.6870; }
-        else {
-          lat = defaultCenterLat + ((i % 5) - 2) * 0.007;
-          lng = defaultCenterLng + ((i % 4) - 1.5) * 0.007;
-        }
-      }
 
       return {
         id: c.id,
@@ -399,7 +286,7 @@ export default function MapaScreen() {
         estado: c.estado,
         isSelected: isTarget,
       };
-    });
+    }).filter(marker => validCoordinates(marker.lat, marker.lng));
 
     return `
       <!DOCTYPE html>
@@ -427,7 +314,7 @@ export default function MapaScreen() {
             height: 32px;
             border-radius: 50% 50% 50% 0;
             transform: rotate(-45deg);
-            background: #2563eb;
+            background: ${colors.primary[600]};
             color: #ffffff;
             display: flex;
             align-items: center;
@@ -452,7 +339,7 @@ export default function MapaScreen() {
           .custom-pin.selected {
             width: 38px;
             height: 38px;
-            background: #1e3a8a;
+            background: ${colors.primary[800]};
             border: 2.5px solid #ffffff;
             box-shadow: 0 0 0 3.5px #f59e0b, 0 8px 20px rgba(15, 23, 42, 0.5);
             transform: rotate(-45deg) scale(1.15);
@@ -511,12 +398,14 @@ export default function MapaScreen() {
       <body>
         <div id="map"></div>
         <script>
+          function report(type) { var msg={type:type}; if(window.parent)window.parent.postMessage(msg,'*'); if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }
+          window.addEventListener('error',function(){ report('MAP_ERROR'); });
           var stops = ${JSON.stringify(markersData)};
           var initialCenter = [${centerLat}, ${centerLng}];
           var initialZoom = ${initialZoom};
 
           var map = L.map('map', {
-            zoomControl: true,
+            zoomControl: false,
             attributionControl: true
           }).setView(initialCenter, initialZoom);
 
@@ -524,7 +413,8 @@ export default function MapaScreen() {
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; OpenStreetMap'
-          }).addTo(map);
+          }).on('tileerror',function(){report('MAP_ERROR');}).addTo(map);
+          map.whenReady(function(){report('MAP_READY');});
 
           var markerMap = {};
           var latlngs = [];
@@ -565,17 +455,6 @@ export default function MapaScreen() {
 
             markerMap[s.id] = { marker: marker, data: s };
           });
-
-          // Trazado de ruta conectando paradas de forma limpia
-          if (latlngs.length > 1) {
-            L.polyline(latlngs, {
-              color: '#2563eb',
-              weight: 3.5,
-              opacity: 0.7,
-              dashArray: '6, 8',
-              lineJoin: 'round'
-            }).addTo(map);
-          }
 
           function selectMarker(id, shouldPan) {
             Object.keys(markerMap).forEach(function(key) {
@@ -634,9 +513,11 @@ export default function MapaScreen() {
             } else if (data.type === 'FIT_ALL') {
               fitAllStops();
             } else if (data.type === 'LOCATE_USER') {
-              if (data.lat && data.lng) {
+              if (Number.isFinite(data.lat) && Number.isFinite(data.lng)) {
                 setUserPosition(data.lat, data.lng);
               }
+            } else if (data.type === 'ZOOM_IN') { map.zoomIn();
+            } else if (data.type === 'ZOOM_OUT') { map.zoomOut();
             } else if (data.type === 'INVALIDATE_SIZE') {
               setTimeout(function() { map.invalidateSize(); }, 60);
             }
@@ -650,6 +531,12 @@ export default function MapaScreen() {
       </html>
     `;
   }, [leonClientes, selectedClient]);
+
+  useEffect(() => {
+    setMapState('loading');
+    const timer = setTimeout(()=>setMapState(state=>state==='loading'?'error':state),12000);
+    return ()=>clearTimeout(timer);
+  }, [leafletMapHtml]);
 
   return (
     <View style={styles.container}>
@@ -669,7 +556,7 @@ export default function MapaScreen() {
             Mapa de Ruta León
           </Text>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
-            {getRutaDiaActual()} · {leonClientes.length}{' '}
+            {selectedClient?.ruta || 'Paradas de ruta'} · {leonClientes.length}{' '}
             {leonClientes.length === 1 ? 'parada' : 'paradas'}
           </Text>
         </View>
@@ -687,8 +574,15 @@ export default function MapaScreen() {
         )}
       </View>
 
+      {leonClientes.length === 0 ? (
+        <Text style={{ padding: 12, fontSize: 13, color: colors.neutral[600], backgroundColor: colors.primary[50] }}>Aún no hay paradas. Registra clientes para ver tu ruta.</Text>
+      ) : leonClientes.some(c => !validCoordinates(c.latitud, c.longitud)) ? (
+        <Text style={{ padding: 10, fontSize: 12, color: colors.neutral[600], backgroundColor: colors.primary[50] }}>Las paradas sin ubicación siguen en la lista. Captura su ubicación desde Clientes.</Text>
+      ) : null}
+
       {/* 2. ÁREA DEL MAPA (Ocupa el espacio restante sin empujar hacia abajo) */}
       <View style={styles.mapArea}>
+        {mapState !== 'ready' && <View style={{position:'absolute',top:12,left:12,right:68,zIndex:5,padding:12,backgroundColor:'#FFFFFF',borderRadius:12,borderWidth:1,borderColor:colors.neutral[200]}}>{mapState==='loading'?<><ActivityIndicator color={colors.primary[600]} /><Text>Cargando mapa…</Text></>:<><Text>No se pudo cargar el mapa completo.</Text><TouchableOpacity accessibilityRole="button" style={{minHeight:44,justifyContent:'center'}} onPress={()=>setMapAttempt(n=>n+1)}><Text>Reintentar mapa</Text></TouchableOpacity></>}</View>}
         {Platform.OS === 'web' ? (
           <iframe
             ref={iframeRef as any}
@@ -707,6 +601,8 @@ export default function MapaScreen() {
             onMessage={(e: any) => {
               try {
                 const data = JSON.parse(e.nativeEvent.data);
+                if (data?.type === 'MAP_READY') setMapState('ready');
+                if (data?.type === 'MAP_ERROR') setMapState('error');
                 if (data?.type === 'CLIENT_CLICKED') {
                   const match = leonClientes.find((c) => String(c.id) === String(data.clientId));
                   if (match) setSelectedClient(match);
@@ -724,6 +620,8 @@ export default function MapaScreen() {
 
         {/* Controles simplificados y limpios sobre el mapa */}
         <View style={styles.mapControlsGroup}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Acercar mapa" style={styles.mapCtrlBtn} onPress={()=>sendToMap({type:'ZOOM_IN'})}><Plus size={18} color={colors.primary[700]} /></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Alejar mapa" style={styles.mapCtrlBtn} onPress={()=>sendToMap({type:'ZOOM_OUT'})}><Minus size={18} color={colors.primary[700]} /></TouchableOpacity>
           <TouchableOpacity
             style={styles.mapCtrlBtn}
             activeOpacity={0.85}
@@ -766,7 +664,7 @@ export default function MapaScreen() {
               <Text style={styles.clientAddress} numberOfLines={1}>
                 {realDistanceLabel ? `${realDistanceLabel} · ` : ''}
                 {selectedClient.propietario ? `${selectedClient.propietario} · ` : ''}
-                {selectedClient.direccion}
+                {!validCoordinates(selectedClient.latitud,selectedClient.longitud) ? 'Sin coordenadas · ' : ''}{selectedClient.direccion}
               </Text>
             </View>
 
@@ -867,7 +765,7 @@ export default function MapaScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <ScrollView keyboardShouldPersistTaps="handled"
               style={styles.sheetList}
               contentContainerStyle={styles.sheetListContent}
               showsVerticalScrollIndicator={true}
@@ -919,7 +817,7 @@ export default function MapaScreen() {
                         ) : null}
                       </View>
                       <Text style={styles.stopItemAddress} numberOfLines={1}>
-                        {c.propietario ? `${c.propietario} · ` : ''}{c.direccion}
+                        {!validCoordinates(c.latitud,c.longitud) ? 'Sin coordenadas · ' : ''}{c.direccion}
                       </Text>
                     </View>
 
@@ -948,7 +846,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  // Cabecera compacta
   header: {
     height: 48,
     flexDirection: 'row',
@@ -966,6 +863,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   headerTitles: {
     flex: 1,
@@ -990,13 +889,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   headerFullRouteText: {
     fontSize: 11,
     fontWeight: fontWeight.bold,
     color: colors.primary[700],
   },
-  // Contenedor del mapa adaptable
   mapArea: {
     flex: 1,
     minHeight: 180,
@@ -1026,7 +926,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.neutral[500],
   },
-  // Controles flotantes limpios
   mapControlsGroup: {
     position: 'absolute',
     top: spacing.xs + 2,
@@ -1045,8 +944,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[200],
     ...shadows.card,
+    minHeight: 44,
+    minWidth: 44,
   },
-  // Ficha única compacta
   selectedClientCard: {
     backgroundColor: colors.neutral[0],
     borderRadius: radius.lg,
@@ -1168,7 +1068,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[200],
   },
-  // Estado vacío
   emptyClientCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1197,13 +1096,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   emptyClientBtnText: {
     fontSize: 11,
     fontWeight: fontWeight.bold,
     color: colors.primary[700],
   },
-  // Panel Modal de Paradas
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
@@ -1211,11 +1111,14 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    maxHeight: '62%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '88%',
     paddingBottom: Platform.OS === 'ios' ? 24 : spacing.sm,
     ...shadows.floating,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   sheetHandle: {
     width: 36,
@@ -1252,6 +1155,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   sheetList: {
     paddingHorizontal: spacing.sm + 2,

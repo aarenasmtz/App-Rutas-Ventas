@@ -264,9 +264,9 @@ public class SyncController : ControllerBase
 
                                     int factor = pres?.PiezasEquivalentes ?? (item.FactorConversion > 0 ? item.FactorConversion : 1);
                                     string presNombre = pres?.Nombre ?? item.PresentacionNombre ?? item.PresentacionTipo;
-                                    int unidadesADescontar = item.CantidadPresentaciones * factor;
+                                    decimal unidadesADescontar = item.CantidadPresentaciones * factor;
 
-                                    prod.Existencia = Math.Max(0, prod.Existencia - unidadesADescontar);
+                                    prod.Existencia = Math.Max(0m, prod.Existencia - unidadesADescontar);
 
                                     _db.InventarioMovimientos.Add(new InventarioMovimiento
                                     {

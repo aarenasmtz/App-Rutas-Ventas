@@ -32,7 +32,7 @@ public class RevisionController : ControllerBase
             Marca = p.Marca,
             Sistema = p.Existencia,
             Fisico = p.Existencia, // Inicialmente igual al sistema
-            Diferencia = 0,
+            Diferencia = 0m,
             Revisado = false,
             Comentario = ""
         }).ToList();

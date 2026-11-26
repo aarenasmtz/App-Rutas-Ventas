@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
-import {
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { KeyboardAvoidingView,
+  Linking,
   View,
   Text,
   StyleSheet,
@@ -12,7 +13,9 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { validCoordinates, buildMapsUrl } from '@/utils/location';
+import { reverseGeocode, searchGeocode } from '@/services/geocodingService';
 import {
   Users,
   AlertCircle,
@@ -44,6 +47,8 @@ const DIAS_SEMANA: DiaVisita[] = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 export default function ClientesScreen() {
   const router = useRouter();
+  const { origen, editar } = useLocalSearchParams<{ origen?: string; editar?: string }>();
+  const formVersion = useRef(0);
   const { clienteActivoId, setClienteActivoId } = useApp();
 
   const [search, setSearch] = useState('');
@@ -65,7 +70,7 @@ export default function ClientesScreen() {
   const [formNombre, setFormNombre] = useState('');
   const [formPropietario, setFormPropietario] = useState('');
   const [formDireccion, setFormDireccion] = useState('');
-  const [formColonia, setFormColonia] = useState('Centro');
+  const [formColonia, setFormColonia] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formRuta, setFormRuta] = useState('Ruta Lunes');
   const [formDias, setFormDias] = useState<DiaVisita[]>(['Lun', 'Mié', 'Vie']);
@@ -73,8 +78,8 @@ export default function ClientesScreen() {
   const [formSaldo, setFormSaldo] = useState('0');
 
   // GPS Maps Location State
-  const [formLatitud, setFormLatitud] = useState<number | null>(null);
-  const [formLongitud, setFormLongitud] = useState<number | null>(null);
+  const [formLatitud, setFormLatitud] = useState<number | string | null>(null);
+  const [formLongitud, setFormLongitud] = useState<number | string | null>(null);
   const [geocodificando, setGeocodificando] = useState(false);
   const [ubicacionConfirmada, setUbicacionConfirmada] = useState<string | null>(null);
 
@@ -97,38 +102,27 @@ export default function ClientesScreen() {
   const handleCapturarGpsActual = () => {
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       setGeocodificando(true);
+      const version = formVersion.current;
       navigator.geolocation.getCurrentPosition(
         async (position) => {
+          if (version !== formVersion.current) return;
           const lat = parseFloat(position.coords.latitude.toFixed(6));
           const lon = parseFloat(position.coords.longitude.toFixed(6));
           setFormLatitud(lat);
           setFormLongitud(lon);
-          setUbicacionConfirmada(`📍 GPS Celular en Vivo: ${lat}, ${lon}`);
-
-          // Intentar geocodificación inversa para auto-completar dirección
+          setUbicacionConfirmada(`Ubicación capturada: ${lat}, ${lon}`);
           try {
-            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
-            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.address) {
-                const road = data.address.road || '';
-                const houseNumber = data.address.house_number || '';
-                const suburb = data.address.suburb || data.address.neighbourhood || '';
-                if (road && (!formDireccion || formDireccion === 'León, Guanajuato')) {
-                  setFormDireccion(`${road} ${houseNumber}`.trim());
-                }
-                if (suburb && (!formColonia || formColonia === 'Centro')) {
-                  setFormColonia(suburb);
-                }
-              }
-            }
-          } catch {}
-
-          setGeocodificando(false);
-          Alert.alert('GPS Capturado con Éxito', `Coordenadas del celular de Miguel registradas:\nLatitud: ${lat}\nLongitud: ${lon}`);
+            const address = await reverseGeocode(lat, lon);
+            if (version !== formVersion.current) return;
+            setFormDireccion(current => current.trim() ? current : address.direccion);
+            setFormColonia(current => current.trim() ? current : address.colonia);
+            if (!address.colonia) setUbicacionConfirmada('Coordenadas guardadas en el formulario. El servicio no devolvió colonia; complétala manualmente.');
+          } catch {
+            if (version === formVersion.current) setUbicacionConfirmada('Coordenadas capturadas. No se pudo consultar la dirección; complétala manualmente.');
+          } finally { if (version === formVersion.current) setGeocodificando(false); }
         },
         (error) => {
+          if (version !== formVersion.current) return;
           setGeocodificando(false);
           let msg = 'No se pudo obtener la posición GPS del dispositivo.';
           if (error.code === 1) msg = 'Permiso de ubicación denegado. Permite el acceso a ubicación en tu celular o navegador.';
@@ -149,26 +143,20 @@ export default function ClientesScreen() {
       return;
     }
     setGeocodificando(true);
+    const version = formVersion.current;
     const dirTexto = `${formDireccion.trim()}, ${formColonia.trim()}, León, Guanajuato, México`;
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dirTexto)}&limit=1`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const lat = parseFloat(parseFloat(data[0].lat).toFixed(6));
-          const lon = parseFloat(parseFloat(data[0].lon).toFixed(6));
-          setFormLatitud(lat);
-          setFormLongitud(lon);
-          setUbicacionConfirmada(`GPS Detectado: ${lat}, ${lon}`);
-          setGeocodificando(false);
-          return;
-        }
-      }
+      const found = await searchGeocode(dirTexto);
+      if (version !== formVersion.current) return;
+      setFormLatitud(found.lat);setFormLongitud(found.lng);
+      setFormColonia(current=>current.trim()?current:found.colonia);
+      setUbicacionConfirmada(found.colonia ? `Ubicación encontrada: ${found.lat}, ${found.lng}` : 'Ubicación encontrada. Completa la colonia manualmente.');
+      setGeocodificando(false); return;
     } catch {
       // Fallback
     }
 
+    if (version !== formVersion.current) return;
     setGeocodificando(false);
     Alert.alert(
       'Dirección no ubicada con exactitud',
@@ -225,11 +213,13 @@ export default function ClientesScreen() {
   }, [clientesList, search, tabAtencion]);
 
   const handleOpenCreate = () => {
+    setGeocodificando(false);
     setEditingCliente(null);
     setFormNombre('');
     setFormPropietario('');
-    setFormDireccion('León, Guanajuato');
-    setFormColonia('Centro');
+    formVersion.current++;
+    setFormDireccion('');
+    setFormColonia('');
     setFormTelefono('477 ');
     setFormRuta(rutasDisponibles[0] || 'Ruta Centro');
     setFormDias(['Lun', 'Mié', 'Vie']);
@@ -242,11 +232,13 @@ export default function ClientesScreen() {
   };
 
   const handleOpenEdit = (c: Cliente) => {
+    setGeocodificando(false);
+    formVersion.current++;
     setEditingCliente(c);
     setFormNombre(c.nombre);
     setFormPropietario(c.propietario);
     setFormDireccion(c.direccion);
-    setFormColonia(c.colonia || 'Centro');
+    setFormColonia(c.colonia || '');
     setFormTelefono(c.telefono || '477 ');
     setFormRuta(c.ruta || rutasDisponibles[0] || 'Ruta Centro');
     setFormDias(c.diasVisita || ['Lun', 'Mié', 'Vie']);
@@ -254,9 +246,14 @@ export default function ClientesScreen() {
     setFormSaldo((c.saldo || 0).toString());
     setFormLatitud(c.latitud ?? null);
     setFormLongitud(c.longitud ?? null);
-    setUbicacionConfirmada(c.latitud && c.longitud ? `GPS: ${c.latitud.toFixed(5)}, ${c.longitud.toFixed(5)}` : null);
+    setUbicacionConfirmada(validCoordinates(c.latitud, c.longitud) ? `GPS: ${c.latitud!.toFixed(5)}, ${c.longitud!.toFixed(5)}` : null);
     setModalVisible(true);
   };
+
+  useEffect(() => {
+    const selected = clientesList.find(c => c.id === editar);
+    if (selected && !modalVisible) handleOpenEdit(selected);
+  }, [editar, clientesList]);
 
   const toggleDia = (dia: DiaVisita) => {
     if (formDias.includes(dia)) {
@@ -275,6 +272,9 @@ export default function ClientesScreen() {
       return;
     }
 
+    const latitude = formLatitud === null || formLatitud === '' ? undefined : Number(formLatitud);
+    const longitude = formLongitud === null || formLongitud === '' ? undefined : Number(formLongitud);
+    if ((latitude !== undefined || longitude !== undefined) && !validCoordinates(latitude, longitude)) { Alert.alert('Ubicación inválida', 'Revisa latitud y longitud.'); return; }
     setIsSaving(true);
     try {
       const limCred = parseFloat(formLimiteCredito) || 0;
@@ -292,8 +292,8 @@ export default function ClientesScreen() {
           diasVisita: formDias,
           limiteCredito: limCred,
           saldo: saldo,
-          latitud: formLatitud ?? undefined,
-          longitud: formLongitud ?? undefined,
+          latitud: latitude,
+          longitud: longitude,
         });
       } else {
         await DataService.createCliente({
@@ -307,8 +307,8 @@ export default function ClientesScreen() {
           diasVisita: formDias,
           limiteCredito: limCred,
           saldo: saldo,
-          latitud: formLatitud ?? undefined,
-          longitud: formLongitud ?? undefined,
+          latitud: latitude,
+          longitud: longitude,
         });
       }
 
@@ -363,6 +363,22 @@ export default function ClientesScreen() {
     router.push('/(tabs)/mas/cobranza');
   };
 
+  const handleOpenGps = (cliente: Cliente) => {
+    const url = buildMapsUrl(cliente);
+    if (url) {
+      Linking.openURL(url).catch(() => Alert.alert('Maps no disponible', 'Intenta de nuevo.'));
+    } else {
+      Alert.alert(
+        'Falta ubicación',
+        'Captura la dirección o coordenadas del cliente para navegar.',
+        [
+          { text: 'Cancelar' },
+          { text: 'Editar dirección', onPress: () => handleOpenEdit(cliente) },
+        ]
+      );
+    }
+  };
+
   const handleVerDetalle = (cliente: Cliente) => {
     router.push(('/(tabs)/ruta/cliente/' + cliente.id) as any);
   };
@@ -371,6 +387,7 @@ export default function ClientesScreen() {
     <AppShell>
       <PageHeader
         title="Cartera de Clientes"
+        onBack={origen && origen !== 'tab' ? () => origen === 'mas' ? router.replace('/(tabs)/mas') : router.canGoBack() ? router.back() : router.replace('/(tabs)/clientes') : undefined}
         subtitle={`${filtered.length} negocios registrados en León, Guanajuato`}
         right={
           <TouchableOpacity activeOpacity={0.8} onPress={handleOpenCreate} style={styles.createBtnHeader}>
@@ -380,7 +397,7 @@ export default function ClientesScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Buscador */}
         <View style={styles.searchSection}>
           <SearchBar
@@ -451,6 +468,7 @@ export default function ClientesScreen() {
                 onVender={() => handleVender(c)}
                 onCobrar={() => handleCobrar(c)}
                 onVerDetalle={() => handleVerDetalle(c)}
+                onNavigate={() => handleOpenGps(c)}
                 onEdit={() => handleOpenEdit(c)}
                 onDelete={() => handleDeleteClient(c)}
               />
@@ -461,7 +479,7 @@ export default function ClientesScreen() {
 
       {/* MODAL DE ALTA / EDICIÓN DE CLIENTE EN LEÓN, GUANAJUATO */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <View>
@@ -475,7 +493,7 @@ export default function ClientesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
               {/* Nombre del negocio */}
               <Text style={styles.inputLabel}>Nombre del Negocio / Tienda *</Text>
               <TextInput
@@ -591,8 +609,8 @@ export default function ClientesScreen() {
                     keyboardType="numeric"
                     value={formLatitud !== null && formLatitud !== undefined ? String(formLatitud) : ''}
                     onChangeText={(v) => {
-                      const num = parseFloat(v);
-                      setFormLatitud(isNaN(num) ? null : num);
+                      setFormLatitud(v);
+                      setUbicacionConfirmada(null);
                     }}
                     placeholderTextColor={colors.neutral[400]}
                   />
@@ -607,8 +625,8 @@ export default function ClientesScreen() {
                     keyboardType="numeric"
                     value={formLongitud !== null && formLongitud !== undefined ? String(formLongitud) : ''}
                     onChangeText={(v) => {
-                      const num = parseFloat(v);
-                      setFormLongitud(isNaN(num) ? null : num);
+                      setFormLongitud(v);
+                      setUbicacionConfirmada(null);
                     }}
                     placeholderTextColor={colors.neutral[400]}
                   />
@@ -727,7 +745,7 @@ export default function ClientesScreen() {
               </TouchableOpacity>
             )}
           </Pressable>
-        </Pressable>
+        </Pressable></KeyboardAvoidingView>
       </Modal>
     </AppShell>
   );
@@ -741,10 +759,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.lg,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   createBtnHeaderText: {
     color: '#FFFFFF',
@@ -829,10 +851,13 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
-    maxHeight: '92%',
+    maxHeight: '88%',
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -855,6 +880,8 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   inputLabel: {
     fontSize: fontSize.xs,
@@ -866,12 +893,13 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
-    borderRadius: radius.lg,
+    borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
     backgroundColor: colors.neutral[50],
+    minHeight: 44,
   },
   rutasRow: {
     flexDirection: 'row',
@@ -884,6 +912,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   rutaBtnActive: {
     backgroundColor: colors.primary[600],
@@ -908,6 +938,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   diaChipActive: {
     backgroundColor: colors.primary[600],
@@ -934,6 +966,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     marginTop: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   saveBtnText: {
     color: '#FFFFFF',
@@ -951,6 +985,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error[50],
     borderWidth: 1,
     borderColor: colors.error[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   deleteModalBtnText: {
     color: colors.error[700],

@@ -84,58 +84,50 @@ public class ReportesController : ControllerBase
         // 6. Top productos vendidos
         var topProductos = ventasList
             .SelectMany(v => v.Detalles)
-            .GroupBy(d => new { d.ProductoId, Nombre = d.Producto != null ? d.Producto.Nombre : "Producto" })
+            .GroupBy(d => new { d.ProductoId, Nombre = d.Producto != null ? d.Producto.Nombre : "Producto", Presentacion = d.PresentacionNombre ?? d.PresentacionTipo, Unidad = d.Producto != null ? d.Producto.Unidad : "" })
             .Select(g => new TopProductoReporteDto
             {
                 ProductoId = g.Key.ProductoId.ToString(),
                 Nombre = g.Key.Nombre,
                 CantidadVendida = g.Sum(x => x.PiezasTotales),
+                CantidadPresentaciones = g.Sum(x => x.CantidadPresentaciones),
+                Presentacion = g.Key.Presentacion,
+                Unidad = g.Key.Unidad,
                 ImporteTotal = g.Sum(x => x.Subtotal)
             })
             .OrderByDescending(x => x.ImporteTotal)
             .Take(5)
             .ToList();
 
-        // En caso de que no haya ventas suficientes para graficar, rellenar con catálogo
-        if (!topProductos.Any())
-        {
-            var prods = await _db.Productos.Take(5).ToListAsync();
-            topProductos = prods.Select(p => new TopProductoReporteDto
-            {
-                ProductoId = p.Codigo,
-                Nombre = p.Nombre,
-                CantidadVendida = 12,
-                ImporteTotal = p.PrecioBase * 12
-            }).ToList();
-        }
-
         var response = new ReporteResumenDto
         {
             Periodo = periodo,
             FechaInicio = fechaInicio,
             FechaFin = fechaFin,
-            VentasTotales = totalVentas > 0 ? totalVentas : 84250m,
-            CobranzaTotal = totalCobranza > 0 ? totalCobranza : 32000m,
-            CreditoColocado = credito > 0 ? credito : 14300m,
-            GastosTotal = totalGastos > 0 ? totalGastos : 1545m,
-            UtilidadEstimada = utilidadEstimada > 0 ? utilidadEstimada : 28400m,
-            TicketPromedio = ticketPromedio > 0 ? ticketPromedio : 1850m,
-            PedidosTotal = totalPedidos > 0 ? totalPedidos : 45,
-            ClientesVisitados = clientesVisitadosIds > 0 ? clientesVisitadosIds : 28,
-            ClientesTotalRuta = clientesTotal > 0 ? clientesTotal : 35,
-            EfectividadVisitas = efectividad > 0 ? efectividad : 80.0m,
+            VentasTotales = totalVentas,
+            CobranzaTotal = totalCobranza,
+            CreditoColocado = credito,
+            GastosTotal = totalGastos,
+            UtilidadEstimada = utilidadEstimada,
+            TicketPromedio = ticketPromedio,
+            PedidosTotal = totalPedidos,
+            ClientesVisitados = clientesVisitadosIds,
+            ClientesTotalRuta = clientesTotal,
+            EfectividadVisitas = efectividad,
             TopProductos = topProductos,
             MetodosPago = new MetodosPagoReporteDto
             {
-                Efectivo = efectivo > 0 ? efectivo : 45200m,
-                Transferencia = transferencia > 0 ? transferencia : 18450m,
-                Tarjeta = tarjeta > 0 ? tarjeta : 6300m,
-                Credito = credito > 0 ? credito : 14300m
+                Efectivo = efectivo,
+                Transferencia = transferencia,
+                Tarjeta = tarjeta,
+                Credito = credito
             }
         };
 
         return Ok(response);
     }
+
+    private static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
 
     [HttpGet("export/csv")]
     public async Task<IActionResult> ExportCsv([FromQuery] string periodo = "Semana")
@@ -145,14 +137,14 @@ public class ReportesController : ControllerBase
         {
             "dia" or "día" or "hoy" => now.Date,
             "mes" => new DateTime(now.Year, now.Month, 1),
-            _ => now.Date.AddDays(-7)
+            _ => now.Date.AddDays(-((7 + (now.DayOfWeek - DayOfWeek.Monday)) % 7))
         };
 
         var ventas = await _db.Ventas
             .Include(v => v.Cliente)
             .Include(v => v.Usuario)
             .Include(v => v.Pagos)
-            .Where(v => v.FechaHora >= fechaInicio)
+            .Where(v => v.FechaHora >= fechaInicio && v.FechaHora <= now)
             .OrderByDescending(v => v.FechaHora)
             .ToListAsync();
 
@@ -162,22 +154,14 @@ public class ReportesController : ControllerBase
 
         foreach (var v in ventas)
         {
-            var clienteNombre = v.Cliente?.Nombre?.Replace(";", " ") ?? "Cliente General";
-            var vendedorNombre = v.Usuario?.Nombre?.Replace(";", " ") ?? "Miguel";
+            var clienteNombre = Csv(v.Cliente?.Nombre ?? "");
+            var vendedorNombre = Csv(v.Usuario?.Nombre ?? "");
             var fecha = v.FechaHora.ToString("dd/MM/yyyy");
             var hora = v.FechaHora.ToString("HH:mm:ss");
-            var metodo = v.Pagos.FirstOrDefault()?.Metodo ?? "Efectivo";
+            var metodo = Csv(string.Join(" / ", v.Pagos.Select(p => p.Metodo)));
             var saldo = v.Cliente?.Saldo ?? 0m;
 
-            sb.AppendLine($"{v.Folio};{fecha};{hora};{clienteNombre};{vendedorNombre};{metodo};{v.Subtotal:F2};0.00;{v.Total:F2};{saldo:F2}");
-        }
-
-        // Si la base de datos está recién inicializada y tiene pocas ventas, incluir ejemplos de auditoría
-        if (ventas.Count < 3)
-        {
-            sb.AppendLine($"FOL-2026-0929-001;29/09/2026;10:15:00;ABTS ARENAS;Miguel;Efectivo;1250.00;0.00;1250.00;0.00");
-            sb.AppendLine($"FOL-2026-0929-002;29/09/2026;11:30:00;Cremería La Esquina;Miguel;Transferencia;2450.00;0.00;2450.00;0.00");
-            sb.AppendLine($"FOL-2026-0930-003;30/09/2026;09:45:00;Abarrotes El Chuy;Miguel;Crédito;3200.00;0.00;3200.00;3200.00");
+            sb.AppendLine($"{Csv(v.Folio)};{fecha};{hora};{clienteNombre};{vendedorNombre};{metodo};{v.Subtotal:F2};0.00;{v.Total:F2};{saldo:F2}");
         }
 
         // Prefijar UTF-8 BOM para que Excel abra acentos y ñ sin problemas
@@ -187,7 +171,7 @@ public class ReportesController : ControllerBase
         Buffer.BlockCopy(bom, 0, fullBytes, 0, bom.Length);
         Buffer.BlockCopy(contentBytes, 0, fullBytes, bom.Length, contentBytes.Length);
 
-        var fileName = $"Reporte_Ventas_Ruta_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        var fileName = $"Reporte_Ventas_{periodo}_{fechaInicio:yyyyMMdd}_{now:yyyyMMdd}.csv";
         return File(fullBytes, "text/csv; charset=utf-8", fileName);
     }
 

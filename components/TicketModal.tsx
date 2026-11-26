@@ -10,9 +10,12 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { Printer, Copy, Check, X, Share2, Receipt } from 'lucide-react-native';
+import { Printer, Copy, Check, X, Share2, Receipt, Bluetooth } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { ticketPrinter } from '@/services/ticketPrinterService';
+import { bluetoothPrinter } from '@/services/bluetoothPrinterService';
+
+const NativeReceiptView = Platform.OS !== 'web' ? require('react-native-webview').WebView : null;
 
 interface TicketModalProps {
   visible: boolean;
@@ -20,6 +23,8 @@ interface TicketModalProps {
   title?: string;
   ticketText58: string;
   ticketText80?: string;
+  ticketHtml58?: string;
+  ticketHtml80?: string;
   onShareWhatsApp?: () => void;
   onPrintPdf?: () => void;
 }
@@ -30,6 +35,8 @@ export default function TicketModal({
   title = 'Comprobante Térmico',
   ticketText58,
   ticketText80,
+  ticketHtml58,
+  ticketHtml80,
   onShareWhatsApp,
   onPrintPdf,
 }: TicketModalProps) {
@@ -38,7 +45,9 @@ export default function TicketModal({
 
   const activeText = paperWidth === 80 && ticketText80 ? ticketText80 : ticketText58;
 
+  const activeHtml = paperWidth === 80 ? ticketHtml80 : ticketHtml58;
   const handlePrint = () => {
+    if (activeHtml) { if (!ticketPrinter.printHtml(activeHtml)) Alert.alert('Impresión no disponible', 'Abre la versión web y permite la ventana de impresión.'); return; }
     if (onPrintPdf) {
       onPrintPdf();
       return;
@@ -49,6 +58,26 @@ export default function TicketModal({
         'Modo Portátil',
         'En dispositivos móviles puedes conectar tu impresora Bluetooth térmica o compartir el texto ESC/POS.'
       );
+    }
+  };
+
+  const [isPrintingBt, setIsPrintingBt] = useState(false);
+  const handlePrintBluetooth = async () => {
+    setIsPrintingBt(true);
+    try {
+      const res = await bluetoothPrinter.print(activeText, {
+        width: paperWidth,
+        cut: paperWidth === 80,
+      });
+      if (res.success) {
+        Alert.alert('Impresión Directa ESC/POS', res.message);
+      } else {
+        Alert.alert('Aviso Bluetooth', res.message + '\n\nPuedes usar "Imprimir / Guardar PDF" como alternativa.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error Bluetooth', e?.message || 'Error al conectar con la impresora.');
+    } finally {
+      setIsPrintingBt(false);
     }
   };
 
@@ -104,18 +133,18 @@ export default function TicketModal({
 
           {/* Vista Previa del Papel Térmico */}
           <View style={styles.paperContainer}>
-            <ScrollView
+            <ScrollView keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.paperScroll}
             >
-              <Text
+              {activeHtml && Platform.OS === 'web' ? <iframe title="Vista previa del comprobante" srcDoc={activeHtml} style={{border:0,width:'100%',height:420,background:'#FFFFFF'}} /> : activeHtml && NativeReceiptView ? <NativeReceiptView source={{html:activeHtml}} style={{height:420,backgroundColor:'#FFFFFF'}} /> : <Text
                 style={[
                   styles.thermalText,
                   paperWidth === 80 && { fontSize: 13, letterSpacing: -0.2 },
                 ]}
               >
                 {activeText}
-              </Text>
+              </Text>}
             </ScrollView>
           </View>
 
@@ -127,6 +156,18 @@ export default function TicketModal({
                 <Text style={styles.whatsAppBtnText}>Compartir por WhatsApp</Text>
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handlePrintBluetooth}
+              disabled={isPrintingBt}
+              style={styles.bluetoothBtn}
+            >
+              <Bluetooth size={18} color="#FFFFFF" />
+              <Text style={styles.bluetoothBtnText}>
+                {isPrintingBt ? 'Imprimiendo en Bluetooth...' : 'Imprimir Bluetooth (Directo ESC/POS)'}
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.85} onPress={handlePrint} style={styles.printBtn}>
               <Printer size={18} color={colors.neutral[0]} />
@@ -198,6 +239,8 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 6,
     borderRadius: radius.full,
+    minHeight: 44,
+    minWidth: 44,
   },
   widthSelector: {
     flexDirection: 'row',
@@ -211,6 +254,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     alignItems: 'center',
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   widthBtnActive: {
     backgroundColor: colors.neutral[0],
@@ -226,10 +271,10 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
   },
   paperContainer: {
-    backgroundColor: '#FAF8F5',
+    backgroundColor: colors.neutral[0],
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E8E3DC',
+    borderColor: colors.neutral[200],
     padding: spacing.sm,
     maxHeight: 380,
   },
@@ -254,8 +299,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#25D366',
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   whatsAppBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: '#FFFFFF',
+  },
+  bluetoothBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#1E293B',
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
+  },
+  bluetoothBtnText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: '#FFFFFF',
@@ -268,6 +331,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[600],
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   printBtnText: {
     fontSize: fontSize.sm,
@@ -287,6 +352,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderRadius: radius.lg,
     paddingVertical: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   copyBtnText: {
     fontSize: fontSize.xs,
@@ -298,6 +365,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.lg,
+    minHeight: 44,
+    minWidth: 44,
   },
   cancelBtnText: {
     fontSize: fontSize.xs,

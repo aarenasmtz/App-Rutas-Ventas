@@ -139,13 +139,13 @@ export default function RutaScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Selector de trabajadores (Para que Miguel revise las rutas de los trabajadores) */}
         <View style={styles.trabajadoresSection}>
           <Text style={styles.sectionHeading}>
             {isAdmin ? 'Seleccionar Trabajador para revisar ruta:' : 'Ruta Asignada:'}
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trabajadoresRow}>
+          <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trabajadoresRow}>
             {TRABAJADORES.map((trab) => {
               const isSelected = trabajadorSeleccionado === trab.id;
               return (
@@ -300,6 +300,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[50],
     borderWidth: 1,
     borderColor: colors.primary[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   trabChipActive: {
     backgroundColor: colors.primary[600],
@@ -332,8 +334,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
+    borderRadius: 10,
   },
   tabBar: {
     flexDirection: 'row',

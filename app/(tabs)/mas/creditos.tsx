@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, spacing, radius, fontSize, fontWeight } from '@/constants/theme';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
@@ -13,6 +13,14 @@ export default function CreditosScreen() {
   const router = useRouter();
   const [filtro, setFiltro] = useState<Filtro>('Todos');
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
+  const [solicitudes, setSolicitudes] = useState<any[]>([]);
+
+  const loadSolicitudes = async () => {
+    try {
+      const data = await DataService.getSolicitudesSobregiro('Pendiente');
+      if (Array.isArray(data)) setSolicitudes(data);
+    } catch {}
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -20,6 +28,7 @@ export default function CreditosScreen() {
       try {
         const data = await DataService.getClientes();
         if (isMounted) setClientesList(data ?? []);
+        loadSolicitudes();
       } catch {
         // Fallback
       }
@@ -35,6 +44,22 @@ export default function CreditosScreen() {
     if (filtro === 'Vencidos') return clientesList.filter((c) => c.saldo > c.limiteCredito);
     return clientesList;
   }, [clientesList, filtro]);
+
+  const handleResolver = async (tokenSolicitud: string, autorizado: boolean) => {
+    try {
+      const res = await DataService.resolverSobregiro({
+        tokenSolicitud,
+        autorizado,
+      });
+      Alert.alert(
+        autorizado ? 'Sobregiro Autorizado' : 'Sobregiro Rechazado',
+        res.message || 'Se registró la resolución.'
+      );
+      setSolicitudes((prev) => prev.filter((s) => s.tokenSolicitud !== tokenSolicitud));
+    } catch {
+      Alert.alert('Error', 'No se pudo resolver la solicitud de sobregiro.');
+    }
+  };
 
   const totalCartera = filtered.reduce((s, c) => s + c.saldo, 0);
 
@@ -54,7 +79,38 @@ export default function CreditosScreen() {
         ))}
       </View>
 
-      <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+      {solicitudes.length > 0 && (
+        <View style={styles.solicitudesContainer}>
+          <Text style={styles.solicitudesHeader}>🔔 Solicitudes de Sobregiro de Choferes ({solicitudes.length})</Text>
+          {solicitudes.map((s) => (
+            <View key={s.tokenSolicitud} style={styles.solicitudCard}>
+              <View style={styles.solicitudInfo}>
+                <Text style={styles.solicitudCliente}>{s.clienteNombre}</Text>
+                <Text style={styles.solicitudChofer}>Chofer: {s.choferNombre} · Solicitado: {formatCurrency(s.montoSolicitado)}</Text>
+                <Text style={styles.solicitudDetalle}>
+                  Límite: {formatCurrency(s.limiteCredito)} · Excedente: <Text style={{ color: colors.error[600], fontWeight: 'bold' }}>{formatCurrency(s.excedente)}</Text>
+                </Text>
+              </View>
+              <View style={styles.solicitudActions}>
+                <TouchableOpacity
+                  style={styles.btnRechazar}
+                  onPress={() => handleResolver(s.tokenSolicitud, false)}
+                >
+                  <Text style={styles.btnActionText}>Rechazar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.btnAutorizar}
+                  onPress={() => handleResolver(s.tokenSolicitud, true)}
+                >
+                  <Text style={styles.btnActionText}>Autorizar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
         {filtered.map((c) => {
           const vencido = c.saldo > c.limiteCredito;
           const estadoLabel = vencido ? 'Vencido' : c.saldo === 0 ? 'Al corriente' : 'Con saldo';
@@ -109,4 +165,74 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: colors.neutral[200] },
   statLabel: { fontSize: fontSize.xs, color: colors.neutral[400] },
   statValue: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.neutral[900], marginTop: 2 },
+  solicitudesContainer: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    borderRadius: radius.lg,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  solicitudesHeader: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  solicitudCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  solicitudInfo: {
+    flex: 1,
+  },
+  solicitudCliente: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  solicitudChofer: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[600],
+    marginTop: 1,
+  },
+  solicitudDetalle: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[700],
+    marginTop: 2,
+  },
+  solicitudActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  btnAutorizar: {
+    backgroundColor: '#15803d',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  btnRechazar: {
+    backgroundColor: colors.error[600],
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  btnActionText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+  },
 });

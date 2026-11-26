@@ -37,7 +37,7 @@ export default function NuevoProductoScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader title="Nuevo producto" onBack={() => router.back()} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={styles.field}>
           <Text style={styles.label}>Nombre del producto</Text>
           <TextInput
@@ -122,14 +122,34 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.neutral[50] },
   field: { paddingHorizontal: spacing.md, marginTop: spacing.md },
   label: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600], marginBottom: spacing.sm },
-  input: { backgroundColor: colors.neutral[0], borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.base, color: colors.neutral[900], fontFamily: 'Inter-Regular', borderWidth: 1.5, borderColor: colors.neutral[200], ...shadows.card },
+  input: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: 15,
+    color: colors.neutral[900],
+    fontFamily: 'Inter-Regular',
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+    ...shadows.card,
+    minHeight: 44,
+  },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderRadius: radius.md, backgroundColor: colors.neutral[100] },
   chipActive: { backgroundColor: colors.primary[600] },
   chipText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600] },
   chipTextActive: { color: colors.neutral[0] },
   unidadesRow: { flexDirection: 'row', gap: spacing.sm },
-  unidadBtn: { flex: 1, backgroundColor: colors.neutral[100], borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' },
+  unidadBtn: {
+    flex: 1,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
   unidadBtnActive: { backgroundColor: colors.primary[600] },
   unidadText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600] },
   unidadTextActive: { color: colors.neutral[0] },
@@ -137,6 +157,18 @@ const styles = StyleSheet.create({
   currencyWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.neutral[0], borderRadius: radius.md, paddingHorizontal: spacing.md, borderWidth: 1.5, borderColor: colors.neutral[200], ...shadows.card },
   currencySymbol: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.neutral[400], marginRight: spacing.xs },
   currencyInput: { flex: 1, paddingVertical: spacing.md, fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.neutral[900] },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.primary[600], marginHorizontal: spacing.md, marginTop: spacing.xl, borderRadius: radius.md, paddingVertical: spacing.md + 2 },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary[600],
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xl,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md + 2,
+    minHeight: 44,
+    minWidth: 44,
+  },
   saveBtnText: { color: colors.neutral[0], fontSize: fontSize.md, fontWeight: fontWeight.bold },
 });

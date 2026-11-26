@@ -49,19 +49,21 @@ El sistema fue diseñado con enfoque **Mobile-First** para soportar el trabajo r
 2. Como Administrador, tendrás acceso al menú completo **Más** en la barra inferior, incluyendo **Cortes de Caja**, **Revisión de Inventario**, **Catálogo de Productos**, **Bitácora de Auditoría** y **Equipo de Trabajo**.
 3. En la cabecera superior derecha puedes utilizar el selector rápido de rol para simular la vista que ve cada uno de tus choferes.
 
-### B. Gestión de Catálogo y Presentaciones
-- **Ruta:** Menú `Más` → `Catálogo de Productos`.
+### B. Gestión de Catálogo, Importación CSV y Surtido PDF
+- **Ruta:** Menú `Más` → `Catálogo de Productos` y `Surtido con Nota PDF`.
+- **Importación Masiva CSV:** Carga oficial de `ProductosMiguel.csv` (456 registros) con previsualización segura, validación de números con formato contable español, detección de homónimos y confirmación transaccional con hash SHA-256 (previene doble subida).
+- **Surtido con Nota PDF de Bodega:** Carga de notas de remisión en PDF con extracción automática zlib y vinculación inteligente por **Doble Nombre** (Nombre Almacén vs Nombre en App). Al oprimir "Aumentar Inventario", el stock en camioneta se incrementa automáticamente.
 - **Equivalencias de Piezas**: Cada producto cuenta con factores de conversión automáticos:
-  - *Pieza*: Unidad base para descuento en almacén.
-  - *Paquete*: Agrupación estándar (ej. paquete de 5 o 10 piezas) con precio preferencial.
-  - *Caja*: Empaque mayorista (ej. caja de 12 u 80 piezas) con cálculo en tiempo real.
-- El sistema descuenta siempre **piezas físicas reales**, evitando discrepancias en el inventario.
+  - *Pieza / Paquete*: Unidad base para descuento en inventario.
+  - *Exhibidor*: Agrupación intermedia (ej. 10 paquetes) con precio propio.
+  - *Caja*: Empaque mayorista (ej. 6 exhibidores = 60 paquetes) con cálculo en tiempo real.
+- El sistema descuenta siempre **unidades base reales**, evitando discrepancias en el inventario.
 
 ### C. Supervisión de Cortes de Caja y Arqueo Diario
 - **Ruta:** Menú `Más` → `Corte y Arqueo de Caja`.
 - **Selector de Chofer**: Selecciona a **Juan Pérez (Ruta Norte)**, **Pedro Ramírez (Ruta Sur)** o **Miguel (Ruta Centro)**.
-- **Cuadre Financiero**: El sistema calcula de forma estricta:
-  $$\text{Efectivo Esperado} = \text{Ventas Efectivo} + \text{Abonos Cobranza} - \text{Gastos en Efectivo}$$
+- **Cuadre Financiero con Fondo Inicial**: El sistema calcula de forma estricta:
+  $$\text{Efectivo Esperado} = \text{Fondo Inicial} + \text{Ventas Efectivo} + \text{Abonos Cobranza} - \text{Gastos en Efectivo} - \text{Devoluciones en Efectivo}$$
 - Al momento en que el chofer entrega el dinero físico, se captura el **Efectivo Contado**. Si coincide con el esperado, la diferencia de caja marcará `$0.00` con estatus **Cerrado**.
 - Oprime **"Imprimir Ticket de Corte"** para emitir el acta física con firmas de chofer y auditor.
 
@@ -98,23 +100,23 @@ El sistema fue diseñado con enfoque **Mobile-First** para soportar el trabajo r
 2. Coteja las piezas físicas cargadas en tu camioneta contra el listado.
 3. Oprime **"Confirmar Carga de Camioneta"** para recibir la mercancía bajo tu custodia.
 
-### C. Navegación de Ruta y Selección de Clientes
+### C. Navegación de Ruta y Mapa Adaptable (0 Scroll)
 1. Toca la pestaña **Clientes** o **Ruta** en la barra inferior.
 2. Puedes consultar el listado con filtros rápidos (*Hoy*, *Pendientes*, *Con crédito*, *Cercanos*).
-3. Entra a `Ver en Mapa`: Podrás ver tus paradas numeradas secuencialmente. Al tocar cualquier cliente, verás su saldo pendiente y el botón **"Navegar con GPS"** que abrirá Google Maps para guiarte en carretera.
-4. Toca **"Iniciar Venta"** para atender al cliente seleccionado.
+3. Entra a `Ver en Mapa`: La pantalla se adapta al 100% de tu celular sin scroll inicial. Podrás ver tus paradas numeradas con marcadores gota.
+4. Al tocar cualquier cliente en el mapa o abrir el panel modal "Ver paradas (N)":
+   - El marcador se resalta con un halo dorado.
+   - En la ficha inferior verás su nombre, saldo pendiente y distancia real calculada por tu GPS.
+   - Presiona **"Vender"** para abrir el catálogo inmediatamente con ese cliente activo, o **"Cómo llegar"** para abrir Google Maps.
 
-### D. Proceso de Venta Rápida
-1. En la pestaña **Vender**, selecciona la categoría o utiliza el buscador universal (nombre, marca o SKU).
-2. Toca el producto: Se abrirá el **Selector de Presentaciones**. Elige si vendes por **Pieza**, **Paquete** o **Caja**. La aplicación calculará al instante las piezas totales.
-3. Presiona **"Agregar al Carrito"**.
-4. Ve al carrito, revisa el pedido y oprime **"Proceder al Cobro"**.
-5. **Cobro Combinado**: Puedes registrar el pago exacto:
-   - Todo en *Efectivo*.
-   - Parte en *Efectivo* y parte a *Crédito*.
-   - Por *Transferencia SPEI* o *Tarjeta*.
-6. Oprime **"Confirmar y Registrar Venta"**.
-7. En la pantalla de confirmación, se desplegará el folio (ej. `FOL-20260930-002`) y el botón **"Imprimir Ticket Térmico"** para entregar el recibo al cliente.
+### D. Proceso de Venta Rápida con Mosaico de 3 Columnas
+1. En la pestaña **Vender**, verás el catálogo en un mosaico ultra compacto de **3 columnas** con separación de 7 px.
+2. **Favoritos y Orden Spotify:** Puedes marcar la estrella de tus productos preferidos o presionar "Ordenar" para mover tus productos más vendidos al inicio del catálogo.
+3. **Adición Rápida con Stepper:** Toca cualquier tarjeta: se añade 1 unidad y aparece el stepper interactivo `[−] [Cantidad] [+]` con botones táctiles grandes (≥ 44×44 px). Si el pedido es grande (ej. 40 piezas), toca el número de cantidad para escribirlo directamente.
+4. **Multipresentaciones (Caja / Exhibidor / Paquete):** Si el producto tiene presentaciones, se abrirá una ventana inferior para seleccionar si vendes por caja o exhibidor, calculando en tiempo real las piezas equivalentes y el importe.
+5. **Cobro Unificado en 1 Toque:** En la misma pantalla de revisión, selecciona si te pagan en Efectivo, Transferencia, Tarjeta, Crédito o Combinado.
+6. Oprime **"Confirmar venta"** (protegido contra doble clic).
+7. En la pantalla final, presiona **"Compartir comprobante"** para enviarlo por WhatsApp o descargarlo, y pulsa **"Nueva venta"** para atender al siguiente cliente.
 
 ### E. Cobranza de Saldos y Abonos
 1. Si un cliente te paga una cuenta pendiente, ve a `Clientes` → toca el botón **[Cobrar]** en su tarjeta.
@@ -208,3 +210,25 @@ El bundle web de producción fue generado con éxito en la carpeta `dist/`.
 ---
 
 ¡El **Sistema de Ventas en Ruta de Miguel** se encuentra 100% probado, compilado y listo para operar en calle!
+
+## Actualización de interfaz local — 2026-11-08
+
+Inicio prioriza Nueva venta y muestra tres indicadores y ventas recientes. La venta sigue Cliente → Productos → Resumen; se puede vender a mostrador y cambiar cliente conservando el pedido. Los productos se muestran en cuatro columnas o Lista. Tocar cantidad o nombre abre el editor completo de cantidad/presentación; la estrella es independiente. Mi orden y Ordenar conservan la organización manual.
+
+El total y Revisar venta permanecen encima de Inicio/Clientes/Vender/Inventario/Más. Las preferencias se recuerdan en este navegador por usuario. Más conserva los módulos administrativos, con formularios y acciones existentes. Surtido comienza sin nota: subir un PDF o capturar manualmente; un archivo ilegible muestra error. La versión nativa no simula la carga de un PDF y orienta a web/captura manual.
+
+Esta versión es local y no está liberada para operación; consultar [validaciones y pendientes](docs/REDISENO_OLIVA_2026-11.md) antes de usarla con datos reales.
+
+## Actualización operativa — 2026-11-09
+
+- Inventario cuenta productos/referencias; cada existencia muestra su unidad. El desglose se abre por producto.
+- Cuenta consulta saldo y movimientos de crédito/abonos; si falla, usa Reintentar cuenta. Un error no implica saldo cero.
+- GPS conserva dirección/colonia ya escritas. Si el servicio no devuelve colonia, complétala manualmente antes de guardar.
+- Comprobantes y reportes ofrecen vista HTML58/80mm. Imprimir/Guardar PDF depende del navegador/controlador; validación física pendiente. Solo se imprime identidad comercial configurada y se identifica como comprobante no fiscal.
+- Exportar a Excel (CSV) descarga CSV UTF-8 del reporte seleccionado; el enlace Descargar CSV generado permite repetir la descarga. En nativo se comparte el contenido como texto.
+
+Alcance y evidencia: [informe de incidencias](docs/INCIDENCIAS_UI_2026-11-09.md).
+
+## Continuación por otro agente
+
+Leer [CONTINUIDAD_ANTIGRAVITY.md](docs/CONTINUIDAD_ANTIGRAVITY.md) antes de retomar. Incluye estado de Git, archivos nuevos que deben conservarse, prioridades y comandos de QA. La rama local aún contiene cambios sin commit. Este manual describe uso; no certifica los pendientes de GPS físico, impresión ni integración SQL.

@@ -1,398 +1,289 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import {
-  ShoppingBag,
-  TrendingUp,
-  Wallet,
-  CreditCard,
-  LogOut,
-  ArrowRight,
-  Shield,
-  User as UserIcon,
-} from 'lucide-react-native';
-import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
+import { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { ShoppingBag, Users, Wallet, ArrowRight, LogOut, Receipt } from 'lucide-react-native';
+import { colors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { formatCurrency } from '@/utils/helpers';
-import { AppShell, MoneyDisplay } from '@/components/DesignSystem';
 import { DataService } from '@/services/mockDataService';
+import { formatCurrency } from '@/utils/helpers';
+import { AppShell } from '@/components/DesignSystem';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, switchRole, logout, carrito } = useApp();
-  const isAdmin = user?.rol === 'Administrador';
-
-  const [resumen, setResumen] = useState({
-    ventasHoy: 0,
-    cobranzaHoy: 0,
-    creditoColocadoHoy: 0,
-    efectivoEnCaja: 0,
-    totalPiezasVendidas: 0,
-  });
-  const [isLiveConnected, setIsLiveConnected] = useState(true);
-
-  // Fecha dinámica real en español
-  const fechaHoy = new Date().toLocaleDateString('es-MX', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-  const fechaHoyFormateada = fechaHoy.charAt(0).toUpperCase() + fechaHoy.slice(1);
-
-  const loadDashboard = useCallback(async () => {
-    try {
-      const live = await DataService.getDashboardResumen();
-      if (live) {
-        setResumen({
-          ventasHoy: live.ventasHoy || 0,
-          cobranzaHoy: live.cobranzaHoy || 0,
-          creditoColocadoHoy: live.creditoColocadoHoy || 0,
-          efectivoEnCaja: live.efectivoEnCaja || 0,
-          totalPiezasVendidas: live.totalPiezasVendidas || 0,
-        });
-        setIsLiveConnected(true);
-      }
-    } catch {
-      setIsLiveConnected(false);
-    }
+  const { user, logout, carrito } = useApp();
+  const [summary, setSummary] = useState({ ventasHoy: 0, cobranzaHoy: 0, creditoColocadoHoy: 0 });
+  const [recent, setRecent] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState(false);
+  const load = useCallback(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
+    Promise.all([DataService.getDashboardResumen(), DataService.getVentas(30), DataService.isLive()])
+      .then(([data, sales, live]) => {
+        if (!active) return;
+        setSummary(data);
+        setRecent([...sales].sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime()).slice(0, 3));
+        setConnected(live);
+      }).catch(() => { if (active) setError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
-
-  const cartCount = carrito.length;
-
-  return (
-    <AppShell>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        bounces={true}
-      >
-        {/* 1. ENCABEZADO COMPACTO */}
-        <View style={styles.header}>
-          <View style={styles.headerInfo}>
-            <Text style={styles.greeting}>Hola, {user?.nombre || 'Miguel'}</Text>
-            <View style={styles.metaRow}>
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: isLiveConnected ? colors.success[500] : colors.neutral[400] },
-                ]}
-              />
-              <Text style={styles.statusText}>
-                {isLiveConnected ? 'En línea' : 'Sin conexión'}
-              </Text>
-              <Text style={styles.metaDot}>·</Text>
-              <Text style={styles.dateText}>{fechaHoyFormateada}</Text>
-            </View>
-          </View>
-
-          {/* Acciones de Cabecera: Selector compacto de Rol + Salir */}
-          <View style={styles.headerActions}>
-            <View style={styles.rolePill}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => switchRole('Administrador')}
-                style={[styles.roleOption, isAdmin && styles.roleOptionActive]}
-              >
-                <Text style={[styles.roleOptionText, isAdmin && styles.roleOptionTextActive]}>
-                  Admin
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => switchRole('Vendedor')}
-                style={[styles.roleOption, !isAdmin && styles.roleOptionActive]}
-              >
-                <Text style={[styles.roleOptionText, !isAdmin && styles.roleOptionTextActive]}>
-                  Vendedor
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={logout}
-              style={styles.logoutBtn}
-              accessibilityLabel="Cerrar sesión"
-            >
-              <LogOut size={18} color={colors.neutral[600]} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 2. BOTÓN PRINCIPAL GRANDE: VENDER */}
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={() => router.push('/(tabs)/venta')}
-          style={[styles.venderHeroBtn, shadows.card]}
-          accessibilityLabel="Iniciar venta"
-        >
-          <View style={styles.venderHeroIconWrap}>
-            <ShoppingBag size={26} color={colors.neutral[0]} strokeWidth={2.4} />
-          </View>
-          <View style={styles.venderHeroTextWrap}>
-            <Text style={styles.venderHeroTitle}>VENDER</Text>
-            <Text style={styles.venderHeroSub}>
-              {cartCount > 0 ? `Venta en curso (${cartCount} productos)` : 'Iniciar pedido rápido'}
-            </Text>
-          </View>
-          <View style={styles.venderHeroArrowWrap}>
-            <ArrowRight size={20} color={colors.neutral[0]} strokeWidth={2.6} />
-          </View>
-        </TouchableOpacity>
-
-        {/* 3. RESUMEN COMPACTO: 3 INDICADORES CLAVE */}
-        <View style={styles.kpiSection}>
-          <Text style={styles.sectionLabel}>Resumen del día</Text>
-
-          {/* Tarjeta 1: Ventas Hoy */}
-          <View style={[styles.kpiCard, styles.kpiCardPrimary, shadows.card]}>
-            <View style={styles.kpiTopRow}>
-              <View style={[styles.kpiIconWrap, { backgroundColor: colors.primary[50] }]}>
-                <TrendingUp size={18} color={colors.primary[600]} />
-              </View>
-              <Text style={styles.kpiTitle}>Ventas hoy</Text>
-            </View>
-            <MoneyDisplay amount={resumen.ventasHoy} size="lg" color={colors.primary[800]} />
-            <Text style={styles.kpiDetail}>
-              {resumen.totalPiezasVendidas} piezas/paq vendidas
-            </Text>
-          </View>
-
-          {/* Fila compacta de 2 columnas: Cobrado hoy y Crédito hoy */}
-          <View style={styles.kpiRowDouble}>
-            {/* Tarjeta 2: Cobrado Hoy */}
-            <View style={[styles.kpiCardHalf, shadows.card]}>
-              <View style={styles.kpiTopRow}>
-                <View style={[styles.kpiIconWrap, { backgroundColor: colors.success[50] }]}>
-                  <Wallet size={16} color={colors.success[700]} />
-                </View>
-                <Text style={styles.kpiTitleSmall}>Cobrado hoy</Text>
-              </View>
-              <MoneyDisplay amount={resumen.cobranzaHoy} size="md" color={colors.success[700]} />
-              <Text style={styles.kpiDetailSmall}>Efectivo y transfers</Text>
-            </View>
-
-            {/* Tarjeta 3: Crédito Hoy */}
-            <View style={[styles.kpiCardHalf, shadows.card]}>
-              <View style={styles.kpiTopRow}>
-                <View style={[styles.kpiIconWrap, { backgroundColor: colors.warning[50] }]}>
-                  <CreditCard size={16} color={colors.warning[700]} />
-                </View>
-                <Text style={styles.kpiTitleSmall}>Crédito hoy</Text>
-              </View>
-              <MoneyDisplay amount={resumen.creditoColocadoHoy} size="md" color={colors.warning[700]} />
-              <Text style={styles.kpiDetailSmall}>Fiado del día</Text>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-    </AppShell>
-  );
+  useFocusEffect(load);
+  const date = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  return <AppShell>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}><Text style={styles.eyebrow}>VENTAS MIGUEL</Text><Text style={styles.greeting}>Hola, {user?.nombre}</Text><Text style={styles.date}>{date}</Text></View>
+        <TouchableOpacity onPress={logout} style={styles.iconButton} accessibilityLabel="Cerrar sesión"><LogOut size={20} color={colors.primary[700]} /></TouchableOpacity>
+      </View>
+      <View style={styles.status}><View style={[styles.dot, { backgroundColor: connected ? colors.success[600] : colors.warning[600] }]} /><Text style={styles.statusText}>{connected ? 'En línea' : 'Datos del dispositivo'}</Text><Text style={styles.role}>{user?.rol}</Text></View>
+      <TouchableOpacity onPress={() => router.push('/(tabs)/venta')} style={styles.hero} accessibilityLabel="Nueva venta">
+        <View style={styles.heroIcon}><ShoppingBag size={27} color={colors.neutral[0]} /></View><View style={{ flex: 1 }}><Text style={styles.heroTitle}>Nueva venta</Text><Text style={styles.heroSubtitle}>{carrito.length ? 'Continuar la venta en curso' : 'Selecciona un cliente y comienza'}</Text></View><ArrowRight size={23} color={colors.neutral[0]} />
+      </TouchableOpacity>
+      <Text style={styles.sectionTitle}>Tu día, de un vistazo</Text>
+      <View style={styles.metrics}>
+        {[
+          { label: 'Ventas de hoy', value: summary.ventasHoy },
+          { label: 'Cobrado', value: summary.cobranzaHoy },
+          { label: 'Crédito colocado', value: summary.creditoColocadoHoy },
+        ].map((metric, index) => <View key={metric.label} style={[styles.metric, index === 0 && styles.metricActive]}><Text style={styles.metricLabel}>{metric.label}</Text><Text style={styles.metricValue} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(metric.value)}</Text></View>)}
+      </View>
+      <View style={styles.shortcuts}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/clientes')} style={styles.shortcut}><Users size={21} color={colors.primary[600]} /><Text style={styles.shortcutText}>Clientes</Text><ArrowRight size={16} color={colors.primary[600]} /></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/mas/cobranza')} style={styles.shortcut}><Wallet size={21} color={colors.primary[600]} /><Text style={styles.shortcutText}>Cobrar</Text><ArrowRight size={16} color={colors.primary[600]} /></TouchableOpacity>
+      </View>
+      <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Ventas recientes</Text><TouchableOpacity onPress={() => router.push('/(tabs)/mas/ventas')} style={styles.seeAll}><Text style={styles.link}>Ver todas</Text></TouchableOpacity></View>
+      {loading ? <ActivityIndicator color={colors.primary[600]} style={{ marginVertical: 24 }} /> : error ? <TouchableOpacity onPress={load} style={styles.empty}><Text style={styles.meta}>No se pudo cargar el resumen. Toca para reintentar.</Text></TouchableOpacity> : recent.length === 0 ? <View style={styles.empty}><Receipt size={28} color={colors.neutral[400]} /><Text style={styles.emptyTitle}>Aún no hay ventas</Text><Text style={styles.meta}>Tus próximas ventas aparecerán aquí.</Text></View> : <View style={styles.sales}>
+        {recent.map(sale => {
+          const credit = (sale.pagos || []).some((p: any) => p.metodo === 'Crédito' && p.monto > 0);
+          return <TouchableOpacity key={sale.folio || sale.id} style={styles.sale} onPress={() => router.push('/(tabs)/mas/ventas')}>
+            <View style={styles.saleIcon}><Receipt size={20} color={colors.primary[600]} /></View><View style={{ flex: 1 }}><Text numberOfLines={1} style={styles.saleName}>{sale.cliente?.nombre || sale.clienteNombre || 'Venta de mostrador'}</Text><Text style={styles.meta}>{new Date(sale.fechaHora).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={styles.amount}>{formatCurrency(sale.total)}</Text><Text style={[styles.badge, credit && styles.credit]}>{sale.estado === 'Cancelada' ? 'Cancelada' : credit ? 'Con crédito' : 'Pagado'}</Text></View>
+          </TouchableOpacity>;
+        })}
+      </View>}
+    </ScrollView>
+  </AppShell>;
 }
-
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 12 : 16,
     paddingBottom: 24,
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8,
   },
-  headerInfo: {
-    flex: 1,
+  eyebrow: {
+    color: colors.primary[600],
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
   },
   greeting: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '700',
     color: colors.neutral[900],
-    letterSpacing: -0.3,
+    marginTop: 4,
   },
-  metaRow: {
+  date: {
+    fontSize: 13,
+    color: colors.neutral[500],
+    marginTop: 4,
+    textTransform: 'capitalize',
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.neutral[0],
+    minHeight: 44,
+    minWidth: 44,
+  },
+  status: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 3,
+    marginBottom: 20,
   },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
     color: colors.neutral[600],
   },
-  metaDot: {
-    fontSize: 12,
-    color: colors.neutral[400],
-  },
-  dateText: {
-    fontSize: 12,
-    color: colors.neutral[500],
-    fontWeight: '500',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rolePill: {
-    flexDirection: 'row',
-    backgroundColor: colors.neutral[200],
-    borderRadius: radius.full,
-    padding: 2,
-  },
-  roleOption: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  roleOptionActive: {
-    backgroundColor: colors.neutral[0],
-    ...shadows.card,
-  },
-  roleOptionText: {
+  role: {
     fontSize: 11,
-    fontWeight: '600',
-    color: colors.neutral[600],
-  },
-  roleOptionTextActive: {
     color: colors.primary[700],
-    fontWeight: '800',
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 'auto',
   },
-  logoutBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.full,
-    backgroundColor: colors.neutral[100],
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-  },
-
-  /* Botón Hero Vender */
-  venderHeroBtn: {
+  hero: {
     backgroundColor: colors.primary[600],
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    padding: 16,
+    minHeight: 80,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: colors.primary[700],
+    gap: 12,
   },
-  venderHeroIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  venderHeroTextWrap: {
-    flex: 1,
-  },
-  venderHeroTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.neutral[0],
-    letterSpacing: 0.5,
-  },
-  venderHeroSub: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  venderHeroArrowWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  heroIcon: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  /* Sección de Indicadores (3 KPIs) */
-  kpiSection: {
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 12,
+  heroTitle: {
+    fontSize: 22,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    color: colors.neutral[500],
-    letterSpacing: 0.6,
-    marginBottom: 2,
+    color: colors.neutral[0],
   },
-  kpiCard: {
+  heroSubtitle: {
+    fontSize: 12,
+    color: colors.primary[100],
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    color: colors.neutral[800],
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  metrics: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metric: {
+    flex: 1,
+    minWidth: 0,
     backgroundColor: colors.neutral[0],
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
     borderColor: colors.neutral[200],
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
   },
-  kpiCardPrimary: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary[600],
+  metricActive: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
   },
-  kpiTopRow: {
+  metricLabel: {
+    fontSize: 12,
+    color: colors.neutral[600],
+    minHeight: 30,
+  },
+  metricValue: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: colors.neutral[900],
+    marginTop: 4,
+  },
+  shortcuts: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  shortcut: {
+    flex: 1,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
-  },
-  kpiIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  kpiTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.neutral[700],
-  },
-  kpiDetail: {
-    fontSize: 11,
-    color: colors.neutral[500],
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  kpiRowDouble: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  kpiCardHalf: {
-    flex: 1,
-    backgroundColor: colors.neutral[0],
-    borderRadius: 14,
-    padding: 12,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    borderRadius: 12,
+    backgroundColor: colors.neutral[0],
+    paddingHorizontal: 12,
   },
-  kpiTitleSmall: {
+  shortcutText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.neutral[800],
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  seeAll: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    marginTop: 8,
+  },
+  link: {
+    color: colors.primary[600],
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sales: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    overflow: 'hidden',
+  },
+  sale: {
+    minHeight: 76,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  saleIcon: {
+    width: 32,
+    alignItems: 'center',
+  },
+  saleName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.neutral[900],
+    marginBottom: 4,
+  },
+  meta: {
     fontSize: 12,
-    fontWeight: '700',
-    color: colors.neutral[700],
-  },
-  kpiDetailSmall: {
-    fontSize: 10.5,
     color: colors.neutral[500],
+  },
+  amount: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  badge: {
+    fontSize: 11,
+    color: colors.success[700],
     marginTop: 4,
-    fontWeight: '500',
+  },
+  credit: {
+    color: colors.warning[700],
+  },
+  empty: {
+    padding: 24,
+    gap: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: 14,
+    backgroundColor: colors.neutral[0],
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.neutral[700],
   },
 });

@@ -143,6 +143,9 @@ try
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Clientes') AND name = 'Ciudad')
             ALTER TABLE Clientes ADD Ciudad NVARCHAR(100) NULL;
 
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('CortesCaja') AND name = 'FondoInicial')
+            ALTER TABLE CortesCaja ADD FondoInicial DECIMAL(18,2) NOT NULL DEFAULT 0;
+
         UPDATE Clientes SET Latitud = 21.1219, Longitud = -101.6825, Colonia = 'Centro', Ciudad = 'León, Gto' WHERE Codigo = 'c1' AND Latitud IS NULL;
         UPDATE Clientes SET Latitud = 21.1245, Longitud = -101.6850, Colonia = 'Centro', Ciudad = 'León, Gto' WHERE Codigo = 'c2' AND Latitud IS NULL;
         UPDATE Clientes SET Latitud = 21.1350, Longitud = -101.6780, Colonia = 'Obrera', Ciudad = 'León, Gto' WHERE Codigo = 'c3' AND Latitud IS NULL;
@@ -157,7 +160,8 @@ try
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Productos') AND name = 'CodigoOrigen')
             ALTER TABLE Productos ADD CodigoOrigen NVARCHAR(50) NULL;
 
-        UPDATE Productos SET EstadoConfiguracion = 'Completo' WHERE EstadoConfiguracion IS NULL;
+        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Productos') AND name = 'EstadoConfiguracion')
+            EXEC('UPDATE Productos SET EstadoConfiguracion = ''Completo'' WHERE EstadoConfiguracion IS NULL;');
 
         IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ImportacionesCatalogo')
         BEGIN

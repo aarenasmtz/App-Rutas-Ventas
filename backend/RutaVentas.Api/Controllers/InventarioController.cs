@@ -18,20 +18,49 @@ public class InventarioController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetInventario([FromQuery] string? ubicacion)
+    public async Task<IActionResult> GetInventario([FromQuery] string? ubicacion, [FromQuery] int? usuarioId)
     {
+        string targetUbicacion = ubicacion?.Trim() ?? "";
+        if (string.IsNullOrEmpty(targetUbicacion) && usuarioId.HasValue)
+        {
+            var u = await _db.Usuarios.FirstOrDefaultAsync(x => x.Id == usuarioId.Value);
+            if (u != null && !string.IsNullOrWhiteSpace(u.RutaAsignada))
+            {
+                targetUbicacion = u.RutaAsignada.Trim();
+            }
+        }
+        if (string.IsNullOrEmpty(targetUbicacion))
+        {
+            targetUbicacion = "Bodega";
+        }
+
         var productos = await _db.Productos
             .Include(p => p.Presentaciones)
             .Where(p => p.Activo)
             .OrderBy(p => p.Id)
             .ToListAsync();
 
+        // Buscar movimientos específicos para la ubicación solicitada (Camioneta 1, Camioneta 2, etc.)
+        var movimientosUbicacion = await _db.InventarioMovimientos
+            .Where(m => m.Ubicacion.ToLower() == targetUbicacion.ToLower() ||
+                        (targetUbicacion.ToLower().Contains("trabajador 1") && m.Ubicacion.ToLower().Contains("camioneta 1")) ||
+                        (targetUbicacion.ToLower().Contains("trabajador 2") && m.Ubicacion.ToLower().Contains("camioneta 2")))
+            .GroupBy(m => m.ProductoId)
+            .Select(g => new { ProductoId = g.Key, Piezas = g.Sum(m => m.Piezas) })
+            .ToDictionaryAsync(x => x.ProductoId, x => x.Piezas);
+
+        bool tieneMovimientosUbicacion = movimientosUbicacion.Any();
+
         var items = productos.Select(p =>
         {
-            var estado = p.Existencia switch
+            decimal existenciaReal = tieneMovimientosUbicacion
+                ? (movimientosUbicacion.TryGetValue(p.Id, out var pcs) ? Math.Max(0m, pcs) : 0m)
+                : p.Existencia;
+
+            var estado = existenciaReal switch
             {
-                <= 0 => "Agotado",
-                <= 20 => "Bajo",
+                <= 0m => "Agotado",
+                <= 20m => "Bajo",
                 _ => "Normal"
             };
 
@@ -43,7 +72,7 @@ public class InventarioController : ControllerBase
                 Sku = p.Sku ?? p.Codigo,
                 Unidad = p.Unidad,
                 ManejaMultiplesPresentaciones = p.ManejaMultiplesPresentaciones,
-                ExistenciaPiezas = p.Existencia,
+                ExistenciaPiezas = existenciaReal,
                 PrecioBase = p.PrecioBase,
                 EstadoStock = estado,
                 Presentaciones = p.Presentaciones
@@ -69,8 +98,15 @@ public class InventarioController : ControllerBase
 
         var response = new InventarioUbicacionDto
         {
-            UbicacionId = ubicacion ?? "Camioneta 1",
-            UbicacionNombre = ubicacion ?? "Camioneta 1 (Ruta Centro)",
+            UbicacionId = targetUbicacion,
+            UbicacionNombre = targetUbicacion switch
+            {
+                "Bodega" or "Almacen General" or "Almacén General" => "Bodega Central (Almacén)",
+                "Trabajador 1" or "Camioneta 1" => "Camioneta 1 (Juan / Ruta 1)",
+                "Trabajador 2" or "Camioneta 2" => "Camioneta 2 (Pedro / Ruta 2)",
+                "Trabajador 3" or "Camioneta 3" => "Camioneta 3 (Ruta 3)",
+                _ => targetUbicacion
+            },
             TotalPiezas = totalPiezas,
             TotalStockBajo = totalBajo,
             TotalAgotados = totalAgotados,

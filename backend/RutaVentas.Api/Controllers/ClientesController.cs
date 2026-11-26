@@ -145,6 +145,23 @@ public class ClientesController : ControllerBase
         return Ok(dto);
     }
 
+    [HttpGet("{id}/cuenta")]
+    public async Task<IActionResult> GetCuenta(string id)
+    {
+        var cliente = await _db.Clientes.AsNoTracking().FirstOrDefaultAsync(c => c.Codigo == id || c.Id.ToString() == id);
+        if (cliente == null) return NotFound(new { message = "Cliente no encontrado" });
+        var ventas = await _db.Ventas.AsNoTracking().Include(v => v.Pagos)
+            .Where(v => v.ClienteId == cliente.Id).ToListAsync();
+        var cargos = ventas.Where(v => v.Estado != "Cancelada").Select(v => new {
+            id = $"venta-{v.Id}", fecha = v.FechaHora, concepto = $"Crédito · {v.Folio}",
+            monto = v.Pagos.Where(p => p.Metodo == "Crédito" || p.Metodo == "Credito").Sum(p => p.Monto), tipo = "cargo"
+        }).Where(m => m.monto > 0);
+        var abonos = await _db.AbonosCobranza.AsNoTracking().Where(a => a.ClienteId == cliente.Id)
+            .Select(a => new { id = "abono-" + a.Id, fecha = a.FechaHora, concepto = "Abono · " + a.MetodoPago, monto = a.Monto, tipo = "abono" }).ToListAsync();
+        return Ok(new { clienteId = cliente.Codigo, saldo = cliente.Saldo, limiteCredito = cliente.LimiteCredito,
+            movimientos = cargos.Concat(abonos).OrderByDescending(m => m.fecha) });
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] GuardarClienteRequestDto req)
     {

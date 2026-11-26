@@ -153,7 +153,7 @@ export default function RutasAdminScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Banner Informativo */}
         <View style={styles.infoBanner}>
           <Route size={22} color={colors.primary[600]} />
@@ -292,16 +292,23 @@ export default function RutasAdminScreen() {
 const styles = StyleSheet.create({
   scroll: {
     padding: spacing.md,
-    paddingBottom: 60,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   addHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: 12,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   addHeaderBtnText: {
     color: colors.neutral[0],
@@ -398,6 +405,8 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   metaRow: {
     flexDirection: 'row',
@@ -424,9 +433,13 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+    maxHeight: '88%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -446,6 +459,8 @@ const styles = StyleSheet.create({
   },
   modalCloseBtn: {
     padding: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   inputLabel: {
     fontSize: fontSize.xs,
@@ -457,11 +472,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[50],
     borderWidth: 1,
     borderColor: colors.neutral[200],
-    borderRadius: radius.md,
+    borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: 9,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
   },
   modalActions: {
     flexDirection: 'row',
@@ -478,6 +494,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[300],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalCancelText: {
     fontSize: fontSize.sm,
@@ -490,6 +508,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.primary[600],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalSaveText: {
     fontSize: fontSize.sm,

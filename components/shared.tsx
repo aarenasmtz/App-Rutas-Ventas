@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Wifi, WifiOff, CloudCheck, CloudOff, Clock, X } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -12,7 +12,7 @@ export function ConnectivityBanner() {
   return (
     <View style={bannerStyles.container}>
       <WifiOff size={18} color={colors.neutral[0]} />
-      <Text style={bannerStyles.text}>Sin conexión. Tus movimientos se guardarán en el dispositivo y se sincronizarán automáticamente.</Text>
+      <Text style={bannerStyles.text}>Sin conexión · Consulta los movimientos pendientes en Sincronización.</Text>
     </View>
   );
 }
@@ -86,18 +86,20 @@ export function BottomSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={sheetStyles.overlay} onPress={onClose}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={sheetStyles.keyboard}>
         <Pressable style={sheetStyles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={sheetStyles.handle} />
           <View style={sheetStyles.header}>
             <Text style={sheetStyles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={sheetStyles.closeBtn}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar panel" onPress={onClose} style={sheetStyles.closeBtn}>
               <X size={22} color={colors.neutral[400]} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={sheetStyles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView style={sheetStyles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>
         </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );
@@ -143,19 +145,21 @@ const headerStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    backgroundColor: colors.neutral[0],
+    backgroundColor: colors.primary[600],
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.primary[700],
+    minHeight: 44,
+    minWidth: 44,
   },
   backText: {
     fontSize: 28,
-    color: colors.neutral[700],
+    color: colors.neutral[0],
     marginTop: -4,
   },
   titles: {
@@ -164,26 +168,33 @@ const headerStyles = StyleSheet.create({
   title: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
-    color: colors.neutral[900],
+    color: colors.neutral[0],
   },
   subtitle: {
     fontSize: fontSize.sm,
-    color: colors.neutral[500],
+    color: colors.primary[100],
     marginTop: 2,
   },
 });
 
 const sheetStyles = StyleSheet.create({
+  keyboard: {
+    width: '100%',
+    maxWidth: 680,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
   },
   sheet: {
     backgroundColor: colors.neutral[0],
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,
-    maxHeight: '85%',
+    maxHeight: '90%',
     paddingBottom: spacing.xl,
   },
   handle: {
@@ -208,12 +219,19 @@ const sheetStyles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
+    flexShrink: 1,
+    marginRight: 8,
   },
   closeBtn: {
-    padding: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   content: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    flexGrow: 0,
+    flexShrink: 1,
   },
 });

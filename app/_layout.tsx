@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -14,14 +14,16 @@ SplashScreen.preventAutoHideAsync();
 
 function AppContent() {
   const { loggedIn } = useApp();
+  const segments = useSegments();
 
   useEffect(() => {
-    if (loggedIn) {
+    const loginRoute = segments[0] === 'login';
+    if (loggedIn && loginRoute) {
       router.replace('/(tabs)');
-    } else {
+    } else if (!loggedIn && !loginRoute) {
       router.replace('/login');
     }
-  }, [loggedIn]);
+  }, [loggedIn, segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -75,7 +77,7 @@ export default function RootLayout() {
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
         <link rel="icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <meta name="theme-color" content="#1e3a8a" />
+        <meta name="theme-color" content={colors.primary[800]} />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="RutaVentas" />

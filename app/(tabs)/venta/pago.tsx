@@ -62,6 +62,9 @@ export default function PagoScreen() {
   const [transferencia, setTransferencia] = useState('');
   const [tarjeta, setTarjeta] = useState('');
   const [credito, setCredito] = useState('');
+  const [tokenAutorizacion, setTokenAutorizacion] = useState<string | null>(null);
+  const [solicitandoAutorizacion, setSolicitandoAutorizacion] = useState(false);
+  const [tokenSolicitud, setTokenSolicitud] = useState<string | null>(null);
 
   // Prevención de doble envío
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,6 +102,60 @@ export default function PagoScreen() {
     setCredito(pCredito.toString());
   };
 
+  const handleSolicitarAutorizacionRemota = async () => {
+    if (solicitandoAutorizacion) return;
+    setSolicitandoAutorizacion(true);
+    try {
+      const res = await DataService.solicitarSobregiro({
+        clienteId: cliente.id,
+        empleadoId: user?.id || '1',
+        montoSolicitado: cr,
+        motivo: `Sobregiro en ruta para ${cliente.nombre} por ${formatCurrency(cr)} (Excede límite por ${formatCurrency(nuevoSaldo - limiteCredito)})`,
+      });
+
+      if (res && res.tokenSolicitud) {
+        setTokenSolicitud(res.tokenSolicitud);
+        Alert.alert(
+          'Solicitud Enviada a Don Miguel',
+          `Se notificó a Don Miguel para autorizar el sobregiro de ${formatCurrency(nuevoSaldo - limiteCredito)}. Puedes verificar la aprobación o ingresar el código de autorización.`,
+          [
+            {
+              text: 'Ingresar Código',
+              onPress: () => {
+                if (typeof window !== 'undefined' && window.prompt) {
+                  const pin = window.prompt('Ingresa el Código de Autorización de Don Miguel (ej. AUTH-123456):');
+                  if (pin && pin.trim()) {
+                    setTokenAutorizacion(pin.trim());
+                    Alert.alert('Código Registrado', 'Sobregiro desbloqueado para esta venta.');
+                  }
+                }
+              },
+            },
+            {
+              text: 'Verificar Estado',
+              onPress: async () => {
+                const check = await DataService.consultarSobregiro(res.tokenSolicitud);
+                if (check?.estado === 'Autorizada' && check?.tokenAutorizacion) {
+                  setTokenAutorizacion(check.tokenAutorizacion);
+                  Alert.alert('¡Autorizado!', 'Don Miguel aprobó el sobregiro. Ya puedes confirmar la venta.');
+                } else if (check?.estado === 'Rechazada') {
+                  Alert.alert('Rechazada', 'Don Miguel no autorizó el sobregiro para este cliente.');
+                } else {
+                  Alert.alert('En Espera', 'La solicitud sigue pendiente de aprobación por Don Miguel.');
+                }
+              },
+            },
+            { text: 'Entendido', style: 'cancel' },
+          ]
+        );
+      }
+    } catch {
+      Alert.alert('Error', 'No se pudo enviar la solicitud de autorización.');
+    } finally {
+      setSolicitandoAutorizacion(false);
+    }
+  };
+
   const handleConfirm = async () => {
     if (isSubmitting) return;
 
@@ -112,10 +169,14 @@ export default function PagoScreen() {
       return;
     }
 
-    if (excedeCredito) {
+    if (excedeCredito && !tokenAutorizacion) {
       Alert.alert(
         'Límite de crédito excedido',
-        `El nuevo saldo (${formatCurrency(nuevoSaldo)}) excede el límite autorizado del cliente (${formatCurrency(limiteCredito)}).`
+        `El nuevo saldo (${formatCurrency(nuevoSaldo)}) excede el límite autorizado (${formatCurrency(limiteCredito)}). ¿Deseas solicitar autorización remota a Don Miguel?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Solicitar Autorización', onPress: handleSolicitarAutorizacionRemota },
+        ]
       );
       return;
     }
@@ -146,6 +207,7 @@ export default function PagoScreen() {
           subtotal: i.subtotal,
         })),
         pagos: pagosValidos.map((p) => ({ metodo: p.metodo, monto: p.monto })),
+        tokenAutorizacionSobregiro: tokenAutorizacion || undefined,
       });
 
       if (res && res.folio) {
@@ -167,7 +229,7 @@ export default function PagoScreen() {
         onBack={() => router.back()}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Tarjeta de Total a Cobrar */}
         <View style={[styles.heroCard, shadows.card]}>
           <Text style={styles.heroSub}>TOTAL DE LA NOTA</Text>
@@ -183,7 +245,7 @@ export default function PagoScreen() {
         {/* Acceso Rápido de Métodos (Un Toque) */}
         <View style={styles.quickMethodsSection}>
           <Text style={styles.sectionHeading}>Asignación rápida de monto:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+          <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
             <TouchableOpacity activeOpacity={0.8} onPress={() => setExacto('Efectivo')} style={styles.quickChip}>
               <Banknote size={15} color={colors.success[700]} />
               <Text style={styles.quickChipText}>100% Efectivo</Text>
@@ -351,11 +413,11 @@ export default function PagoScreen() {
       <View style={[styles.bottomBar, shadows.floating]}>
         <TouchableOpacity
           activeOpacity={0.88}
-          disabled={!completo || isSubmitting || excedeCredito}
+          disabled={!completo || isSubmitting || (excedeCredito && !tokenAutorizacion)}
           onPress={handleConfirm}
           style={[
             styles.confirmBtn,
-            (!completo || isSubmitting || excedeCredito) && styles.confirmBtnDisabled,
+            (!completo || isSubmitting || (excedeCredito && !tokenAutorizacion)) && styles.confirmBtnDisabled,
           ]}
         >
           {isSubmitting ? (
@@ -437,6 +499,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   quickChipCombinado: {
     backgroundColor: colors.primary[50],
@@ -494,10 +558,12 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    fontSize: fontSize.xl,
+    fontSize: 15,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
     padding: 0,
+    minHeight: 44,
+    borderRadius: 10,
   },
   statusCard: {
     backgroundColor: colors.neutral[0],
@@ -563,6 +629,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   confirmBtnDisabled: {
     backgroundColor: colors.neutral[300],
@@ -572,5 +640,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  solicitarBtn: {
+    marginTop: 8,
+    backgroundColor: colors.primary[700],
+    borderRadius: radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+  },
+  solicitarBtnText: {
+    color: colors.neutral[0],
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
   },
 });

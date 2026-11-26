@@ -7,6 +7,8 @@ import { mockClientes, mockProductos, DataService } from '@/services/mockDataSer
 import { useApp } from '@/context/AppContext';
 import { Card, Badge, ScreenHeader } from '@/components/shared';
 import { formatCurrency, getEstadoColor, getRutaDiaActual } from '@/utils/helpers';
+import { buildMapsUrl, validCoordinates } from '@/utils/location';
+import { validateAccount, type CustomerAccount } from '@/utils/customerAccount';
 import type { Cliente } from '@/types';
 
 type Tab = 'resumen' | 'sugerido' | 'historial' | 'cuenta';
@@ -19,28 +21,20 @@ export default function ClienteDetailScreen() {
   const [cliente, setCliente] = useState<Cliente | null>(() => {
     return mockClientes.find((c) => c.id === id) || null;
   });
+  const [loadError, setLoadError] = useState('');
+  const [retry, setRetry] = useState(0);
   const [tab, setTab] = useState<Tab>('resumen');
 
   useEffect(() => {
-    const fetchLiveCliente = async () => {
-      try {
-        setLoading(true);
-        const live = await DataService.getClienteById(id);
-        if (live) {
-          setCliente(live);
-        } else {
-          const list = await DataService.getClientes();
-          const found = list.find((c) => c.id === id);
-          if (found) setCliente(found);
-        }
-      } catch {
-        // Keep fallback
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLiveCliente();
-  }, [id]);
+    let active = true;
+    setLoading(true); setCliente(null); setLoadError('');
+    DataService.getClienteById(id).then(result=>{
+      if (!result || String(result.id)!==String(id) || !result.nombre) throw new Error('Cliente no disponible');
+      if (active) setCliente(result);
+    }).catch(()=>{if(active)setLoadError('No se pudo cargar este cliente. Revisa la conexión o el registro.');})
+      .finally(()=>{if(active)setLoading(false);});
+    return ()=>{active=false;};
+  }, [id,retry]);
 
   if (loading && !cliente) {
     return (
@@ -55,12 +49,12 @@ export default function ClienteDetailScreen() {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Cliente no encontrado" onBack={() => router.back()} />
-        <View style={[styles.center, { padding: spacing.xl }]}>
+        <View style={[styles.center, { padding: spacing.xl }]}><TouchableOpacity accessibilityRole="button" onPress={()=>setRetry(n=>n+1)} style={{padding:16}}><Text>Reintentar cliente</Text></TouchableOpacity>
           <Text style={{ fontSize: fontSize.lg, fontWeight: 'bold', color: colors.neutral[800], marginBottom: spacing.sm }}>
             No se encontró el registro
           </Text>
           <Text style={{ color: colors.neutral[500], textAlign: 'center', marginBottom: spacing.lg }}>
-            El cliente solicitado no existe o fue dado de baja.
+            {loadError || 'El cliente solicitado no existe o fue dado de baja.'}
           </Text>
           <TouchableOpacity
             style={[styles.agregarSugeridosBtn, { backgroundColor: colors.primary[600] }]}
@@ -73,9 +67,9 @@ export default function ClienteDetailScreen() {
     );
   }
 
-  const saldo = cliente.saldo ?? 0;
-  const limiteCredito = cliente.limiteCredito ?? 0;
-  const creditoDisponible = Math.max(0, limiteCredito - saldo);
+  const saldo = cliente.saldo;
+  const limiteCredito = cliente.limiteCredito;
+  const creditoDisponible = Number.isFinite(limiteCredito) && Number.isFinite(saldo) ? Math.max(0, limiteCredito - saldo) : undefined;
   const diasVisitaTexto = Array.isArray(cliente.diasVisita) && cliente.diasVisita.length > 0
     ? cliente.diasVisita.join(' - ')
     : 'Lunes a Viernes';
@@ -91,15 +85,9 @@ export default function ClienteDetailScreen() {
   };
 
   const handleOpenGpsNavegacion = () => {
-    const lat = cliente.latitud;
-    const lng = cliente.longitud;
-    if (lat && lng) {
-      // Abre navegación directa con destino en las coordenadas exactas de la tienda
-      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
-    } else {
-      const query = encodeURIComponent(`${cliente.nombre}, ${cliente.direccion}, ${cliente.colonia || 'León'}, Guanajuato`);
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
-    }
+    const url = buildMapsUrl(cliente);
+    if (url) Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir Maps', 'Intenta de nuevo.'));
+    else Alert.alert('Falta ubicación', 'Captura una dirección o coordenadas para navegar.', [{text:'Cancelar'}, {text:'Editar dirección', onPress:()=>router.push({pathname:'/(tabs)/clientes', params:{editar:cliente.id, origen:'detalle'}})}]);
   };
 
   return (
@@ -110,7 +98,7 @@ export default function ClienteDetailScreen() {
         onBack={() => router.back()}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>
             <View style={styles.avatar}>
@@ -136,11 +124,11 @@ export default function ClienteDetailScreen() {
                   {cliente.colonia ? ` · Col. ${cliente.colonia}` : ''}
                 </Text>
               </View>
-              {cliente.latitud && cliente.longitud && (
+              {validCoordinates(cliente.latitud, cliente.longitud) && (
                 <View style={[styles.addressRow, { marginTop: 4 }]}>
                   <Navigation size={12} color={colors.success[600]} />
                   <Text style={[styles.addressText, { color: colors.success[700], fontSize: 11, fontWeight: '600' }]}>
-                    GPS: {cliente.latitud.toFixed(5)}, {cliente.longitud.toFixed(5)}
+                    GPS: {cliente.latitud!.toFixed(5)}, {cliente.longitud!.toFixed(5)}
                   </Text>
                 </View>
               )}
@@ -348,37 +336,28 @@ function HistorialTab({ cliente }: { cliente: Cliente }) {
 }
 
 function CuentaTab({ cliente }: { cliente: Cliente }) {
-  const movimientos = [
-    { fecha: '2026-09-15', concepto: 'Abono en efectivo', monto: -500, tipo: 'abono' },
-    { fecha: '2026-09-11', concepto: 'Venta a crédito', monto: 2350, tipo: 'cargo' },
-    { fecha: '2026-09-08', concepto: 'Abono en efectivo', monto: -1820, tipo: 'abono' },
-    { fecha: '2026-09-04', concepto: 'Venta a crédito', monto: 2150, tipo: 'cargo' },
-    { fecha: '2026-09-01', concepto: 'Abono en efectivo', monto: -3200, tipo: 'abono' },
-    { fecha: '2026-08-28', concepto: 'Venta a crédito', monto: 1950, tipo: 'cargo' },
-  ];
-  return (
-    <View style={styles.tabInner}>
-      <Card style={styles.cuentaCard}>
-        <View style={styles.cuentaHeader}>
-          <Text style={styles.cuentaTitle}>Estado de cuenta</Text>
-          <Text style={[styles.cuentaSaldo, { color: cliente.saldo > 0 ? colors.error[600] : colors.success[600] }]}>
-            {formatCurrency(cliente.saldo)}
-          </Text>
-        </View>
-        {movimientos.map((m, i) => (
-          <View key={i} style={styles.cuentaRow}>
-            <View>
-              <Text style={styles.cuentaConcepto}>{m.concepto}</Text>
-              <Text style={styles.cuentaFecha}>{m.fecha}</Text>
-            </View>
-            <Text style={[styles.cuentaMonto, { color: m.tipo === 'cargo' ? colors.error[600] : colors.success[600] }]}>
-              {m.tipo === 'cargo' ? '+' : '-'}{formatCurrency(Math.abs(m.monto))}
-            </Text>
-          </View>
-        ))}
-      </Card>
-    </View>
-  );
+  const [account, setAccount] = useState<CustomerAccount | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setError(''); setAccount(null);
+    DataService.getCuentaCliente(cliente.id).then(data => {
+      const result = validateAccount(data, cliente.id);
+      if (active) setAccount(result);
+    }).catch(() => { if (active) setError('No se pudo consultar la cuenta. Revisa la conexión e intenta de nuevo.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [cliente.id, attempt]);
+  if (loading) return <View style={styles.tabInner}><ActivityIndicator accessibilityLabel="Cargando cuenta" color={colors.primary[600]} /><Text>Cargando estado de cuenta…</Text></View>;
+  if (error) return <View style={styles.tabInner}><Text accessibilityRole="alert">{error}</Text><TouchableOpacity accessibilityRole="button" style={{padding:16,minHeight:44}} onPress={()=>setAttempt(n=>n+1)}><Text>Reintentar cuenta</Text></TouchableOpacity></View>;
+  if (!account) return null;
+  return <View style={styles.tabInner}><Card style={styles.cuentaCard}>
+    <View style={styles.cuentaHeader}><Text style={styles.cuentaTitle}>Estado de cuenta</Text><Text style={styles.cuentaSaldo}>{formatCurrency(account.saldo)}</Text></View>
+    {!account.movimientos.length && <Text style={{paddingVertical:16}}>Sin movimientos registrados.</Text>}
+    {account.movimientos.map(m=><View key={m.id} style={styles.cuentaRow}><View style={{flex:1,paddingRight:12}}><Text style={styles.cuentaConcepto}>{m.concepto}</Text><Text style={styles.cuentaFecha}>{new Date(m.fecha).toLocaleDateString('es-MX')}</Text></View><Text style={[styles.cuentaMonto,{color:m.tipo==='cargo'?colors.error[600]:colors.success[600]}]}>{m.tipo==='cargo'?'+':'−'}{formatCurrency(Math.abs(m.monto))}</Text></View>)}
+  </Card></View>;
 }
 
 const styles = StyleSheet.create({
@@ -483,12 +462,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: spacing.xs + 2,
+    minHeight: 44,
+    minWidth: 44,
   },
   actionIcon: {
     width: 48,
     height: 48,
     borderRadius: radius.md,
-    backgroundColor: colors.primary[50],
+    backgroundColor: colors.primary[600],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -558,6 +539,8 @@ const styles = StyleSheet.create({
   emptyTab: {
     padding: spacing.xl,
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   emptyText: {
     fontSize: fontSize.sm,
@@ -621,6 +604,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md - 2,
     alignItems: 'center',
     marginTop: spacing.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   agregarSugeridosText: {
     color: colors.neutral[0],

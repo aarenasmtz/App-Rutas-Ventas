@@ -61,7 +61,7 @@ export default function NuevoClienteScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader title="Nuevo cliente" onBack={() => router.back()} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={styles.field}>
           <Text style={styles.label}>Nombre del negocio</Text>
           <TextInput style={styles.input} placeholder="Ej: Abarrotes La Esquina" placeholderTextColor={colors.neutral[400]} value={nombre} onChangeText={setNombre} />
@@ -133,7 +133,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.neutral[50] },
   field: { paddingHorizontal: spacing.md, marginTop: spacing.md },
   label: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600], marginBottom: spacing.sm },
-  input: { backgroundColor: colors.neutral[0], borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.base, color: colors.neutral[900], fontFamily: 'Inter-Regular', borderWidth: 1.5, borderColor: colors.neutral[200], ...shadows.card },
+  input: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    fontSize: 15,
+    color: colors.neutral[900],
+    fontFamily: 'Inter-Regular',
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+    ...shadows.card,
+    minHeight: 44,
+  },
   inputWithIcon: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.neutral[0], borderRadius: radius.md, paddingHorizontal: spacing.md, borderWidth: 1.5, borderColor: colors.neutral[200], gap: spacing.sm, ...shadows.card },
   inputInline: { flex: 1, paddingVertical: spacing.md, fontSize: fontSize.base, color: colors.neutral[900], fontFamily: 'Inter-Regular' },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -142,13 +154,34 @@ const styles = StyleSheet.create({
   chipText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[600] },
   chipTextActive: { color: colors.neutral[0] },
   diasRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  diaBtn: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.neutral[100], alignItems: 'center', justifyContent: 'center' },
+  diaBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
   diaBtnActive: { backgroundColor: colors.primary[600] },
   diaText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.neutral[500] },
   diaTextActive: { color: colors.neutral[0] },
   currencyWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.neutral[0], borderRadius: radius.md, paddingHorizontal: spacing.md, borderWidth: 1.5, borderColor: colors.neutral[200], ...shadows.card },
   currencySymbol: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.neutral[400], marginRight: spacing.xs },
   currencyInput: { flex: 1, paddingVertical: spacing.md, fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.neutral[900] },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.primary[600], marginHorizontal: spacing.md, marginTop: spacing.xl, borderRadius: radius.md, paddingVertical: spacing.md + 2 },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary[600],
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xl,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md + 2,
+    minHeight: 44,
+    minWidth: 44,
+  },
   saveBtnText: { color: colors.neutral[0], fontSize: fontSize.md, fontWeight: fontWeight.bold },
 });

@@ -1,3 +1,4 @@
+import { businessLines, saleReceipt, reportReceipt, corteReceipt, cobranzaReceipt, receiptHtml } from '@/utils/receiptDocument';
 import { Platform, Linking } from 'react-native';
 import { formatCurrency } from '@/utils/helpers';
 import { ticketImageService } from './ticketImageService';
@@ -61,9 +62,11 @@ export interface CorteTicketData {
   diferenciaCaja: number;
   piezasVendidas?: number;
   inventarioActualPiezas?: number;
+  fondoInicial?: number;
 }
 
 export interface ReporteTicketData {
+  fechaGeneracion?: string;
   periodo: string;
   fechaInicio: string;
   fechaFin: string;
@@ -75,7 +78,7 @@ export interface ReporteTicketData {
   ticketPromedio: number;
   pedidosTotal: number;
   clientesVisitados: number;
-  topProductos: { nombre: string; cantidad: number; total: number }[];
+  topProductos: { nombre: string; presentacion?: string; cantidad: number; total: number }[];
   metodosPago: { efectivo: number; transferencia: number; tarjeta: number; credito: number };
 }
 
@@ -100,10 +103,10 @@ class TicketPrinterService {
 
     const lines: string[] = [];
     lines.push(dblDiv);
-    lines.push(center('DISTRIBUIDORA MIGUEL'));
+    businessLines().forEach(line=>lines.push(center(line)));
     lines.push(center('Venta y Reparto en Ruta'));
-    lines.push(center('RFC: VEM-980112-AB1'));
-    lines.push(center('Tel: (449) 912-3456'));
+
+
     lines.push(div);
     lines.push(row('Folio:', data.folio));
     lines.push(row('Fecha:', data.fecha));
@@ -119,8 +122,7 @@ class TicketPrinterService {
     lines.push(div);
 
     data.items.forEach((it) => {
-      const nombreLine = it.nombre.slice(0, col - 2);
-      lines.push(nombreLine);
+      for (let index=0;index<it.nombre.length;index+=col) lines.push(it.nombre.slice(index,index+col));
       const detail = `  ${it.cantidad} ${it.presentacion} x ${formatCurrency(it.precioUnitario)}`;
       const sub = formatCurrency(it.subtotal);
       lines.push(row(detail, sub));
@@ -149,7 +151,7 @@ class TicketPrinterService {
 
     lines.push(div);
     lines.push(center('¡GRACIAS POR SU COMPRA!'));
-    lines.push(center('Comprobante oficial de entrega'));
+    lines.push(center('Comprobante no fiscal'));
     lines.push(center('Conserve este ticket'));
     lines.push(dblDiv);
 
@@ -162,8 +164,8 @@ class TicketPrinterService {
   generateWhatsAppMessage(data: VentaTicketData): string {
     const lines: string[] = [];
     lines.push('🧾 *COMPROBANTE DE VENTA EN RUTA*');
-    lines.push('*DISTRIBUIDORA DE ALIMENTOS*');
-    lines.push('📍 *León, Guanajuato*');
+    lines.push(...businessLines());
+
     lines.push('--------------------------------');
     lines.push(`📄 *Folio:* ${data.folio}`);
     lines.push(`📅 *Fecha:* ${data.fecha}`);
@@ -260,124 +262,33 @@ class TicketPrinterService {
    * Genera HTML formal para imprimir o guardar como PDF
    */
   generateVentaPdfHtml(data: VentaTicketData): string {
-    const itemsHtml = data.items
-      .map(
-        (it) => `
-        <tr>
-          <td style="padding: 8px 4px; border-bottom: 1px solid #e2e8f0; font-weight: 500;">
-            ${it.nombre}<br/>
-            <small style="color: #64748b;">${it.cantidad % 1 !== 0 ? it.cantidad.toFixed(3) : it.cantidad} ${it.presentacion} x ${formatCurrency(it.precioUnitario)}</small>
-          </td>
-          <td style="padding: 8px 4px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 600;">
-            ${formatCurrency(it.subtotal)}
-          </td>
-        </tr>`
-      )
-      .join('');
+    return receiptHtml(saleReceipt(data), 80);
+  }
 
-    const pagosHtml = data.pagos
-      .map(
-        (p) => `
-        <div style="display: flex; justify-content: space-between; font-size: 13px; color: #475569; margin-top: 2px;">
-          <span>• ${p.metodo}:</span>
-          <span>${formatCurrency(p.monto)}</span>
-        </div>`
-      )
-      .join('');
+  generateVentaHtml(data: VentaTicketData, width: 58 | 80 = 58): string { return receiptHtml(saleReceipt(data), width); }
+  generateReporteHtml(data: ReporteTicketData, width: 58 | 80 = 58): string { return receiptHtml(reportReceipt(data), width); }
+  generateCorteHtml(data: CorteTicketData, width: 58 | 80 = 58): string { return receiptHtml(corteReceipt(data), width); }
+  generateCobranzaHtml(data: CobranzaTicketData, width: 58 | 80 = 58): string { return receiptHtml(cobranzaReceipt(data), width); }
 
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Ticket_${data.folio}</title>
-        <style>
-          @page { size: auto; margin: 5mm; }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 12px; max-width: 420px; margin: auto; background: #fff; }
-          .header { text-align: center; border-bottom: 2px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 12px; }
-          .title { font-size: 18px; font-weight: 800; color: #1e3a8a; }
-          .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
-          .meta-row { display: flex; justify-content: space-between; font-size: 12px; color: #334155; margin-bottom: 3px; }
-          .client-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin: 10px 0; font-size: 12px; }
-          table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-          .totals-row { display: flex; justify-content: space-between; font-size: 14px; margin-top: 4px; }
-          .total-big { font-size: 18px; font-weight: 800; color: #1e3a8a; border-top: 2px solid #cbd5e1; padding-top: 6px; margin-top: 6px; }
-          .footer { text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #64748b; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="title">DISTRIBUIDORA DE ALIMENTOS</div>
-          <div class="sub">Venta y Entrega en Ruta · León, Guanajuato</div>
-          <div class="sub">RFC: VEM-980112-AB1 · Tel: (477) 713-2450</div>
-        </div>
-
-        <div class="meta-row"><span><strong>Folio:</strong></span><span>#${data.folio}</span></div>
-        <div class="meta-row"><span><strong>Fecha:</strong></span><span>${data.fecha}</span></div>
-        <div class="meta-row"><span><strong>Vendedor:</strong></span><span>${data.vendedorNombre} (${data.rutaNombre || 'Ruta Centro'})</span></div>
-
-        <div class="client-box">
-          <div style="font-weight: 700; font-size: 13px; color: #0f172a;">${data.clienteNombre}</div>
-          ${data.clientePropietario ? `<div style="color: #475569;">Atn: ${data.clientePropietario}</div>` : ''}
-          ${data.clienteDireccion ? `<div style="color: #64748b;">${data.clienteDireccion}</div>` : ''}
-        </div>
-
-        <table>
-          <thead>
-            <tr style="border-bottom: 2px solid #cbd5e1; font-size: 11px; color: #475569; text-transform: uppercase;">
-              <th style="text-align: left; padding: 4px;">Concepto</th>
-              <th style="text-align: right; padding: 4px;">Importe</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="totals-row"><span>Subtotal:</span><span>${formatCurrency(data.subtotal)}</span></div>
-        ${data.descuento && data.descuento > 0 ? `<div class="totals-row" style="color: #dc2626;"><span>Descuento:</span><span>-${formatCurrency(data.descuento)}</span></div>` : ''}
-        <div class="totals-row total-big"><span>Total Venta:</span><span>${formatCurrency(data.total)}</span></div>
-
-        <div style="margin-top: 12px; padding: 8px; background: #f8fafc; border-radius: 6px;">
-          <div style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">Forma de Pago:</div>
-          ${pagosHtml}
-          ${data.pagoCredito && data.pagoCredito > 0 ? `
-            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #b45309; font-weight: 600;">
-              Crédito hoy: ${formatCurrency(data.pagoCredito)} | Nuevo saldo: ${formatCurrency(data.nuevoSaldo || 0)}
-            </div>` : ''}
-        </div>
-
-        <div class="footer">
-          <p>¡Gracias por su compra!<br/>Comprobante oficial de entrega expedido en León, Gto.</p>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.focus();
-            window.print();
-          };
-        </script>
-      </body>
-      </html>
-    `;
+    printHtml(html: string): boolean {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+    const target = window.open('', '_blank', 'width=460,height=700');
+    if (!target) return false;
+    try {
+      target.document.open();
+      target.document.write(html);
+      target.document.close();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
    * Abre la ventana de impresión para guardar como PDF o imprimir
    */
   openPdfPrintTicket(data: VentaTicketData): boolean {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') {
-      return false;
-    }
-    const printWindow = window.open('', '_blank', 'width=450,height=700');
-    if (!printWindow) {
-      alert('Por favor habilita las ventanas emergentes para ver el comprobante PDF');
-      return false;
-    }
-    printWindow.document.open();
-    printWindow.document.write(this.generateVentaPdfHtml(data));
-    printWindow.document.close();
-    return true;
+    return this.printHtml(this.generateVentaPdfHtml(data));
   }
 
   /**
@@ -401,7 +312,7 @@ class TicketPrinterService {
     const lines: string[] = [];
     lines.push(dblDiv);
     lines.push(center('RECIBO DE COBRANZA'));
-    lines.push(center('DISTRIBUIDORA MIGUEL'));
+    businessLines().forEach(line=>lines.push(center(line)));
     lines.push(div);
     lines.push(row('Recibo:', data.folio));
     lines.push(row('Fecha:', data.fecha));
@@ -450,7 +361,7 @@ class TicketPrinterService {
     const lines: string[] = [];
     lines.push(dblDiv);
     lines.push(center('ARQUEO Y CORTE DE CAJA'));
-    lines.push(center('DISTRIBUIDORA MIGUEL'));
+    businessLines().forEach(line=>lines.push(center(line)));
     lines.push(div);
     lines.push(row('Fecha:', data.fecha));
     lines.push(row('Vendedor:', data.vendedorNombre));
@@ -464,6 +375,9 @@ class TicketPrinterService {
     lines.push(row('  • A Crédito:', formatCurrency(data.credito)));
     lines.push(div);
 
+    if (data.fondoInicial !== undefined && data.fondoInicial > 0) {
+      lines.push(row('+ Fondo Inicial:', formatCurrency(data.fondoInicial)));
+    }
     lines.push(row('+ Cobranza / Abonos:', formatCurrency(data.abonosCobranza)));
     lines.push(row('- Gastos en Ruta:', `-${formatCurrency(data.gastos)}`));
     lines.push(dblDiv);
@@ -510,7 +424,7 @@ class TicketPrinterService {
     lines.push(dblDiv);
     lines.push(center('REPORTE EJECUTIVO'));
     lines.push(center(`PERIODO: ${data.periodo.toUpperCase()}`));
-    lines.push(center('DISTRIBUIDORA MIGUEL'));
+    businessLines().forEach(line=>lines.push(center(line)));
     lines.push(div);
 
     lines.push(row('Ventas Totales:', formatCurrency(data.ventasTotales)));
@@ -525,7 +439,8 @@ class TicketPrinterService {
 
     lines.push(center('TOP PRODUCTOS VENDIDOS'));
     data.topProductos.forEach((p, idx) => {
-      lines.push(`${idx + 1}. ${p.nombre.slice(0, col - 12)}`);
+      const name = `${idx + 1}. ${p.nombre}`;
+      for (let index=0;index<name.length;index+=col) lines.push(name.slice(index,index+col));
       lines.push(row(`   ${p.cantidad} piezas`, formatCurrency(p.total)));
     });
 

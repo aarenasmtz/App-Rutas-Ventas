@@ -1,0 +1,79 @@
+<!doctype html><meta charset="utf-8"><title>QA imagen comprobante</title><style>body{margin:0;background:white}img{width:100%;max-width:460px}</style><body><script>const canvas=(function receiptCanvas(model) {
+    if (typeof document === 'undefined')
+        return null;
+    const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
+    if (!context)
+        return null;
+    const width = 460, padding = 24, lineHeight = 19;
+    const wrap = (text, max) => {
+        const result = [];
+        let line = '';
+        for (const word of String(text).split(/\s+/)) {
+            if (context.measureText(line + (line ? ' ' : '') + word).width > max && line) {
+                result.push(line);
+                line = '';
+            }
+            if (context.measureText(word).width > max) {
+                for (const char of word) {
+                    if (context.measureText(line + char).width > max) {
+                        result.push(line);
+                        line = '';
+                    }
+                    line += char;
+                }
+            }
+            else
+                line += (line ? ' ' : '') + word;
+        }
+        if (line)
+            result.push(line);
+        return result;
+    };
+    context.font = 'bold 14px Arial';
+    const rows = model.rows.map(row => ({
+        ...row,
+        lines: wrap(row.label, row.value ? width - 2 * padding - 118 : width - 2 * padding),
+        details: wrap(row.detail || '', width - 2 * padding),
+    }));
+    const titleLines = wrap(model.title, width - 2 * padding);
+    const height = padding * 2 + titleLines.length * 26 + rows.reduce((n, row) => n + 18 + lineHeight * (Math.max(row.lines.length, 1) + row.details.length), 0);
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    context.scale(2, 2);
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, width, height);
+    let y = padding;
+    context.fillStyle = '#46522b';
+    context.font = 'bold 20px Arial';
+    for (const text of titleLines) {
+        y += 26;
+        context.fillText(text, padding, y);
+    }
+    for (const row of rows) {
+        y += 18;
+        context.font = row.emphasis ? 'bold 14px Arial' : '14px Arial';
+        context.fillStyle = row.emphasis ? '#354020' : '#1d2418';
+        const top = y;
+        for (const text of row.lines) {
+            context.fillText(text, padding, y);
+            y += lineHeight;
+        }
+        if (row.value !== undefined) {
+            context.textAlign = 'right';
+            context.fillText(row.value, width - padding, top);
+            context.textAlign = 'left';
+        }
+        context.font = '13px Arial';
+        context.fillStyle = '#414b36';
+        for (const text of row.details) {
+            context.fillText(text, padding, y);
+            y += lineHeight;
+        }
+        context.strokeStyle = '#d8dccf';
+        context.beginPath();
+        context.moveTo(padding, y + 5);
+        context.lineTo(width - padding, y + 5);
+        context.stroke();
+    }
+    return canvas;
+})({"title":"Comprobante de venta","rows":[{"label":"DISTRIBUIDORA DON MIGUEL"},{"label":"RFC: MIGD750412AB1"},{"label":"Tel: 477-123-4567"},{"label":"León, Guanajuato"},{"label":"Folio","value":"QA-LOCAL"},{"label":"Fecha","value":"08/11/2026"},{"label":"Vendedor","value":"Usuario de prueba"},{"label":"Cliente de prueba","detail":"","emphasis":true},{"label":"1. Queso \"Especial\"; edición\ncon acentos y nombre completo para comprobar todas las líneas de la descripción","value":"$8","detail":"1 paquete × $8"},{"label":"2. Queso \"Especial\"; edición\ncon acentos y nombre completo para comprobar todas las líneas de la descripción","value":"$8","detail":"1 Caja × $8"},{"label":"3. Queso \"Especial\"; edición\ncon acentos y nombre completo para comprobar todas las líneas de la descripción","value":"$8","detail":"1 paquete × $8"},{"label":"4. Queso \"Especial\"; edición\ncon acentos y nombre completo para comprobar todas las líneas de la descripción","value":"$8","detail":"1 Caja × $8"},{"label":"Subtotal","value":"$32"},{"label":"Total","value":"$32","emphasis":true},{"label":"Efectivo","value":"$32"},{"label":"Comprobante no fiscal","detail":"Gracias por su compra."}]});const image=new Image();image.alt='Comprobante de prueba con nombres completos';image.src=canvas.toDataURL();document.body.appendChild(image);</script>

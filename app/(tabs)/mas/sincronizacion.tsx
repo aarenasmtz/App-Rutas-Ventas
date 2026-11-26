@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -32,6 +33,7 @@ import { AppShell, PageHeader } from '@/components/DesignSystem';
 import { DataService } from '@/services/mockDataService';
 import { offlineSyncQueue, type SyncQueueItem } from '@/services/offlineSyncQueueService';
 import { formatCurrency } from '@/utils/helpers';
+import { getBusinessIdentity, saveBusinessIdentity } from '@/utils/receiptDocument';
 
 export default function SincronizacionScreen() {
   const router = useRouter();
@@ -40,6 +42,21 @@ export default function SincronizacionScreen() {
   const [pingMs, setPingMs] = useState<number>(0);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [preloading, setPreloading] = useState<boolean>(false);
+  const initialBiz = getBusinessIdentity();
+  const [bizNombre, setBizNombre] = useState(initialBiz.nombre);
+  const [bizRfc, setBizRfc] = useState(initialBiz.rfc || '');
+  const [bizTelefono, setBizTelefono] = useState(initialBiz.telefono || '');
+  const [bizDireccion, setBizDireccion] = useState(initialBiz.direccion || '');
+
+  const handleSaveBusinessIdentity = () => {
+    saveBusinessIdentity({
+      nombre: bizNombre.trim() || 'DISTRIBUIDORA DON MIGUEL',
+      rfc: bizRfc.trim(),
+      telefono: bizTelefono.trim(),
+      direccion: bizDireccion.trim(),
+    });
+    Alert.alert('Identidad Comercial Guardada', 'Los nuevos tickets y reportes se imprimirán con estos datos.');
+  };
 
   const checkConnection = async () => {
     const health = await DataService.checkSyncHealth();
@@ -330,6 +347,72 @@ export default function SincronizacionScreen() {
             })}
           </View>
         )}
+        {/* Configuración de Identidad Comercial para Tickets */}
+        <View style={[styles.identityCard, shadows.card]}>
+          <View style={styles.identityHeader}>
+            <Receipt size={20} color={colors.primary[700]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.identityTitle}>Identidad Comercial Don Miguel</Text>
+              <Text style={styles.identitySubtitle}>Encabezado oficial para tickets térmicos y comprobantes</Text>
+            </View>
+          </View>
+
+          <View style={styles.identityInputGroup}>
+            <Text style={styles.identityLabel}>Razón Social / Nombre Comercial</Text>
+            <TextInput
+              style={styles.identityInput}
+              value={bizNombre}
+              onChangeText={setBizNombre}
+              placeholder="DISTRIBUIDORA DON MIGUEL"
+              placeholderTextColor={colors.neutral[400]}
+            />
+          </View>
+
+          <View style={styles.identityRow2}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.identityLabel}>RFC</Text>
+              <TextInput
+                style={styles.identityInput}
+                value={bizRfc}
+                onChangeText={setBizRfc}
+                placeholder="MIGD750412AB1"
+                placeholderTextColor={colors.neutral[400]}
+                autoCapitalize="characters"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.identityLabel}>Teléfono</Text>
+              <TextInput
+                style={styles.identityInput}
+                value={bizTelefono}
+                onChangeText={setBizTelefono}
+                placeholder="477-123-4567"
+                placeholderTextColor={colors.neutral[400]}
+                keyboardType="phone-pad"
+              />
+            </View>
+          </View>
+
+          <View style={styles.identityInputGroup}>
+            <Text style={styles.identityLabel}>Dirección / Ciudad</Text>
+            <TextInput
+              style={styles.identityInput}
+              value={bizDireccion}
+              onChangeText={setBizDireccion}
+              placeholder="León, Guanajuato"
+              placeholderTextColor={colors.neutral[400]}
+            />
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleSaveBusinessIdentity}
+            style={styles.saveIdentityBtn}
+          >
+            <CheckCircle2 size={16} color={colors.neutral[0]} />
+            <Text style={styles.saveIdentityBtnText}>Guardar Identidad Comercial</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </AppShell>
   );
@@ -587,5 +670,69 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.error[600],
     maxWidth: 180,
+  },
+  identityCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  identityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  identityTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[900],
+  },
+  identitySubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.neutral[500],
+    marginTop: 2,
+  },
+  identityInputGroup: {
+    gap: 4,
+  },
+  identityRow2: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  identityLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.neutral[700],
+  },
+  identityInput: {
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    fontSize: fontSize.sm,
+    color: colors.neutral[900],
+    backgroundColor: colors.neutral[50],
+    minHeight: 40,
+  },
+  saveIdentityBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary[700],
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm + 2,
+    minHeight: 44,
+    marginTop: spacing.xs,
+  },
+  saveIdentityBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.neutral[0],
   },
 });

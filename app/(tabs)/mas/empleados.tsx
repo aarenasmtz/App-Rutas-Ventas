@@ -54,7 +54,7 @@ export default function EmpleadosScreen() {
         }
       />
 
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled"
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -150,6 +150,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   list: {
     flex: 1,

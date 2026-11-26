@@ -1,0 +1,102 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="receipt-paper-width" content="80"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Arqueo y Corte de Caja</title><style>
+    @page {
+      size: 80mm auto;
+      margin: 2mm 1mm;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      background: #fff;
+      margin: 0;
+      color: #1d2418;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    body {
+      width: 100%;
+      max-width: 80mm;
+      margin: auto;
+      padding: 3mm 2mm;
+    }
+    h1 {
+      font-size: 18px;
+      color: #46522b;
+      border-bottom: 2px solid #556133;
+      margin: 0 0 8px;
+      padding-bottom: 6px;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    .row {
+      padding: 5px 0;
+      border-bottom: 1px dashed #d8dccf;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      overflow-wrap: anywhere;
+    }
+    .line {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .label {
+      flex: 1;
+      min-width: 0;
+    }
+    .value {
+      max-width: 48%;
+      text-align: right;
+      font-weight: bold;
+      overflow-wrap: anywhere;
+      white-space: nowrap;
+    }
+    .detail {
+      color: #414b36;
+      font-size: 0.9em;
+      margin-top: 2px;
+    }
+    .strong {
+      font-weight: bold;
+      color: #354020;
+      border-top: 1.5px solid #556133;
+      border-bottom: 1.5px solid #556133;
+      padding: 6px 0;
+      background: rgba(85,97,51,0.04);
+    }
+    @media print {
+      @page {
+        size: 80mm auto;
+        margin: 1mm 1mm;
+      }
+      body {
+        width: 80mm !important;
+        max-width: 80mm !important;
+        padding: 1mm 2mm !important;
+        margin: 0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .row {
+        border-color: #888;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .strong, h1 {
+        color: #000;
+        border-color: #000;
+      }
+    }
+  </style>
+  <script>
+    function triggerPrint() {
+      window.focus();
+      setTimeout(function() { window.print(); }, 200);
+    }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      triggerPrint();
+    } else {
+      window.addEventListener('DOMContentLoaded', triggerPrint);
+    }
+  </script>
+  </head><body><h1>Arqueo y Corte de Caja</h1><div class="row"><div class="line"><span class="label">DISTRIBUIDORA DON MIGUEL</span></div></div><div class="row"><div class="line"><span class="label">RFC: MIGD750412AB1</span></div></div><div class="row"><div class="line"><span class="label">Tel: 477-123-4567</span></div></div><div class="row"><div class="line"><span class="label">León, Guanajuato</span></div></div><div class="row"><div class="line"><span class="label">Fecha</span><span class="value">09/nov/2026 18:30</span></div></div><div class="row"><div class="line"><span class="label">Vendedor</span><span class="value">Juan Chofer</span></div></div><div class="row"><div class="line"><span class="label">Ruta</span><span class="value">Ruta 1</span></div></div><div class="row strong"><div class="line"><span class="label">Ventas Totales</span><span class="value">$4,500</span></div></div><div class="row"><div class="line"><span class="label">  • En Efectivo</span><span class="value">$3,000</span></div></div><div class="row"><div class="line"><span class="label">  • Transferencias</span><span class="value">$500</span></div></div><div class="row"><div class="line"><span class="label">  • Tarjetas</span><span class="value">$0</span></div></div><div class="row"><div class="line"><span class="label">  • A Crédito</span><span class="value">$1,000</span></div></div><div class="row"><div class="line"><span class="label">+ Fondo Inicial</span><span class="value">$500</span></div></div><div class="row"><div class="line"><span class="label">+ Cobranza / Abonos</span><span class="value">$800</span></div></div><div class="row"><div class="line"><span class="label">- Gastos en Ruta</span><span class="value">-$200</span></div></div><div class="row strong"><div class="line"><span class="label">Efectivo Esperado</span><span class="value">$4,100</span></div></div><div class="row strong"><div class="line"><span class="label">Efectivo Físico</span><span class="value">$4,100</span></div></div><div class="row strong"><div class="line"><span class="label">Diferencia Caja</span><span class="value">$0</span></div></div><div class="row"><div class="line"><span class="label">Piezas Vendidas</span><span class="value">85 pzas</span></div></div><div class="row"><div class="line"><span class="label">Remanente Camioneta</span><span class="value">120 pzas</span></div></div><div class="row"><div class="line"><span class="label">Firma Chofer / Auditor</span></div><div class="detail">Entrega y recepción conforme de valores.</div></div></body></html>

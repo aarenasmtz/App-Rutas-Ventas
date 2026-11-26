@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
+  Share,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -29,24 +30,32 @@ import { AppShell, PageHeader, MoneyDisplay } from '@/components/DesignSystem';
 import { DataService } from '@/services/mockDataService';
 import { ticketPrinter } from '@/services/ticketPrinterService';
 import TicketModal from '@/components/TicketModal';
+import { reportCsv, reportFilename } from '@/utils/reportExport';
 import { formatCurrency } from '@/utils/helpers';
 
 export default function ReportesScreen() {
   const router = useRouter();
   const [periodo, setPeriodo] = useState<'Día' | 'Semana' | 'Mes'>('Semana');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
+  const [exportFile, setExportFile] = useState<{url:string;name:string}|null>(null);
+  const requestVersion = useRef(0);
   const [reporte, setReporte] = useState<any>(null);
   const [ticketModalVisible, setTicketModalVisible] = useState(false);
 
   const loadReporte = async (p = periodo) => {
-    setLoading(true);
+    const version = ++requestVersion.current;
+    setLoading(true); setError(''); setReporte(null); setExportFile(null);
     try {
       const data = await DataService.getReporteResumen(p);
-      setReporte(data);
+      if (!data?.fechaInicio || !Number.isFinite(data.ventasTotales)) throw new Error('Respuesta incompleta');
+      if (version === requestVersion.current) setReporte({...data,fechaGeneracion:new Date().toLocaleString('es-MX')});
     } catch {
-      // Fallback local
+      if (version === requestVersion.current) setError('No se pudo consultar el reporte. Intenta de nuevo.');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
@@ -54,16 +63,22 @@ export default function ReportesScreen() {
     loadReporte(periodo);
   }, [periodo]);
 
-  const handleExportCsv = () => {
-    const url = DataService.getExportCsvUrl(periodo);
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(url, '_blank');
-    } else {
-      Alert.alert(
-        'Exportación Iniciada',
-        `El archivo CSV de ventas para el periodo "${periodo}" se está descargando de la API.`
-      );
-    }
+  const handleExportCsv = async () => {
+    if (exporting || loading || !reporte) return;
+    setExporting(true); setExportMessage('');
+    try {
+      const csv = reportCsv(reporte), filename = reportFilename(reporte);
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const url = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+        setExportFile({url,name:filename});
+        const link = document.createElement('a'); link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();
+        setExportMessage('CSV generado: '+filename);
+      } else {
+        const result = await Share.share({title:filename,message:csv});
+        setExportMessage(result.action === Share.sharedAction ? 'Contenido CSV compartido.' : 'Exportación cancelada.');
+      }
+    } catch { setExportMessage('No se pudo exportar el CSV. Intenta de nuevo.'); }
+    finally { setExporting(false); }
   };
 
   const handleOpenPrintTicket = () => {
@@ -74,6 +89,7 @@ export default function ReportesScreen() {
   const ticket58 = reporte
     ? ticketPrinter.generateReporteText(
         {
+          fechaGeneracion: reporte.fechaGeneracion,
           periodo: reporte.periodo,
           fechaInicio: reporte.fechaInicio,
           fechaFin: reporte.fechaFin,
@@ -87,7 +103,8 @@ export default function ReportesScreen() {
           clientesVisitados: reporte.clientesVisitados,
           topProductos: (reporte.topProductos || []).map((tp: any) => ({
             nombre: tp.nombre,
-            cantidad: tp.cantidadVendida,
+            presentacion: tp.presentacion || tp.unidad,
+            cantidad: tp.cantidadPresentaciones ?? tp.cantidadVendida,
             total: tp.importeTotal,
           })),
           metodosPago: reporte.metodosPago || { efectivo: 0, transferencia: 0, tarjeta: 0, credito: 0 },
@@ -121,6 +138,8 @@ export default function ReportesScreen() {
       )
     : '';
 
+  const printData = reporte && { ...reporte, topProductos:(reporte.topProductos || []).map((p:any)=>({nombre:p.nombre,presentacion:p.presentacion || p.unidad,cantidad:p.cantidadPresentaciones ?? p.cantidadVendida,total:p.importeTotal})) };
+  if (!reporte) return <AppShell><PageHeader title="Reportes y Estadísticas" onBack={()=>router.replace('/(tabs)/mas')} /><View style={{padding:24}}><Text accessibilityRole={error?'alert':undefined}>{error || 'Cargando reporte…'}</Text>{error && <TouchableOpacity accessibilityRole="button" style={{padding:16,minHeight:44}} onPress={()=>loadReporte(periodo)}><Text>Reintentar reporte</Text></TouchableOpacity>}</View></AppShell>;
   const ventas = reporte?.ventasTotales || 0;
   const cobranza = reporte?.cobranzaTotal || 0;
   const gastos = reporte?.gastosTotal || 0;
@@ -132,7 +151,7 @@ export default function ReportesScreen() {
     <AppShell>
       <PageHeader
         title="Reportes y Estadísticas"
-        subtitle="Métricas ejecutivas de ruta en vivo"
+        subtitle={reporte.origen === 'local' ? 'Resumen del dispositivo · sin conexión' : 'Resumen del periodo seleccionado'}
         onBack={() => router.back()}
       />
 
@@ -152,7 +171,7 @@ export default function ReportesScreen() {
         ))}
       </View>
 
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => loadReporte(periodo)} />}
@@ -254,13 +273,13 @@ export default function ReportesScreen() {
 
           <View style={styles.topProductsList}>
             {(reporte?.topProductos || []).map((p: any, idx: number) => (
-              <View key={p.productoId || idx} style={styles.productRow}>
+              <View key={`${p.productoId}-${idx}`} style={styles.productRow}>
                 <View style={styles.productRank}>
                   <Text style={styles.productRankText}>{idx + 1}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.productName}>{p.nombre}</Text>
-                  <Text style={styles.productSub}>{p.cantidadVendida} piezas vendidas</Text>
+                  <Text style={styles.productSub}>{p.cantidadPresentaciones ?? p.cantidadVendida} {p.presentacion || p.unidad || 'unidades base'} vendidas</Text>
                 </View>
                 <MoneyDisplay amount={p.importeTotal} size="sm" color={colors.primary[700]} />
               </View>
@@ -299,11 +318,13 @@ export default function ReportesScreen() {
           </View>
         </View>
 
+        {!!exportMessage && <Text accessibilityRole="alert" style={{padding:16,color:colors.neutral[800]}}>{exportMessage}</Text>}
+        {exportFile && Platform.OS === 'web' && <a href={exportFile.url} download={exportFile.name} style={{padding:16,color:colors.primary[700],fontSize:15}}>Descargar CSV generado</a>}
         {/* Acciones de Exportación e Impresión Térmica */}
         <View style={styles.actionsWrap}>
-          <TouchableOpacity activeOpacity={0.85} onPress={handleExportCsv} style={styles.exportExcelBtn}>
+          <TouchableOpacity activeOpacity={0.85} onPress={handleExportCsv} disabled={exporting || loading} style={[styles.exportExcelBtn,{backgroundColor:colors.primary[600],opacity:exporting?0.6:1}]}>
             <FileSpreadsheet size={18} color={colors.neutral[0]} />
-            <Text style={styles.exportExcelText}>Exportar a Excel (CSV)</Text>
+            <Text style={styles.exportExcelText}>{exporting ? 'Generando CSV…' : 'Exportar a Excel (CSV)'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity activeOpacity={0.85} onPress={handleOpenPrintTicket} style={styles.printTicketBtn}>
@@ -318,6 +339,8 @@ export default function ReportesScreen() {
         visible={ticketModalVisible}
         onClose={() => setTicketModalVisible(false)}
         title={`Reporte ${periodo}`}
+        ticketHtml58={ticketPrinter.generateReporteHtml(printData,58)}
+        ticketHtml80={ticketPrinter.generateReporteHtml(printData,80)}
         ticketText58={ticket58}
         ticketText80={ticket80}
       />
@@ -340,6 +363,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     borderRadius: radius.lg,
+    minHeight: 44,
+    minWidth: 44,
   },
   periodoChipActive: {
     backgroundColor: colors.primary[700],
@@ -356,8 +381,10 @@ const styles = StyleSheet.create({
   },
   scroll: {
     padding: spacing.md,
-    paddingBottom: 110,
+    paddingBottom: 28,
     gap: spacing.md,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   kpiGrid: {
     flexDirection: 'row',
@@ -367,14 +394,15 @@ const styles = StyleSheet.create({
   kpiCard: {
     width: '48%',
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minWidth: 0,
   },
   kpiCardPrimary: {
     borderColor: colors.primary[200],
-    backgroundColor: '#F8FAFF',
+    backgroundColor: colors.neutral[50],
   },
   kpiIconRow: {
     flexDirection: 'row',
@@ -404,7 +432,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   kpiSub: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.neutral[400],
     marginTop: 4,
   },
@@ -521,10 +549,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: '#047857', // Forest green Excel style
+    backgroundColor: '#047857',
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     ...shadows.card,
+    minHeight: 44,
+    minWidth: 44,
   },
   exportExcelText: {
     fontSize: fontSize.sm,
@@ -541,6 +571,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary[300],
     paddingVertical: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   printTicketText: {
     fontSize: fontSize.sm,

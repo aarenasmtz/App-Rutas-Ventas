@@ -30,6 +30,8 @@ import { useApp } from '@/context/AppContext';
 import { formatCurrency } from '@/utils/helpers';
 import { DataService } from '@/services/mockDataService';
 import { AppShell, PageHeader, MoneyDisplay } from '@/components/DesignSystem';
+import { WorkflowSteps } from '@/components/WorkflowSteps';
+import { resumenCantidades } from '@/utils/ventaResumen';
 import type { ItemCarrito, Cliente, MetodoPago, Pago } from '@/types';
 
 const defaultCliente: Cliente = {
@@ -68,11 +70,14 @@ export default function CarritoScreen() {
   const cliente = rawCliente || defaultCliente;
 
   useEffect(() => {
+    let active = true;
+    setRawCliente(null);
     if (clienteActivoId && clienteActivoId !== 'general') {
       DataService.getClienteById(clienteActivoId).then((c: Cliente | undefined) => {
-        if (c) setRawCliente(c);
+        if (active && c) setRawCliente(c);
       });
     }
+    return () => { active = false; };
   }, [clienteActivoId]);
 
   // Cálculos de totales
@@ -281,7 +286,7 @@ export default function CarritoScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Revisar y Confirmar</Text>
           <Text style={styles.headerSubtitle}>
-            {carrito.length} productos · {totalPiezas} piezas/paq
+            {resumenCantidades(carrito)}
           </Text>
         </View>
         <TouchableOpacity
@@ -297,7 +302,8 @@ export default function CarritoScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <WorkflowSteps current={2} />
+      <ScrollView keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -632,6 +638,8 @@ const styles = StyleSheet.create({
   },
   backButton: {
     paddingRight: 12,
+    minHeight: 44,
+    minWidth: 44,
   },
   headerTitle: {
     fontSize: 18,
@@ -639,17 +647,19 @@ const styles = StyleSheet.create({
     color: colors.neutral[900],
   },
   headerSubtitle: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: colors.neutral[500],
     marginTop: 1,
   },
   trashCartBtn: {
     padding: 6,
+    minHeight: 44,
+    minWidth: 44,
   },
   scrollContent: {
     paddingHorizontal: 14,
     paddingTop: 12,
-    paddingBottom: 100,
+    paddingBottom: 24,
   },
   clientCard: {
     flexDirection: 'row',
@@ -700,6 +710,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[200],
     marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   itemName: {
     fontSize: 13.5,
@@ -733,11 +745,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primary[200],
     overflow: 'hidden',
+    minHeight: 48,
   },
   stepBtn: {
     paddingHorizontal: 8,
     paddingVertical: 6,
     backgroundColor: colors.primary[50],
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   stepQtyBox: {
     paddingHorizontal: 10,
@@ -751,6 +769,8 @@ const styles = StyleSheet.create({
   },
   deleteItemBtn: {
     padding: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   emptyCartWrap: {
     alignItems: 'center',
@@ -766,14 +786,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   emptyCartBackBtnText: {
     color: colors.neutral[0],
     fontWeight: '700',
     fontSize: 12.5,
   },
-
-  /* Sección Pagos */
   paymentSection: {
     backgroundColor: colors.neutral[0],
     borderRadius: radius.md,
@@ -798,6 +818,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   paymentChipActive: {
     backgroundColor: colors.primary[600],
@@ -851,8 +873,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.error[600],
   },
-
-  /* Total */
   totalCard: {
     backgroundColor: colors.neutral[0],
     borderRadius: radius.md,
@@ -881,10 +901,8 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     marginTop: 4,
   },
-
-  /* Barra inferior de confirmación */
   confirmBottomBar: {
-    position: 'absolute',
+    position: 'relative',
     bottom: 0,
     left: 0,
     right: 0,
@@ -893,16 +911,18 @@ const styles = StyleSheet.create({
     borderTopColor: colors.neutral[200],
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    paddingBottom: 10,
   },
   confirmBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.success[600],
+    backgroundColor: colors.primary[600],
     borderRadius: 14,
     paddingVertical: 14,
+    minHeight: 44,
+    minWidth: 44,
   },
   confirmBtnDisabled: {
     opacity: 0.5,

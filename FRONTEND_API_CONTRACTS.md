@@ -1,16 +1,16 @@
-# ESPECIFICACIÓN DE CONTRATOS API Y DTOs (FASE 2)
+# ESPECIFICACIÓN DE CONTRATOS API Y DTOs
 ## Sistema de Ventas en Ruta de Miguel
-### Entrada de Requerimientos para Backend .NET 9 y Base de Datos SQL Server
+### Backend ASP.NET Core 9 y Base de Datos SQL Server (`RutaVentasDb`)
 
-Este documento define con precisión los contratos HTTP, modelos DTO (Request/Response), endpoints REST sugeridos y códigos de estado esperados para sustituir limpiamente la capa de servicios mock (`services/mockDataService.ts`) por servicios reales en la Fase 2.
+Este documento define la totalidad de los contratos HTTP, modelos DTO (Request/Response), endpoints RESTful y códigos de estado implementados en el backend .NET 9 (`backend/RutaVentas.Api`) y consumidos por el frontend (`services/httpApiService.ts` y fachada `DataService`).
 
 ---
 
-## 1. Módulo de Autenticación y Perfil
+## 1. Módulo de Autenticación y Perfil (`AuthController`)
 
 ### `POST /api/v1/auth/login`
 - **Pantalla:** `app/login.tsx`
-- **Descripción:** Inicio de sesión con credenciales y retorno de token JWT con rol del operador (Administrador o Vendedor).
+- **Descripción:** Inicio de sesión con credenciales y retorno de token JWT con rol del operador (Administrador o Vendedor) y ruta asignada.
 - **Request DTO (`LoginRequestDto`):**
   ```csharp
   public class LoginRequestDto
@@ -33,6 +33,7 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
   {
       public string Id { get; set; } = string.Empty;
       public string Nombre { get; set; } = string.Empty;
+      public string? NombreAlmacen { get; set; }
       public string Rol { get; set; } = string.Empty; // "Administrador" | "Vendedor"
       public string RutaId { get; set; } = string.Empty;
       public string RutaNombre { get; set; } = string.Empty;
@@ -41,15 +42,15 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
 - **Códigos de Estado:**
   - `200 OK`: Autenticación exitosa.
   - `401 Unauthorized`: Credenciales inválidas.
-  - `403 Forbidden`: Usuario inactivo o sin ruta asignada.
+  - `403 Forbidden`: Usuario inactivo.
 
 ---
 
-## 2. Módulo de Home / Dashboard
+## 2. Módulo de Home / Dashboard (`DashboardController`)
 
 ### `GET /api/v1/dashboard/resumen?rutaId={rutaId}`
 - **Pantalla:** `app/(tabs)/index.tsx`
-- **Descripción:** Obtiene los indicadores rápidos (KPIs) del día actual para la camioneta/vendedor o consolidados para el administrador.
+- **Descripción:** Indicadores clave del día (KPIs) para la camioneta/vendedor o consolidados para el administrador.
 - **Response DTO (`DashboardResumenDto`):**
   ```csharp
   public class DashboardResumenDto
@@ -73,25 +74,25 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
       public double DistanciaMetros { get; set; }
   }
   ```
-- **Códigos de Estado:**
-  - `200 OK`: Datos consolidados.
-  - `500 Internal Server Error`: Falla de cálculo en SQL Server.
 
 ---
 
-## 3. Módulo de Venta y Catálogo
+## 3. Módulo de Productos y Catálogo (`ProductosController`)
 
 ### `GET /api/v1/productos?categoria={cat}&search={q}&activo=true`
-- **Pantalla:** `app/(tabs)/venta/index.tsx`, `app/(tabs)/mas/productos.tsx`
-- **Descripción:** Listado de catálogo con presentaciones y factores de conversión de piezas.
+- **Pantallas:** `app/(tabs)/venta/index.tsx`, `app/(tabs)/mas/productos.tsx`
+- **Descripción:** Catálogo con multipresentaciones, alias de almacén y factores de conversión de piezas.
 - **Response DTO (`List<ProductoDto>`):**
   ```csharp
   public class ProductoDto
   {
       public string Id { get; set; } = string.Empty;
       public string Nombre { get; set; } = string.Empty;
+      public string? NombreAlmacen { get; set; }
       public string? Marca { get; set; }
       public string Categoria { get; set; } = string.Empty;
+      public string Unidad { get; set; } = "pieza";
+      public bool PrecioPorPeso { get; set; }
       public decimal PrecioBase { get; set; }
       public decimal? PrecioCompra { get; set; }
       public int ExistenciaPiezas { get; set; }
@@ -99,6 +100,9 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
       public string CodigoBarras { get; set; } = string.Empty;
       public bool Favorito { get; set; }
       public bool Activo { get; set; }
+      public string EstadoConfiguracion { get; set; } = "Completo"; // "Completo" | "Pendiente"
+      public string? CodigoOrigen { get; set; }
+      public bool ManejaMultiplesPresentaciones { get; set; }
       public List<PresentacionConfigDto> Presentaciones { get; set; } = new();
   }
 
@@ -106,15 +110,46 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
   {
       public string Tipo { get; set; } = string.Empty; // "pieza" | "paquete" | "caja" | "exhibidor"
       public string Nombre { get; set; } = string.Empty;
-      public int PiezasEquivalentes { get; set; } // Factor multiplicador a inventario
+      public int PiezasEquivalentes { get; set; }
       public decimal Precio { get; set; }
       public string? DescripcionEquivalencia { get; set; }
+      public string? CodigoBarras { get; set; }
+      public bool Activa { get; set; } = true;
+      public int Orden { get; set; } = 1;
   }
   ```
 
+### `POST /api/v1/productos` / `PUT /api/v1/productos/{id}`
+- **Request DTO (`GuardarProductoRequestDto`):**
+  ```csharp
+  public class GuardarProductoRequestDto
+  {
+      public string? NombreAlmacen { get; set; }
+      public string? Codigo { get; set; }
+      public string Nombre { get; set; } = string.Empty;
+      public string? Marca { get; set; }
+      public string Categoria { get; set; } = "Jamón";
+      public string Unidad { get; set; } = "kg";
+      public decimal PrecioBase { get; set; }
+      public decimal? PrecioCompra { get; set; }
+      public int ExistenciaPiezas { get; set; }
+      public string? Sku { get; set; }
+      public string? CodigoBarras { get; set; }
+      public bool Favorito { get; set; } = false;
+      public string? EstadoConfiguracion { get; set; }
+      public string? CodigoOrigen { get; set; }
+      public bool ManejaMultiplesPresentaciones { get; set; } = false;
+      public List<PresentacionConfigDto>? Presentaciones { get; set; }
+  }
+  ```
+
+---
+
+## 4. Módulo de Ventas y Cobro (`VentasController`)
+
 ### `POST /api/v1/ventas`
-- **Pantalla:** `app/(tabs)/venta/pago.tsx`
-- **Descripción:** Registro de la venta, descuento de inventario por piezas y generación de saldos a crédito.
+- **Pantalla:** `app/(tabs)/venta/carrito.tsx` / `pago.tsx`
+- **Descripción:** Registro transaccional de venta, descuento de existencias en unidades base (con precisión decimal para pesaje en báscula) y actualización del saldo del cliente si hubo crédito o sobregiro autorizado.
 - **Request DTO (`RegistrarVentaRequestDto`):**
   ```csharp
   public class RegistrarVentaRequestDto
@@ -124,14 +159,17 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
       public decimal Total { get; set; }
       public List<LineaVentaRequestDto> Items { get; set; } = new();
       public List<PagoRequestDto> Pagos { get; set; } = new();
+      public string? TokenAutorizacionSobregiro { get; set; }
   }
 
   public class LineaVentaRequestDto
   {
       public string ProductoId { get; set; } = string.Empty;
       public string PresentacionTipo { get; set; } = string.Empty;
-      public int CantidadPresentaciones { get; set; }
-      public int PiezasTotalesCalculadas { get; set; }
+      public decimal CantidadPresentaciones { get; set; } // Admite fracciones ej. 0.450 kg
+      public decimal PiezasTotalesCalculadas { get; set; }
+      public int FactorConversion { get; set; } = 1;
+      public string? PresentacionNombre { get; set; }
       public decimal PrecioUnitario { get; set; }
       public decimal Subtotal { get; set; }
   }
@@ -146,7 +184,7 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
   ```csharp
   public class VentaRegistradaResponseDto
   {
-      public string Folio { get; set; } = string.Empty; // Ej. "FOL-2026-0915-084"
+      public string Folio { get; set; } = string.Empty;
       public DateTime FechaHora { get; set; }
       public decimal TotalVenta { get; set; }
       public decimal TotalPagado { get; set; }
@@ -155,19 +193,91 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
       public string Estado { get; set; } = "Completada";
   }
   ```
-- **Códigos de Estado:**
-  - `201 Created`: Venta registrada con éxito.
-  - `400 Bad Request`: Discrepancia en suma de pagos o stock insuficiente.
-  - `409 Conflict`: Venta duplicada (folio o id idempotente ya registrado).
-  - `422 Unprocessable Entity`: El crédito supera el límite autorizado.
+
+### `POST /api/v1/ventas/solicitar-sobregiro`
+- **Pantalla:** `app/(tabs)/venta/pago.tsx`
+- **Descripción:** El chofer solicita autorización remota a Don Miguel para realizar una venta que excede el límite de crédito del cliente.
+- **Request DTO (`SolicitarSobregiroRequestDto`):**
+  ```csharp
+  public class SolicitarSobregiroRequestDto
+  {
+      public string ClienteId { get; set; } = string.Empty;
+      public string EmpleadoId { get; set; } = string.Empty;
+      public decimal MontoSolicitado { get; set; }
+      public string? Motivo { get; set; }
+  }
+  ```
+- **Response DTO:**
+  ```json
+  {
+    "tokenSolicitud": "415e8f5a59fa4b828d40eab7ac08b256",
+    "mensaje": "Solicitud de sobregiro registrada como pendiente.",
+    "estado": "Pendiente"
+  }
+  ```
+
+### `GET /api/v1/ventas/solicitudes-sobregiro?estado={estado}`
+- **Pantalla:** `app/(tabs)/mas/creditos.tsx`
+- **Descripción:** Don Miguel consulta solicitudes de sobregiro activas o históricas.
+- **Response DTO (`List<SolicitudSobregiroDto>`):**
+  ```csharp
+  public class SolicitudSobregiroDto
+  {
+      public int Id { get; set; }
+      public string TokenSolicitud { get; set; } = string.Empty;
+      public string ClienteId { get; set; } = string.Empty;
+      public string ClienteNombre { get; set; } = string.Empty;
+      public string ChoferNombre { get; set; } = string.Empty;
+      public decimal SaldoActual { get; set; }
+      public decimal LimiteCredito { get; set; }
+      public decimal MontoSolicitado { get; set; }
+      public string Motivo { get; set; } = string.Empty;
+      public string Estado { get; set; } = string.Empty; // "Pendiente" | "Autorizada" | "Rechazada"
+      public DateTime FechaSolicitud { get; set; }
+      public string? TokenAutorizacion { get; set; }
+  }
+  ```
+
+### `POST /api/v1/ventas/resolver-sobregiro`
+- **Pantalla:** `app/(tabs)/mas/creditos.tsx`
+- **Descripción:** Don Miguel autoriza o rechaza una solicitud de sobregiro desde su dispositivo.
+- **Request DTO (`ResolverSobregiroRequestDto`):**
+  ```csharp
+  public class ResolverSobregiroRequestDto
+  {
+      public string TokenSolicitud { get; set; } = string.Empty;
+      public bool Autorizado { get; set; }
+      public string? AdminId { get; set; }
+      public string? MotivoResolucion { get; set; }
+  }
+  ```
+- **Response DTO:**
+  ```json
+  {
+    "message": "Sobregiro autorizado exitosamente",
+    "estado": "Autorizada",
+    "tokenAutorizacion": "AUTH-984103"
+  }
+  ```
+
+### `GET /api/v1/ventas/consultar-sobregiro/{token}`
+- **Pantalla:** `app/(tabs)/venta/pago.tsx`
+- **Descripción:** El chofer consulta periódicamente si su solicitud ya fue resuelta por Don Miguel para desbloquear la venta.
+- **Response DTO:**
+  ```json
+  {
+    "tokenSolicitud": "415e8f5a59fa4b828d40eab7ac08b256",
+    "estado": "Autorizada",
+    "tokenAutorizacion": "AUTH-984103"
+  }
+  ```
 
 ---
 
-## 4. Módulo de Clientes
+## 5. Módulo de Clientes y Cartera (`ClientesController`)
 
-### `GET /api/v1/clientes?filtro={filtro}&search={q}`
+### `GET /api/v1/clientes?ruta={ruta}&filtro={filtro}`
 - **Pantalla:** `app/(tabs)/clientes.tsx`
-- **Filtros aceptados:** `Todos`, `Hoy`, `Pendientes de cobro`, `Con crédito`, `Cercanos`.
 - **Response DTO (`List<ClienteDetalleDto>`):**
   ```csharp
   public class ClienteDetalleDto
@@ -185,81 +295,116 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
       public string? DistanciaMock { get; set; }
       public string? UltimaCompra { get; set; }
       public string? UltimoPago { get; set; }
+      public double? Latitud { get; set; }
+      public double? Longitud { get; set; }
+      public string? Colonia { get; set; }
+      public string? Ciudad { get; set; }
       public Dictionary<string, decimal>? PreciosEspeciales { get; set; }
   }
   ```
 
+---
+
+## 6. Módulo de Cobranza y Abonos (`CobranzaController`)
+
 ### `POST /api/v1/cobranza/abonos`
-- **Pantalla:** `app/(tabs)/mas/cobranza.tsx`, botón [Cobrar] en ClienteCard
-- **Descripción:** Registra un abono para reducir el saldo pendiente del cliente.
+- **Pantallas:** `app/(tabs)/mas/cobranza.tsx`, `app/(tabs)/clientes.tsx`
 - **Request DTO (`RegistrarAbonoRequestDto`):**
   ```csharp
   public class RegistrarAbonoRequestDto
   {
       public string ClienteId { get; set; } = string.Empty;
       public decimal Monto { get; set; }
-      public string MetodoPago { get; set; } = string.Empty; // "Efectivo" | "Transferencia"
+      public string MetodoPago { get; set; } = "Efectivo"; // "Efectivo" | "Transferencia"
       public string? Comentario { get; set; }
+      public string? EmpleadoId { get; set; }
+  }
+  ```
+- **Response DTO (`AbonoRegistradoResponseDto`):**
+  ```csharp
+  public class AbonoRegistradoResponseDto
+  {
+      public int Id { get; set; }
+      public string ClienteId { get; set; } = string.Empty;
+      public decimal MontoAbonado { get; set; }
+      public decimal NuevoSaldo { get; set; }
+      public DateTime FechaHora { get; set; }
+      public string Mensaje { get; set; } = "Abono registrado con éxito";
   }
   ```
 
 ---
 
-## 5. Módulo de Inventario (Vendedor y Administrador)
+## 7. Módulo de Inventario y Surtido (`InventarioController`)
 
-### `GET /api/v1/inventario?ubicacion={bodega|trabajadorId}`
+### `GET /api/v1/inventario?ubicacion={ubicacion}&usuarioId={usuarioId}`
 - **Pantalla:** `app/(tabs)/inventario.tsx`
-- **Descripción:** Consulta de existencias en piezas y equivalencias configuradas.
-- **Response DTO (`InventarioUbicacionDto`):**
+- **Descripción:** Consulta del catálogo de existencias físicas segmentadas por ubicación (`Bodega` vs `Camioneta 1`). Soporta existencias fraccionarias decimales (`DECIMAL(18,3)`).
+- **Response DTO (`List<InventarioItemDto>`):**
   ```csharp
-  public class InventarioUbicacionDto
+  public class InventarioItemDto
   {
-      public string UbicacionId { get; set; } = string.Empty;
-      public string UbicacionNombre { get; set; } = string.Empty;
-      public int TotalPiezas { get; set; }
-      public int TotalStockBajo { get; set; }
-      public int TotalAgotados { get; set; }
-      public List<ItemInventarioDto> Items { get; set; } = new();
-  }
-
-  public class ItemInventarioDto
-  {
-      public string ProductoId { get; set; } = string.Empty;
+      public int ProductoId { get; set; }
+      public string Codigo { get; set; } = string.Empty;
       public string Nombre { get; set; } = string.Empty;
-      public string? Marca { get; set; }
-      public string Sku { get; set; } = string.Empty;
-      public int ExistenciaPiezas { get; set; }
+      public string Unidad { get; set; } = "pza";
+      public decimal Existencia { get; set; } // Admite decimales para pesaje en báscula
+      public string Ubicacion { get; set; } = "Bodega";
       public decimal PrecioBase { get; set; }
-      public string EstadoStock { get; set; } = string.Empty; // "Normal" | "Bajo" | "Agotado"
-      public List<PresentacionConfigDto> Presentaciones { get; set; } = new();
+      public List<PresentacionInventarioDto> Presentaciones { get; set; } = new();
   }
   ```
 
-### `POST /api/v1/inventario/transferencias`
-- **Descripción:** Traspaso de mercancía entre Bodega Central y Camioneta de Vendedor.
-- **Request DTO (`TransferenciaInventarioDto`):**
+### `POST /api/v1/inventario/surtido-nota`
+- **Pantalla:** `app/(tabs)/mas/surtido-nota.tsx`
+- **Descripción:** Recepción masiva de existencias extraídas por el parser PDF de bodega central.
+- **Request DTO (`SurtidoNotaPdfRequestDto`):**
   ```csharp
-  public class TransferenciaInventarioDto
+  public class SurtidoNotaPdfRequestDto
   {
-      public string OrigenId { get; set; } = "Bodega";
-      public string DestinoId { get; set; } = string.Empty; // Camioneta / Trabajador
+      public string FolioNota { get; set; } = string.Empty;
+      public string FechaNota { get; set; } = string.Empty;
+      public string Proveedor { get; set; } = "Almacén Central";
+      public string? EmpleadoId { get; set; }
+      public string? UbicacionDestino { get; set; } = "Camioneta 1";
+      public List<ItemSurtidoNotaDto> Items { get; set; } = new();
+  }
+
+  public class ItemSurtidoNotaDto
+  {
+      public string ProductoAlmacen { get; set; } = string.Empty;
+      public string? ProductoIdApp { get; set; }
+      public int? ProductoId { get; set; }
+      public string Um { get; set; } = "PZA";
+      public decimal CantidadNota { get; set; }
+      public string? Equivalencias { get; set; }
+      public decimal PiezasASurtir { get; set; }
+      public decimal PiezasCalculadas { get; set; }
+      public bool GuardarVinculacion { get; set; } = false;
+      public bool RecordarVinculacion { get; set; } = false;
+  }
+  ```
+
+### `POST /api/v1/inventario/confirmar-carga-inicial`
+- **Pantalla:** `app/(tabs)/mas/carga.tsx`
+- **Descripción:** Verificación de camioneta. Si `EsEntradaMercancia == false`, genera auditoría sin alterar stock; si es `true`, incrementa existencia.
+- **Request DTO (`ConfirmarCargaInicialRequestDto`):**
+  ```csharp
+  public class ConfirmarCargaInicialRequestDto
+  {
+      public string EmpleadoId { get; set; } = string.Empty;
+      public string UbicacionDestino { get; set; } = "Camioneta 1";
+      public bool EsEntradaMercancia { get; set; } = false;
       public List<ItemTransferenciaDto> Lotes { get; set; } = new();
   }
-
-  public class ItemTransferenciaDto
-  {
-      public string ProductoId { get; set; } = string.Empty;
-      public int Piezas { get; set; }
-  }
   ```
 
 ---
 
-## 6. Módulo de Cortes por Trabajador (Admin)
+## 8. Módulo de Cortes de Caja y Arqueo (`CortesController`)
 
 ### `GET /api/v1/cortes/diario?fecha={yyyy-MM-dd}`
 - **Pantalla:** `app/(tabs)/mas/corte.tsx`
-- **Descripción:** Listado de cortes y cuadre de caja por cada vendedor/ruta.
 - **Response DTO (`List<CorteTrabajadorDto>`):**
   ```csharp
   public class CorteTrabajadorDto
@@ -267,6 +412,7 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
       public string EmpleadoId { get; set; } = string.Empty;
       public string Nombre { get; set; } = string.Empty;
       public string Ruta { get; set; } = string.Empty;
+      public decimal FondoInicial { get; set; } // Fondo de caja entregado al inicio
       public decimal VentasTotales { get; set; }
       public decimal Efectivo { get; set; }
       public decimal Transferencias { get; set; }
@@ -283,62 +429,209 @@ Este documento define con precisión los contratos HTTP, modelos DTO (Request/Re
   }
   ```
 
----
-
-## 7. Módulo de Revisión Rápida de Inventario (Admin)
-
-### `GET /api/v1/inventario/revision?rutaId={rutaId}`
-- **Pantalla:** `app/(tabs)/mas/revision.tsx`
-- **Descripción:** Carga de productos en ruta con existencias teóricas para cotejo físico.
-- **Response DTO (`List<RevisionItemDto>`):**
+### `POST /api/v1/cortes/cerrar`
+- **Request DTO (`CerrarCorteCajaRequestDto`):**
   ```csharp
-  public class RevisionItemDto
-  {
-      public string ProductoId { get; set; } = string.Empty;
-      public string ProductoNombre { get; set; } = string.Empty;
-      public string? Marca { get; set; }
-      public int Sistema { get; set; }
-      public int Fisico { get; set; }
-      public int Diferencia { get; set; }
-      public bool Revisado { get; set; }
-      public string Comentario { get; set; } = string.Empty;
-  }
-  ```
-
-### `POST /api/v1/inventario/revision/autorizar`
-- **Descripción:** Miguel autoriza las diferencias detectadas (merma, faltante o sobrante) para ajustar el inventario real en SQL Server.
-- **Request DTO (`AutorizarAjusteInventarioDto`):**
-  ```csharp
-  public class AutorizarAjusteInventarioDto
+  public class CerrarCorteCajaRequestDto
   {
       public string EmpleadoId { get; set; } = string.Empty;
-      public DateTime FechaRevision { get; set; }
-      public List<AjusteItemDto> Ajustes { get; set; } = new();
-  }
-
-  public class AjusteItemDto
-  {
-      public string ProductoId { get; set; } = string.Empty;
-      public int CantidadSistema { get; set; }
-      public int CantidadFisica { get; set; }
-      public int Diferencia { get; set; }
-      public string Motivo { get; set; } = string.Empty;
+      public decimal FondoInicial { get; set; }
+      public decimal EfectivoContado { get; set; }
+      public string? Observaciones { get; set; }
   }
   ```
 
 ---
 
-## 8. Arquitectura de Transición: Mock a HTTP en Fase 2
+## 9. Módulo de Importación CSV de Catálogo (`ImportacionesController`)
 
-En el frontend, el archivo `services/mockDataService.ts` implementa interfaces homogéneas:
-```typescript
-export interface IDataService {
-  getProductos(filtro?: { categoria?: string; search?: string }): Promise<Producto[]>;
-  getClientes(filtro?: string): Promise<Cliente[]>;
-  registrarVenta(venta: RegistrarVentaRequestDto): Promise<VentaRegistradaResponseDto>;
-  getCortes(): Promise<CorteTrabajador[]>;
-  getRevisionInventario(): Promise<RevisionItem[]>;
-}
+### `POST /api/v1/productos/importaciones/preview`
+- **Pantalla:** `app/(tabs)/mas/productos.tsx`
+- **Descripción:** Lectura en memoria y clasificación de `ProductosMiguel.csv` (formato contable español, detección de homónimos, 0 escrituras en BD).
+- **Request DTO (`PreviewImportacionRequestDto`):**
+  ```csharp
+  public class PreviewImportacionRequestDto
+  {
+      public string NombreArchivo { get; set; } = string.Empty;
+      public string ContenidoCsv { get; set; } = string.Empty;
+  }
+  ```
+- **Response DTO (`PreviewImportacionResponseDto`):**
+  ```csharp
+  public class PreviewImportacionResponseDto
+  {
+      public string FileHash { get; set; } = string.Empty;
+      public string NombreArchivo { get; set; } = string.Empty;
+      public int TotalFilas { get; set; }
+      public int TotalNuevos { get; set; }
+      public int TotalExistentes { get; set; }
+      public int TotalAmbiguos { get; set; }
+      public int TotalInvalidos { get; set; }
+      public bool YaFueImportadoPreviamente { get; set; }
+      public DateTime? FechaUltimaImportacion { get; set; }
+      public List<FilaPreviewImportacionDto> Filas { get; set; } = new();
+  }
+  ```
+
+### `POST /api/v1/productos/importaciones/confirmar`
+- **Descripción:** Transacción SQL que aplica la importación. Si el hash SHA-256 ya existe, retorna `409 Conflict`.
+- **Request DTO (`ConfirmarImportacionRequestDto`):**
+  ```csharp
+  public class ConfirmarImportacionRequestDto
+  {
+      public string FileHash { get; set; } = string.Empty;
+      public string NombreArchivo { get; set; } = string.Empty;
+      public string Usuario { get; set; } = "Miguel";
+      public List<ResolucionFilaImportacionDto> Resoluciones { get; set; } = new();
+  }
+  ```
+- **Response DTO (`ConfirmarImportacionResponseDto`):**
+  ```csharp
+  public class ConfirmarImportacionResponseDto
+  {
+      public bool Success { get; set; }
+      public string Message { get; set; } = string.Empty;
+      public string FileHash { get; set; } = string.Empty;
+      public int TotalProcesados { get; set; }
+      public int TotalCreados { get; set; }
+      public int TotalActualizados { get; set; }
+      public int TotalOmitidos { get; set; }
+      public int TotalPendientesConfiguracion { get; set; }
+      public List<string> Advertencias { get; set; } = new();
+  }
+  ```
+
+---
+
+## 10. Módulo de Gastos Operativos (`GastosController`)
+
+### `POST /api/v1/gastos`
+- **Pantalla:** `app/(tabs)/mas/gastos.tsx`
+- **Request DTO (`RegistrarGastoRequestDto`):**
+  ```csharp
+  public class RegistrarGastoRequestDto
+  {
+      public string EmpleadoId { get; set; } = string.Empty;
+      public string Concepto { get; set; } = "Gasolina";
+      public decimal Importe { get; set; }
+      public string MetodoPago { get; set; } = "Efectivo";
+      public string? Observaciones { get; set; }
+  }
+  ```
+
+---
+
+## 11. Módulo de Devoluciones (`DevolucionesController`)
+
+### `POST /api/v1/devoluciones`
+- **Pantalla:** `app/(tabs)/mas/devoluciones.tsx`
+- **Request DTO (`RegistrarDevolucionRequestDto`):**
+  ```csharp
+  public class RegistrarDevolucionRequestDto
+  {
+      public string ClienteId { get; set; } = string.Empty;
+      public string EmpleadoId { get; set; } = string.Empty;
+      public string ProductoId { get; set; } = string.Empty;
+      public int Cantidad { get; set; }
+      public string PresentacionTipo { get; set; } = "pieza";
+      public decimal PrecioUnitario { get; set; }
+      public decimal Total { get; set; }
+      public string Motivo { get; set; } = "Caducado";
+      public string Destino { get; set; } = "Merma"; // "Merma" | "Inventario"
+      public string MetodoReembolso { get; set; } = "SaldoAFavor"; // "SaldoAFavor" | "Efectivo" | "CambioFisico"
+      public string? Observaciones { get; set; }
+  }
+  ```
+
+---
+
+## 12. Módulo de Sincronización Fuera de Línea (`SyncController`)
+
+### `POST /api/v1/sync/lote`
+- **Servicio:** `services/offlineSyncQueueService.ts`
+- **Descripción:** Recepción y procesamiento en lote de operaciones generadas en camioneta sin conexión.
+- **Request DTO (`SyncBatchRequestDto`):**
+  ```csharp
+  public class SyncBatchRequestDto
+  {
+      public string DispositivoId { get; set; } = string.Empty;
+      public string EmpleadoId { get; set; } = string.Empty;
+      public DateTime FechaEnvio { get; set; } = DateTime.Now;
+      public List<SyncOperationItemDto> Operaciones { get; set; } = new();
+  }
+
+  public class SyncOperationItemDto
+  {
+      public string Id { get; set; } = string.Empty; // UUID
+      public string Tipo { get; set; } = string.Empty; // "Venta", "Abono", "Gasto", "Devolucion"
+      public string IdempotencyKey { get; set; } = string.Empty;
+      public DateTime FechaGeneracion { get; set; }
+      public string PayloadJson { get; set; } = string.Empty;
+  }
+  ```
+- **Response DTO (`SyncBatchResponseDto`):**
+  ```csharp
+  public class SyncBatchResponseDto
+  {
+      public bool Exitoso { get; set; } = true;
+      public int TotalRecibidas { get; set; }
+      public int SincronizadasCorrectas { get; set; }
+      public int DuplicadasOmitidas { get; set; }
+      public int ConError { get; set; }
+      public List<SyncOperationResultDto> Resultados { get; set; } = new();
+      public DateTime TimestampServidor { get; set; } = DateTime.Now;
+  }
+  ```
+
+---
+
+## 13. Módulo de Reportes y Exportación (`ReportesController`)
+
+### `GET /api/v1/reportes/dashboard?periodo={periodo}`
+- **Pantalla:** `app/(tabs)/mas/reportes.tsx`
+- **Response DTO (`ReporteResumenDto`):**
+  ```csharp
+  public class ReporteResumenDto
+  {
+      public string Periodo { get; set; } = "Día";
+      public DateTime FechaInicio { get; set; }
+      public DateTime FechaFin { get; set; }
+      public decimal VentasTotales { get; set; }
+      public decimal CobranzaTotal { get; set; }
+      public decimal CreditoColocado { get; set; }
+      public decimal GastosTotal { get; set; }
+      public decimal UtilidadEstimada { get; set; }
+      public decimal TicketPromedio { get; set; }
+      public int PedidosTotal { get; set; }
+      public int ClientesVisitados { get; set; }
+      public int ClientesTotalRuta { get; set; }
+      public decimal EfectividadVisitas { get; set; }
+      public List<TopProductoReporteDto> TopProductos { get; set; } = new();
+      public MetodosPagoReporteDto MetodosPago { get; set; } = new();
+  }
+  ```
+
+### `GET /api/v1/reportes/exportar-excel?periodo={periodo}`
+- **Descripción:** Genera y descarga un archivo `.csv` estructurado con codificación **UTF-8 BOM** y delimitador punto y coma (`;`), abriéndose sin corrupción tipográfica directamente en Microsoft Excel.
+
+## Aclaración de consumo frontend — 2026-11-08
+
+Sin cambios en endpoints, DTOs de escritura ni reglas de negocio. El adaptador de GET clientes y GET cliente por ID expone ahora el campo existente preciosEspeciales como precioEspecial para los helpers del frontend. La vista Mosaicos/Lista es una preferencia web local por usuario, sin contrato de API ni sincronización entre dispositivos.
+
+La UI de corte sigue sumando fondo inicial; el controlador actual calcula efectivo + abonos − gastos sin fondo. Esta discrepancia sigue pendiente y el rediseño no acredita conciliación. La entrada de peso decimal del frontend tampoco acredita soporte decimal integral del backend. Ver [alcance y limitaciones](docs/REDISENO_OLIVA_2026-11.md).
+
+## Adenda de contratos — 2026-11-09
+
+### GET /api/v1/clientes/{id}/cuenta
+
+Nuevo endpoint de solo lectura. Acepta código o ID numérico; 404 si no existe. Respuesta:
+
+```json
+{"clienteId":"<codigo>","saldo":0,"limiteCredito":0,"movimientos":[]}
 ```
 
-En la **Fase 2**, bastará con cambiar la implementación a `services/httpApiService.ts` mediante `fetch` o `axios` contra los endpoints de ASP.NET Core 9, sin necesidad de modificar ningún componente visual ni la navegación construida en esta Fase 1.
+Cada movimiento contiene `id`, `fecha` ISO, `concepto`, `monto` numérico y `tipo` (`cargo` o `abono`). El saldo es el almacenado en Clientes; los movimientos son pagos a crédito de ventas no canceladas y abonos de cobranza. No se infiere saldo inicial ni se recalcula saldo a partir de esta lista. El consumidor usa el código canónico del cliente y rechaza respuestas incompletas o pertenecientes a otro cliente; error de red no significa saldo cero. Compilado, pendiente consulta integrada con SQL.
+
+### Reportes
+
+`TopProductoReporteDto` conserva `CantidadVendida` en unidades base y agrega `CantidadPresentaciones` (int, como la entidad actual), `Presentacion` y `Unidad`. La agrupación distingue producto y presentación. Se retiraron productos/métricas ilustrativos para resultados vacíos. La UI exporta CSV del reporte ya cargado (mismo periodo y contenido visible); no promete XLSX. El endpoint CSV anterior se conserva con escapado y semana desde lunes. Véase [incidencias](docs/INCIDENCIAS_UI_2026-11-09.md).

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import {
+import { KeyboardAvoidingView, Platform,
   View,
   Text,
   StyleSheet,
@@ -155,7 +155,7 @@ export default function CategoriasAdminScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Buscador */}
         <View style={styles.searchSection}>
           <SearchBar
@@ -230,7 +230,7 @@ export default function CategoriasAdminScreen() {
 
       {/* MODAL DE ALTA / EDICIÓN */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -241,7 +241,7 @@ export default function CategoriasAdminScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 450 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 450 }}>
               {/* Nombre */}
               <Text style={styles.inputLabel}>Nombre de la Categoría *</Text>
               <TextInput
@@ -289,7 +289,7 @@ export default function CategoriasAdminScreen() {
               </Text>
             </TouchableOpacity>
           </Pressable>
-        </Pressable>
+        </Pressable></KeyboardAvoidingView>
       </Modal>
     </AppShell>
   );
@@ -297,16 +297,22 @@ export default function CategoriasAdminScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   createBtnHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.lg,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   createBtnHeaderText: {
     color: colors.neutral[0],
@@ -438,10 +444,13 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
-    maxHeight: '90%',
+    maxHeight: '88%',
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -458,6 +467,8 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   inputLabel: {
     fontSize: fontSize.xs,
@@ -469,12 +480,13 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
-    borderRadius: radius.lg,
+    borderRadius: 10,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
     backgroundColor: colors.neutral[50],
+    minHeight: 44,
   },
   emojiGrid: {
     flexDirection: 'row',
@@ -489,6 +501,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   emojiBtnActive: {
     backgroundColor: colors.primary[100],
@@ -507,6 +521,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     marginTop: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   saveBtnText: {
     color: colors.neutral[0],

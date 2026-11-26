@@ -218,7 +218,7 @@ export default function TrabajadoresScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Banner Informativo para Miguel */}
         <View style={styles.infoBanner}>
           <ShieldCheck size={22} color={colors.primary[600]} />
@@ -367,7 +367,7 @@ export default function TrabajadoresScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
               {/* Nombre Completo */}
               <Text style={styles.inputLabel}>Nombre Completo *</Text>
               <TextInput
@@ -569,20 +569,29 @@ export default function TrabajadoresScreen() {
 const styles = StyleSheet.create({
   scroll: {
     padding: spacing.md,
-    paddingBottom: 60,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   backBtn: {
     padding: 6,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   addHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: 12,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   addHeaderBtnText: {
     color: colors.neutral[0],
@@ -672,6 +681,8 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: radius.md,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   metaRow: {
     flexDirection: 'row',
@@ -716,6 +727,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.full,
+    minHeight: 44,
+    minWidth: 44,
   },
   chipActive: {
     backgroundColor: colors.primary[50],
@@ -746,10 +759,13 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     backgroundColor: colors.neutral[0],
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
-    maxHeight: '90%',
+    maxHeight: '88%',
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -769,6 +785,8 @@ const styles = StyleSheet.create({
   },
   modalCloseBtn: {
     padding: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   inputLabel: {
     fontSize: fontSize.xs,
@@ -781,11 +799,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[50],
     borderWidth: 1,
     borderColor: colors.neutral[200],
-    borderRadius: radius.md,
+    borderRadius: 10,
     paddingHorizontal: spacing.sm,
     paddingVertical: 9,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
   },
   rutasRow: {
     flexDirection: 'row',
@@ -799,6 +818,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[300],
     backgroundColor: colors.neutral[50],
+    minHeight: 44,
+    minWidth: 44,
   },
   rutaChipActive: {
     borderColor: colors.primary[600],
@@ -862,6 +883,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.neutral[300],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalCancelText: {
     fontSize: fontSize.sm,
@@ -874,6 +897,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.primary[600],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalSaveText: {
     fontSize: fontSize.sm,

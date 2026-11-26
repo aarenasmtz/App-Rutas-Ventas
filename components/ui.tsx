@@ -48,6 +48,7 @@ export function PrimaryButton({ title, onPress, icon, style, disabled }: { title
   return (
     <TouchableOpacity
       activeOpacity={0.8}
+      accessibilityRole="button"
       onPress={onPress}
       disabled={disabled}
       style={[btnStyles.primary, disabled && btnStyles.disabled, style]}
@@ -60,7 +61,7 @@ export function PrimaryButton({ title, onPress, icon, style, disabled }: { title
 
 export function SecondaryButton({ title, onPress, icon, style }: { title: string; onPress: () => void; icon?: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[btnStyles.secondary, style]}>
+    <TouchableOpacity accessibilityRole="button" activeOpacity={0.8} onPress={onPress} style={[btnStyles.secondary, style]}>
       {icon}
       <Text style={btnStyles.secondaryText}>{title}</Text>
     </TouchableOpacity>
@@ -101,6 +102,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderRadius: radius.lg,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
 });
 
@@ -142,6 +145,7 @@ const btnStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    minHeight: 44,
   },
   primaryText: {
     color: colors.neutral[0],
@@ -160,6 +164,7 @@ const btnStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    minHeight: 44,
   },
   secondaryText: {
     color: colors.neutral[700],

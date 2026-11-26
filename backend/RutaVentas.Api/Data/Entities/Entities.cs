@@ -154,7 +154,8 @@ public class Producto
     [Column(TypeName = "decimal(18,2)")]
     public decimal PrecioCompra { get; set; }
 
-    public int Existencia { get; set; } = 0; // En piezas totales
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal Existencia { get; set; } = 0; // En piezas o kg con fracción decimal
 
     [MaxLength(50)]
     public string? Sku { get; set; }
@@ -271,9 +272,11 @@ public class VentaDetalle
     [MaxLength(30)]
     public string PresentacionTipo { get; set; } = "pieza";
 
-    public int CantidadPresentaciones { get; set; }
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal CantidadPresentaciones { get; set; }
 
-    public int PiezasTotales { get; set; }
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal PiezasTotales { get; set; }
 
     public int FactorConversion { get; set; } = 1;
 
@@ -353,7 +356,8 @@ public class InventarioMovimiento
     [MaxLength(50)]
     public string Ubicacion { get; set; } = "Camioneta 1";
 
-    public int Piezas { get; set; } // Puede ser positivo o negativo
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal Piezas { get; set; } // Puede ser positivo o negativo (piezas o kg)
 
     [MaxLength(200)]
     public string? Motivo { get; set; }
@@ -428,6 +432,9 @@ public class CorteCaja
     [Required]
     [MaxLength(50)]
     public string Ruta { get; set; } = "Ruta Centro";
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal FondoInicial { get; set; } = 0;
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal VentasTotales { get; set; }
@@ -641,3 +648,48 @@ public class ImportacionCatalogo
     public string Usuario { get; set; } = "Miguel";
 }
 
+
+public class SolicitudSobregiro
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string TokenSolicitud { get; set; } = Guid.NewGuid().ToString("N");
+
+    public int ClienteId { get; set; }
+
+    [ForeignKey(nameof(ClienteId))]
+    public Cliente? Cliente { get; set; }
+
+    public int ChoferId { get; set; }
+
+    [ForeignKey(nameof(ChoferId))]
+    public Usuario? Chofer { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal SaldoActual { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal LimiteCredito { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal MontoSolicitado { get; set; }
+
+    [MaxLength(200)]
+    public string? Motivo { get; set; }
+
+    [Required]
+    [MaxLength(30)]
+    public string Estado { get; set; } = "Pendiente"; // "Pendiente" | "Autorizada" | "Rechazada" | "Utilizada"
+
+    public int? AutorizadoPorId { get; set; }
+
+    [MaxLength(50)]
+    public string? TokenAutorizacion { get; set; }
+
+    public DateTime FechaSolicitud { get; set; } = DateTime.Now;
+
+    public DateTime? FechaResolucion { get; set; }
+}

@@ -45,7 +45,7 @@ export default function InventarioScreen() {
         <TextInput style={styles.searchInput} placeholder="Buscar producto" placeholderTextColor={colors.neutral[400]} value={search} onChangeText={setSearch} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
         {filtered.map((p: Producto) => {
           const estado = getStockEstado(p.existencia, p.precioPorPeso);
           const estadoColor = getEstadoColor(estado);
@@ -79,7 +79,14 @@ const styles = StyleSheet.create({
   statValue: { fontSize: fontSize.xxl, fontWeight: fontWeight.bold, color: colors.neutral[900] },
   statLabel: { fontSize: fontSize.xs, color: colors.neutral[400], marginTop: 2 },
   searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.neutral[0], marginHorizontal: spacing.md, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, gap: spacing.sm, marginBottom: spacing.md, ...shadows.card },
-  searchInput: { flex: 1, fontSize: fontSize.base, color: colors.neutral[900], fontFamily: 'Inter-Regular' },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.neutral[900],
+    fontFamily: 'Inter-Regular',
+    minHeight: 44,
+    borderRadius: 10,
+  },
   productCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: spacing.md, marginBottom: spacing.sm },
   productLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   productIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.primary[50], alignItems: 'center', justifyContent: 'center' },

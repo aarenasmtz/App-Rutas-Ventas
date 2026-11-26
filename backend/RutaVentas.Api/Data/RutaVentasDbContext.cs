@@ -27,6 +27,7 @@ public class RutaVentasDbContext : DbContext
     public DbSet<BitacoraEvento> BitacoraEventos => Set<BitacoraEvento>();
     public DbSet<Categoria> Categorias => Set<Categoria>();
     public DbSet<ImportacionCatalogo> ImportacionesCatalogo => Set<ImportacionCatalogo>();
+    public DbSet<SolicitudSobregiro> SolicitudesSobregiro => Set<SolicitudSobregiro>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -133,6 +134,11 @@ public class RutaVentasDbContext : DbContext
         modelBuilder.Entity<GastoOperativo>(entity =>
         {
             entity.ToTable("GastosOperativos");
+        });
+
+        modelBuilder.Entity<SolicitudSobregiro>(entity =>
+        {
+            entity.ToTable("SolicitudesSobregiro");
         });
 
         modelBuilder.Entity<ImportacionCatalogo>(entity =>

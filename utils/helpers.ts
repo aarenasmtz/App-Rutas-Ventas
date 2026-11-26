@@ -1,4 +1,5 @@
-export function formatCurrency(n: number): string {
+export function formatCurrency(n: unknown): string {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
   return '$' + n.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 

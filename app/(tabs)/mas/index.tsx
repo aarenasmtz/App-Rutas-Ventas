@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { KeyboardAvoidingView, Platform,  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Boxes,
@@ -58,7 +58,7 @@ export default function MasScreen() {
     { title: 'Trabajadores y Permisos', subtitle: 'Configurar 2 vendedores, PIN y permisos', icon: UserCheck, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/trabajadores' },
     { title: 'Catálogo de Productos', subtitle: 'Altas, bajas y catálogo por peso/pieza', icon: Boxes, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/productos' },
     { title: 'Categorías de Productos', subtitle: 'Administrar familias y emojis de productos', icon: Tag, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/categorias' },
-    { title: 'Cartera de Clientes', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes' },
+    { title: 'Cartera de Clientes', subtitle: 'Altas, bajas y rutas en León, Guanajuato', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/clientes?origen=mas' },
     { title: 'Corte de Caja', subtitle: 'Arqueo en tiempo real y efectivo de inicio', icon: Scissors, color: colors.primary[600], bg: colors.primary[50], route: '/(tabs)/mas/corte' },
     { title: 'Cobranza', subtitle: 'Registrar y consultar abonos', icon: Wallet, color: colors.success[600], bg: colors.success[50], route: '/(tabs)/mas/cobranza' },
     { title: 'Rutas Asignadas', subtitle: 'Rutas semanales (Lunes a Sábado)', icon: MapPin, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/rutas' },
@@ -67,6 +67,14 @@ export default function MasScreen() {
     { title: 'Bitácora de Eventos', subtitle: 'Registro cronológico de todas las actividades', icon: ScrollText, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/bitacora' },
     { title: 'Configuración', subtitle: 'Sincronización y parámetros', icon: Settings, color: colors.neutral[700], bg: colors.neutral[100], route: '/(tabs)/mas/sincronizacion' },
   ];
+
+  adminMenuItems.push(
+    { title: 'Reportes', subtitle: 'Análisis y exportación', icon: FileSpreadsheet, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/reportes' },
+    { title: 'Caja y movimientos', subtitle: 'Resumen de caja', icon: Wallet, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/caja' },
+    { title: 'Verificación de carga', subtitle: 'Carga del día', icon: ClipboardCheck, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/carga' },
+    { title: 'Créditos', subtitle: 'Cartera de crédito', icon: Wallet, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/creditos' },
+    { title: 'Resumen del equipo', subtitle: 'Personal y resultados', icon: Users, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/empleados' },
+  );
 
   const vendedorMenuItems: MenuItem[] = [
     { title: 'Detalle de Ventas', subtitle: 'Mis ventas y tickets del día', icon: FileText, color: colors.primary[700], bg: colors.primary[50], route: '/(tabs)/mas/ventas' },
@@ -93,7 +101,7 @@ export default function MasScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Tarjeta de Perfil y Rol Actual */}
         <View style={[styles.profileCard, shadows.card]}>
           <View style={styles.profileAvatar}>
@@ -115,7 +123,7 @@ export default function MasScreen() {
         {/* Lista de Módulos según Rol */}
         <View style={styles.menuSection}>
           <Text style={styles.sectionHeading}>
-            {isAdmin ? 'Módulos Administrativos (Miguel):' : 'Módulos de Ruta (Vendedor):'}
+            {isAdmin ? 'Administración y operación' : 'Herramientas de ruta'}
           </Text>
 
           {currentMenuItems.map((item) => {
@@ -132,7 +140,7 @@ export default function MasScreen() {
                   </View>
                   <View style={styles.menuInfo}>
                     <Text style={styles.menuTitle}>{item.title}</Text>
-                    <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+
                   </View>
                   <ChevronRight size={20} color={colors.neutral[300]} />
                 </View>
@@ -146,7 +154,7 @@ export default function MasScreen() {
           <Text style={styles.sectionHeading}>Instalación en Celular:</Text>
           <TouchableOpacity activeOpacity={0.82} onPress={() => setShowShortcutModal(true)}>
             <View style={[styles.menuCard, styles.shortcutBanner, shadows.card]}>
-              <View style={[styles.menuIcon, { backgroundColor: '#eff6ff' }]}>
+              <View style={[styles.menuIcon, { backgroundColor: colors.primary[50] }]}>
                 <Smartphone size={24} color={colors.primary[600]} />
               </View>
               <View style={styles.menuInfo}>
@@ -191,7 +199,7 @@ export default function MasScreen() {
 
       {/* Modal Guía de Acceso Directo Móvil */}
       <Modal visible={showShortcutModal} transparent animationType="slide" onRequestClose={() => setShowShortcutModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowShortcutModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Pressable style={styles.modalOverlay} onPress={() => setShowShortcutModal(false)}>
           <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -223,7 +231,7 @@ export default function MasScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: spacing.sm }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 380, marginTop: spacing.sm }}>
               {platformTab === 'ios' ? (
                 <View style={styles.guideBlock}>
                   <Text style={styles.guideIntro}>
@@ -308,7 +316,7 @@ export default function MasScreen() {
               <Text style={styles.modalBtnEntendidoText}>Entendido</Text>
             </TouchableOpacity>
           </Pressable>
-        </Pressable>
+        </Pressable></KeyboardAvoidingView>
       </Modal>
     </AppShell>
   );
@@ -316,23 +324,25 @@ export default function MasScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   profileCard: {
     backgroundColor: colors.neutral[0],
-    marginHorizontal: spacing.md,
-    marginTop: spacing.md,
-    borderRadius: radius.xl,
-    padding: spacing.md,
+    marginHorizontal: 0,
+    marginTop: 0,
+    borderRadius: 14,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 10,
     borderWidth: 1.5,
-    borderColor: colors.neutral[100],
+    borderColor: colors.neutral[200],
   },
   profileAvatar: {
-    width: 52,
-    height: 52,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     backgroundColor: colors.primary[50],
     alignItems: 'center',
@@ -342,7 +352,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    fontSize: fontSize.lg,
+    fontSize: 18,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
@@ -358,9 +368,9 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   menuSection: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
-    gap: spacing.xs + 2,
+    marginTop: 16,
+    paddingHorizontal: 0,
+    gap: 0,
   },
   sectionHeading: {
     fontSize: fontSize.xs,
@@ -372,19 +382,24 @@ const styles = StyleSheet.create({
   },
   menuCard: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
+    borderRadius: 0,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.neutral[100],
-    marginBottom: spacing.xs + 2,
+    gap: 10,
+    borderWidth: 0,
+    borderColor: colors.neutral[200],
+    marginBottom: 0,
+    minHeight: 52,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    elevation: 0,
   },
   menuIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.lg,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -392,8 +407,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.bold,
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.neutral[900],
   },
   menuSubtitle: {
@@ -403,12 +418,12 @@ const styles = StyleSheet.create({
   },
   systemSection: {
     marginTop: spacing.lg,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 0,
     gap: spacing.xs + 2,
   },
   shortcutBanner: {
-    borderColor: '#bfdbfe',
-    backgroundColor: '#f8faff',
+    borderColor: colors.primary[200],
+    backgroundColor: colors.neutral[50],
   },
   modalOverlay: {
     flex: 1,
@@ -416,11 +431,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.lg,
-    maxHeight: '85%',
+    maxHeight: '88%',
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -438,6 +456,8 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   platformTabs: {
     flexDirection: 'row',
@@ -451,6 +471,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   platformTabActive: {
     backgroundColor: '#FFFFFF',

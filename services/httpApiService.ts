@@ -81,6 +81,7 @@ export interface RegistrarVentaRequestDto {
     metodo: string;
     monto: number;
   }[];
+  tokenAutorizacionSobregiro?: string;
 }
 
 export interface VentaRegistradaResponseDto {
@@ -304,6 +305,7 @@ class HttpApiService {
       diasVisita: c.diasVisita || ['Lun', 'Mié', 'Vie'],
       saldo: c.saldo,
       limiteCredito: c.limiteCredito,
+      precioEspecial: c.preciosEspeciales,
       estado: c.estadoVisita === 'Visitado' || c.estadoVisita === 'Venta realizada' ? 'Venta realizada' : 'Pendiente',
       ultimaVisita: c.ultimaCompra || '',
       telefono: c.telefono || '',
@@ -321,6 +323,7 @@ class HttpApiService {
 
   async getClienteById(id: string): Promise<Cliente> {
     const c = await this.request<any>(`/clientes/${encodeURIComponent(id)}`);
+    if (!c?.id || typeof c.nombre !== 'string') throw new Error('Respuesta de cliente incompleta');
     return {
       id: c.id,
       nombre: c.nombre,
@@ -330,6 +333,7 @@ class HttpApiService {
       diasVisita: c.diasVisita || ['Lun', 'Mié', 'Vie'],
       saldo: c.saldo,
       limiteCredito: c.limiteCredito,
+      precioEspecial: c.preciosEspeciales,
       estado: c.estadoVisita === 'Visitado' || c.estadoVisita === 'Venta realizada' ? 'Venta realizada' : 'Pendiente',
       ultimaVisita: c.ultimaCompra || '',
       telefono: c.telefono || '',
@@ -343,6 +347,10 @@ class HttpApiService {
       sugerido: [],
       historial: [],
     };
+  }
+
+  async getCuentaCliente(id: string): Promise<any> {
+    return this.request<any>(`/clientes/${encodeURIComponent(id)}/cuenta`);
   }
 
   async createCliente(cliente: Partial<Cliente>): Promise<Cliente> {
@@ -555,6 +563,30 @@ class HttpApiService {
       method: 'DELETE',
     });
     return true;
+  }
+
+  // Sobregiro Remoto (Fase 4)
+  async solicitarSobregiro(req: { clienteId: string; empleadoId: string; montoSolicitado: number; motivo?: string }): Promise<any> {
+    return this.request<any>('/ventas/solicitar-sobregiro', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async getSolicitudesSobregiro(estado?: string): Promise<any[]> {
+    const q = estado ? `?estado=${encodeURIComponent(estado)}` : '';
+    return this.request<any[]>(`/ventas/solicitudes-sobregiro${q}`);
+  }
+
+  async resolverSobregiro(req: { tokenSolicitud: string; autorizado: boolean; adminId?: string; motivoResolucion?: string }): Promise<any> {
+    return this.request<any>('/ventas/resolver-sobregiro', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  }
+
+  async consultarSobregiro(token: string): Promise<any> {
+    return this.request<any>(`/ventas/consultar-sobregiro/${encodeURIComponent(token)}`);
   }
 
   // Registrar Venta
@@ -1022,6 +1054,7 @@ export interface DevolucionDto {
 export interface CerrarCorteCajaRequestDto {
   empleadoId: string;
   efectivoContado: number;
+  fondoInicial?: number;
   observaciones?: string;
 }
 

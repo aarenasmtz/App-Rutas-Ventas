@@ -100,21 +100,50 @@ public class VentasController : ControllerBase
         var creditoOtorgado = req.Pagos?.Where(p => p.Metodo == "Crédito").Sum(p => p.Monto) ?? 0m;
         var totalPagadoDirecto = totalPagos - creditoOtorgado;
 
-        if (creditoOtorgado > 0)
+                if (creditoOtorgado > 0)
         {
-            if (cliente.Saldo + creditoOtorgado > cliente.LimiteCredito)
+            decimal excedente = (cliente.Saldo + creditoOtorgado) - cliente.LimiteCredito;
+            if (excedente > 0)
             {
-                return StatusCode(422, new
+                bool autorizacionValida = false;
+                SolicitudSobregiro? solicitudAprobada = null;
+
+                if (!string.IsNullOrWhiteSpace(req.TokenAutorizacionSobregiro))
                 {
-                    message = $"El crédito solicitado (${creditoOtorgado:N2}) excede el límite disponible del cliente. Saldo actual: ${cliente.Saldo:N2}, Límite: ${cliente.LimiteCredito:N2}"
-                });
+                    solicitudAprobada = await _db.SolicitudesSobregiro
+                        .FirstOrDefaultAsync(s => s.TokenAutorizacion == req.TokenAutorizacionSobregiro &&
+                                                  s.ClienteId == cliente.Id &&
+                                                  s.Estado == "Autorizada");
+
+                    if (solicitudAprobada != null)
+                    {
+                        autorizacionValida = true;
+                        solicitudAprobada.Estado = "Utilizada";
+                        solicitudAprobada.FechaResolucion = DateTime.Now;
+                    }
+                }
+
+                if (!autorizacionValida)
+                {
+                    return StatusCode(422, new
+                    {
+                        message = $"El crédito solicitado (${creditoOtorgado:N2}) excede el límite disponible del cliente. Saldo actual: ${cliente.Saldo:N2}, Límite: ${cliente.LimiteCredito:N2}, Excedente: ${excedente:N2}",
+                        requiereAutorizacion = true,
+                        clienteId = cliente.Id,
+                        clienteNombre = cliente.Nombre,
+                        saldoActual = cliente.Saldo,
+                        limiteCredito = cliente.LimiteCredito,
+                        montoSolicitado = creditoOtorgado,
+                        excedente = excedente
+                    });
+                }
             }
         }
 
         // Cargar productos y validar existencias de forma transaccional antes de proceder
         var productosDict = new Dictionary<int, Producto>();
-        var itemsResueltos = new List<(LineaVentaRequestDto item, Producto prod, int factor, int unidadesBase, string presNombre)>();
-        var requerimientosPorProducto = new Dictionary<int, int>();
+        var itemsResueltos = new List<(LineaVentaRequestDto item, Producto prod, int factor, decimal unidadesBase, string presNombre)>();
+        var requerimientosPorProducto = new Dictionary<int, decimal>();
 
         foreach (var item in req.Items)
         {
@@ -143,12 +172,12 @@ public class VentasController : ControllerBase
 
             int factor = pres?.PiezasEquivalentes ?? (item.FactorConversion > 0 ? item.FactorConversion : 1);
             string presNombre = pres?.Nombre ?? item.PresentacionNombre ?? item.PresentacionTipo;
-            int unidadesBase = item.CantidadPresentaciones * factor;
+            decimal unidadesBase = item.CantidadPresentaciones * factor;
 
             itemsResueltos.Add((item, producto, factor, unidadesBase, presNombre));
 
             if (!requerimientosPorProducto.ContainsKey(producto.Id))
-                requerimientosPorProducto[producto.Id] = 0;
+                requerimientosPorProducto[producto.Id] = 0m;
             requerimientosPorProducto[producto.Id] += unidadesBase;
         }
 
@@ -265,5 +294,159 @@ public class VentasController : ControllerBase
             await tx.RollbackAsync();
             return StatusCode(500, new { message = "Error al procesar la venta en base de datos", detalle = ex.Message });
         }
+    }
+
+    [HttpPost("solicitar-sobregiro")]
+    public async Task<IActionResult> SolicitarSobregiro([FromBody] SolicitarSobregiroRequestDto req)
+    {
+        string cleanCId = (req.ClienteId ?? "").Trim().ToLower();
+        string numOnlyCId = cleanCId.StartsWith("c") ? cleanCId.Substring(1) : cleanCId;
+        var cliente = await _db.Clientes.FirstOrDefaultAsync(c =>
+            c.Codigo.ToLower() == cleanCId ||
+            c.Id.ToString() == cleanCId ||
+            c.Id.ToString() == numOnlyCId ||
+            c.Nombre.ToLower() == cleanCId);
+
+        if (cliente == null)
+            return NotFound(new { message = $"Cliente '{req.ClienteId}' no encontrado" });
+
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u =>
+            u.Id.ToString() == req.EmpleadoId ||
+            u.NombreUsuario.ToLower() == req.EmpleadoId.ToLower())
+            ?? await _db.Usuarios.FirstOrDefaultAsync(u => u.Activo)
+            ?? new Usuario { Id = 1, Nombre = "Juan Chofer" };
+
+        decimal excedente = Math.Max(0m, (cliente.Saldo + req.MontoSolicitado) - cliente.LimiteCredito);
+
+        var solicitud = new SolicitudSobregiro
+        {
+            TokenSolicitud = Guid.NewGuid().ToString("N"),
+            ClienteId = cliente.Id,
+            ChoferId = usuario.Id,
+            SaldoActual = cliente.Saldo,
+            LimiteCredito = cliente.LimiteCredito,
+            MontoSolicitado = req.MontoSolicitado,
+            Motivo = req.Motivo ?? $"Sobregiro de crédito en ruta por ${req.MontoSolicitado:N2}",
+            Estado = "Pendiente",
+            FechaSolicitud = DateTime.Now
+        };
+
+        _db.SolicitudesSobregiro.Add(solicitud);
+        await _db.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(ConsultarSobregiro), new { token = solicitud.TokenSolicitud }, new
+        {
+            message = "Solicitud de sobregiro enviada exitosamente a Don Miguel",
+            tokenSolicitud = solicitud.TokenSolicitud,
+            clienteNombre = cliente.Nombre,
+            choferNombre = usuario.Nombre,
+            saldoActual = cliente.Saldo,
+            limiteCredito = cliente.LimiteCredito,
+            montoSolicitado = req.MontoSolicitado,
+            excedente = excedente,
+            estado = solicitud.Estado
+        });
+    }
+
+    [HttpGet("solicitudes-sobregiro")]
+    public async Task<IActionResult> GetSolicitudesSobregiro([FromQuery] string? estado)
+    {
+        string targetEstado = string.IsNullOrWhiteSpace(estado) ? "Pendiente" : estado.Trim();
+        var query = _db.SolicitudesSobregiro
+            .Include(s => s.Cliente)
+            .Include(s => s.Chofer)
+            .AsQueryable();
+
+        if (targetEstado != "Todos")
+        {
+            query = query.Where(s => s.Estado == targetEstado);
+        }
+
+        var list = await query
+            .OrderByDescending(s => s.FechaSolicitud)
+            .Take(50)
+            .Select(s => new SolicitudSobregiroDto
+            {
+                Id = s.Id,
+                TokenSolicitud = s.TokenSolicitud,
+                ClienteId = s.Cliente != null ? s.Cliente.Codigo : s.ClienteId.ToString(),
+                ClienteNombre = s.Cliente != null ? s.Cliente.Nombre : "Cliente",
+                ChoferId = s.Chofer != null ? s.Chofer.Id.ToString() : s.ChoferId.ToString(),
+                ChoferNombre = s.Chofer != null ? s.Chofer.Nombre : "Chofer",
+                SaldoActual = s.SaldoActual,
+                LimiteCredito = s.LimiteCredito,
+                MontoSolicitado = s.MontoSolicitado,
+                Excedente = Math.Max(0m, (s.SaldoActual + s.MontoSolicitado) - s.LimiteCredito),
+                Motivo = s.Motivo,
+                Estado = s.Estado,
+                TokenAutorizacion = s.TokenAutorizacion,
+                FechaSolicitud = s.FechaSolicitud,
+                FechaResolucion = s.FechaResolucion
+            })
+            .ToListAsync();
+
+        return Ok(list);
+    }
+
+    [HttpPost("resolver-sobregiro")]
+    public async Task<IActionResult> ResolverSobregiro([FromBody] ResolverSobregiroRequestDto req)
+    {
+        var solicitud = await _db.SolicitudesSobregiro
+            .Include(s => s.Cliente)
+            .FirstOrDefaultAsync(s => s.TokenSolicitud == req.TokenSolicitud);
+
+        if (solicitud == null)
+            return NotFound(new { message = "Solicitud de sobregiro no encontrada" });
+
+        if (solicitud.Estado != "Pendiente")
+            return BadRequest(new { message = $"La solicitud ya fue procesada anteriormente ({solicitud.Estado})" });
+
+        solicitud.FechaResolucion = DateTime.Now;
+        if (req.Autorizado)
+        {
+            solicitud.Estado = "Autorizada";
+            solicitud.TokenAutorizacion = $"AUTH-{Random.Shared.Next(100000, 999999)}";
+        }
+        else
+        {
+            solicitud.Estado = "Rechazada";
+        }
+
+        if (!string.IsNullOrWhiteSpace(req.MotivoResolucion))
+        {
+            solicitud.Motivo = $"{solicitud.Motivo} | Resolución: {req.MotivoResolucion}";
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = req.Autorizado ? "Sobregiro autorizado por Don Miguel" : "Sobregiro rechazado",
+            tokenSolicitud = solicitud.TokenSolicitud,
+            estado = solicitud.Estado,
+            tokenAutorizacion = solicitud.TokenAutorizacion,
+            clienteNombre = solicitud.Cliente?.Nombre
+        });
+    }
+
+    [HttpGet("consultar-sobregiro/{token}")]
+    public async Task<IActionResult> ConsultarSobregiro(string token)
+    {
+        var solicitud = await _db.SolicitudesSobregiro
+            .Include(s => s.Cliente)
+            .FirstOrDefaultAsync(s => s.TokenSolicitud == token);
+
+        if (solicitud == null)
+            return NotFound(new { message = "Solicitud no encontrada" });
+
+        return Ok(new
+        {
+            tokenSolicitud = solicitud.TokenSolicitud,
+            estado = solicitud.Estado,
+            tokenAutorizacion = solicitud.TokenAutorizacion,
+            clienteNombre = solicitud.Cliente?.Nombre,
+            montoSolicitado = solicitud.MontoSolicitado,
+            fechaResolucion = solicitud.FechaResolucion
+        });
     }
 }

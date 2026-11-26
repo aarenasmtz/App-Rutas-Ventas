@@ -29,7 +29,7 @@ export default function CargaScreen() {
     return () => { isMounted = false; };
   }, []);
 
-  const items = productosList.length > 0 
+  const items = productosList.length > 0
     ? productosList.map(p => ({
         productoId: p.id,
         producto: p.nombre,
@@ -66,7 +66,7 @@ export default function CargaScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader title="Carga del día" subtitle="Mercancía en camioneta" onBack={() => router.back()} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
         <View style={styles.headerCard}>
           <View style={styles.headerIcon}><Truck size={28} color={colors.neutral[0]} /></View>
           <View>
@@ -96,8 +96,8 @@ export default function CargaScreen() {
           <Text style={styles.totalValue}>{formatCurrency(totalCarga)}</Text>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.confirmBtn, confirmada && { backgroundColor: colors.success[600] }]} 
+        <TouchableOpacity
+          style={[styles.confirmBtn, confirmada && { backgroundColor: colors.success[600] }]}
           onPress={handleConfirmarCarga}
           disabled={confirmando || confirmada}
         >
@@ -132,6 +132,15 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.primary[50], paddingHorizontal: spacing.md, paddingVertical: spacing.md, marginTop: spacing.sm },
   totalLabel: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.primary[700] },
   totalValue: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.primary[700] },
-  confirmBtn: { backgroundColor: colors.primary[600], margin: spacing.md, borderRadius: radius.md, paddingVertical: spacing.md + 2, alignItems: 'center', justifyContent: 'center' },
+  confirmBtn: {
+    backgroundColor: colors.primary[600],
+    margin: spacing.md,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
   confirmBtnText: { color: colors.neutral[0], fontSize: fontSize.md, fontWeight: fontWeight.bold },
 });

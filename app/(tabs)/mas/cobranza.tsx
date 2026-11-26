@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 import { useRouter } from 'expo-router';
 import { Banknote, Smartphone, Check, Printer, Search, ArrowLeft, User, DollarSign } from 'lucide-react-native';
 import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/constants/theme';
-import { ScreenHeader } from '@/components/shared';
+import { BottomSheet, ScreenHeader } from '@/components/shared';
 import { formatCurrency } from '@/utils/helpers';
 import { useApp } from '@/context/AppContext';
 import { DataService, mockClientes } from '@/services/mockDataService';
@@ -17,6 +17,7 @@ export default function CobranzaScreen() {
   const router = useRouter();
   const { user, clienteActivoId } = useApp();
   const [clientesList, setClientesList] = useState<Cliente[]>([]);
+  const [showForm, setShowForm] = useState(!!clienteActivoId);
   const [clienteId, setClienteId] = useState<string | null>(clienteActivoId || null);
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
@@ -99,6 +100,7 @@ export default function CobranzaScreen() {
         prev.map((c) => (c.id === cliente.id ? { ...c, saldo: nuevoSaldo } : c))
       );
 
+      setShowForm(false);
       setAbonoRegistrado(true);
       await loadClientes();
     } catch (err: any) {
@@ -118,7 +120,7 @@ export default function CobranzaScreen() {
     return (
       <View style={styles.container}>
         <ScreenHeader title="Cobranza" onBack={handleBack} />
-        <ScrollView contentContainerStyle={styles.confirmContent}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.confirmContent}>
           <View style={styles.successIcon}>
             <Check size={48} color={colors.success[600]} strokeWidth={3} />
           </View>
@@ -186,60 +188,49 @@ export default function CobranzaScreen() {
           </TouchableOpacity>
         </ScrollView>
 
-        <TicketModal
-          visible={showTicketModal}
-          onClose={() => setShowTicketModal(false)}
-          title="Recibo de Cobranza"
-          ticketText58={ticketPrinter.generateCobranzaText(
-            {
-              folio: `REC-${Date.now().toString().slice(-6)}`,
-              fecha: new Date().toLocaleDateString('es-MX', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-              clienteNombre: cliente.nombre,
-              clientePropietario: cliente.propietario,
-              vendedorNombre: user?.nombre || 'Miguel',
-              montoAbonado: montoNum,
-              metodoPago: metodo,
-              saldoAnterior: saldoPrevio,
-              nuevoSaldo: nuevoSaldo,
-            },
-            58
-          )}
-          ticketText80={ticketPrinter.generateCobranzaText(
-            {
-              folio: `REC-${Date.now().toString().slice(-6)}`,
-              fecha: new Date().toLocaleDateString('es-MX', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-              clienteNombre: cliente.nombre,
-              clientePropietario: cliente.propietario,
-              vendedorNombre: user?.nombre || 'Miguel',
-              montoAbonado: montoNum,
-              metodoPago: metodo,
-              saldoAnterior: saldoPrevio,
-              nuevoSaldo: nuevoSaldo,
-            },
-            80
-          )}
-        />
+        {(() => {
+          const cobranzaData = {
+            folio: `REC-${Date.now().toString().slice(-6)}`,
+            fecha: new Date().toLocaleDateString('es-MX', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            clienteNombre: cliente.nombre,
+            clientePropietario: cliente.propietario,
+            vendedorNombre: user?.nombre || 'Miguel',
+            montoAbonado: montoNum,
+            metodoPago: metodo,
+            saldoAnterior: saldoPrevio,
+            nuevoSaldo: nuevoSaldo,
+          };
+          return (
+            <TicketModal
+              visible={showTicketModal}
+              onClose={() => setShowTicketModal(false)}
+              title="Recibo de Cobranza"
+              ticketText58={ticketPrinter.generateCobranzaText(cobranzaData, 58)}
+              ticketText80={ticketPrinter.generateCobranzaText(cobranzaData, 80)}
+              ticketHtml58={ticketPrinter.generateCobranzaHtml(cobranzaData, 58)}
+              ticketHtml80={ticketPrinter.generateCobranzaHtml(cobranzaData, 80)}
+            />
+          );
+        })()}
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title="Cobranza en Ruta" subtitle="Registrar abono de cliente" onBack={handleBack} />
+      <ScreenHeader title="Cobranza" onBack={handleBack} />
+      <View style={{ flexDirection: 'row', margin: 16, gap: 10 }}>
+        <View style={{ flex: 1, padding: 14, backgroundColor: colors.primary[50], borderRadius: 12, borderWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ color: colors.neutral[600], fontSize: 12 }}>Saldo pendiente</Text><Text style={{ fontSize: 23, fontWeight: '700', color: colors.neutral[900] }}>{formatCurrency(clientesList.reduce((sum, c) => sum + c.saldo, 0))}</Text></View>
+        <View style={{ flex: 1, padding: 14, backgroundColor: colors.neutral[0], borderRadius: 12, borderWidth: 1, borderColor: colors.neutral[200] }}><Text style={{ color: colors.neutral[600], fontSize: 12 }}>Clientes con saldo</Text><Text style={{ fontSize: 23, fontWeight: '700', color: colors.neutral[900] }}>{clientesList.filter(c => c.saldo > 0).length}</Text></View>
+      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Filtros y buscador de clientes */}
         <View style={styles.searchWrap}>
           <Search size={18} color={colors.neutral[400]} />
@@ -299,6 +290,7 @@ export default function CobranzaScreen() {
                 activeOpacity={0.7}
                 onPress={() => {
                   setClienteId(c.id);
+                  setShowForm(true);
                   if (c.saldo > 0 && !monto) {
                     setMonto(c.saldo.toString());
                   }
@@ -316,7 +308,7 @@ export default function CobranzaScreen() {
                     <Text style={[styles.clientSaldo, { color: hasSaldo ? colors.error[600] : colors.success[600] }]}>
                       {formatCurrency(c.saldo)}
                     </Text>
-                    <Text style={styles.saldoStatus}>{hasSaldo ? 'Pendiente' : 'Al día'}</Text>
+                    <Text style={[styles.saldoStatus, { color: colors.primary[700], fontWeight: '700' }]}>Registrar abono</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -324,9 +316,10 @@ export default function CobranzaScreen() {
           })
         )}
 
+      </ScrollView>
         {/* Formulario de abono para el cliente seleccionado */}
         {cliente && (
-          <View style={styles.formContainer}>
+          <BottomSheet visible={showForm} title="Registrar abono" onClose={() => setShowForm(false)}><View style={styles.formContainer}>
             <View style={styles.selectedBanner}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.selectedBannerTitle}>Cliente seleccionado:</Text>
@@ -411,7 +404,7 @@ export default function CobranzaScreen() {
             )}
 
             <TouchableOpacity
-              style={[styles.registrarBtn, loading && { opacity: 0.7 }]}
+              style={[styles.registrarBtn, (loading || montoNum <= 0) && { opacity: 0.5 }]}
               disabled={loading || montoNum <= 0}
               onPress={handleRegistrar}
             >
@@ -421,9 +414,8 @@ export default function CobranzaScreen() {
                 <Text style={styles.registrarBtnText}>Registrar Abono de {formatCurrency(montoNum || 0)}</Text>
               )}
             </TouchableOpacity>
-          </View>
+          </View></BottomSheet>
         )}
-      </ScrollView>
     </View>
   );
 }
@@ -445,8 +437,10 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
+    borderRadius: 10,
   },
   tabsRow: {
     flexDirection: 'row',
@@ -460,6 +454,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[200],
     borderRadius: radius.md,
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   tabBtnActive: {
     backgroundColor: colors.primary[600],
@@ -499,6 +495,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     backgroundColor: colors.primary[50],
     borderRadius: radius.sm,
+    minHeight: 44,
+    minWidth: 44,
   },
   emptyBtnText: {
     fontSize: fontSize.xs,
@@ -604,6 +602,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   quickMontoChipText: {
     fontSize: 11,
@@ -645,6 +645,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderRadius: radius.md,
     paddingVertical: spacing.sm + 2,
+    minHeight: 44,
+    minWidth: 44,
   },
   metodoBtnActive: {
     backgroundColor: colors.primary[600],
@@ -677,11 +679,13 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   registrarBtn: {
-    backgroundColor: colors.success[600],
+    backgroundColor: colors.primary[600],
     marginTop: spacing.md,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   registrarBtnText: {
     color: colors.neutral[0],
@@ -758,6 +762,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   confirmBtnText: {
     color: colors.neutral[0],

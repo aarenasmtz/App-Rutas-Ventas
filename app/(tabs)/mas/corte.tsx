@@ -56,8 +56,9 @@ export default function CorteScreen() {
         setCortesList(data);
         if (!selectedTrabajador) {
           setSelectedTrabajador(data[0]);
-          const ini = 500;
-          setEfectivoContado((data[0].efectivoEsperado + ini).toString());
+          const ini = data[0].fondoInicial !== undefined ? data[0].fondoInicial : 500;
+          setFondoInicial(ini.toString());
+          setEfectivoContado((data[0].efectivoEsperado).toString());
         }
       }
     } catch {
@@ -106,6 +107,7 @@ export default function CorteScreen() {
       await DataService.cerrarCorteCaja({
         empleadoId: currentTrabajador.empleadoId,
         efectivoContado: contadoNum,
+        fondoInicial: fondoInicialNum,
       });
       await loadCortes();
       Alert.alert(
@@ -143,44 +145,21 @@ export default function CorteScreen() {
         onBack={() => router.back()}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* HERO CARD FINANCIERO */}
-        <View style={[styles.heroCard, shadows.card]}>
-          <View style={styles.heroTopRow}>
-            <View>
-              <Text style={styles.heroPreTitle}>JORNADA DE HOY</Text>
-              <Text style={styles.heroDate}>{fechaHoy}</Text>
-            </View>
-            <View style={styles.heroLiveBadge}>
-              <View style={styles.heroLiveDot} />
-              <Text style={styles.heroLiveText}>Ruta Activa</Text>
-            </View>
-          </View>
-
-          <View style={styles.heroMetricsGrid}>
-            <View style={styles.heroMetricCol}>
-              <Text style={styles.heroMetricLabel}>Total Ventas (Flota)</Text>
-              <Text style={styles.heroMetricAmount}>{formatCurrency(totalVentasDia)}</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroMetricCol}>
-              <Text style={styles.heroMetricLabel}>Efectivo a Entregar</Text>
-              <Text style={[styles.heroMetricAmount, { color: '#86efac' }]}>{formatCurrency(totalEfectivoGlobal)}</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroMetricCol}>
-              <Text style={styles.heroMetricLabel}>Cobranza Recuperada</Text>
-              <Text style={styles.heroMetricAmount}>{formatCurrency(totalCobradoGlobal)}</Text>
-            </View>
-          </View>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Text style={{ color: colors.neutral[700], fontSize: 13, marginBottom: 12 }}>{fechaHoy}</Text>
+        <View style={[styles.heroCard, { padding: 18 }]}>
+          <Text style={{ color: colors.primary[100], fontSize: 14 }}>Efectivo a entregar · {currentTrabajador?.ruta || 'Selecciona trabajador'}</Text>
+          <Text style={{ color: colors.neutral[0], fontSize: 34, fontWeight: '700', marginVertical: 8 }}>{formatCurrency(esperadoNum)}</Text>
+          <Text style={{ color: colors.primary[100], fontSize: 12 }}>Fondo inicial + ventas en efectivo + abonos − gastos</Text>
         </View>
+        <Text style={{ color: colors.neutral[600], fontSize: 12, marginBottom: 12 }}>Flota: ventas {formatCurrency(totalVentasDia)} · efectivo {formatCurrency(totalEfectivoGlobal)} · abonos {formatCurrency(totalCobradoGlobal)}</Text>
 
         {/* SELECTOR DE TRABAJADOR / RUTA */}
         <View style={styles.sectionHeaderWrap}>
           <Text style={styles.sectionHeading}>Trabajador en Turno:</Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.workerChipsRow}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.workerChipsRow}>
           {cortesList.map((trabajador) => {
             const isSelected = currentTrabajador?.empleadoId === trabajador.empleadoId;
             const hasDiff = trabajador.diferenciaCaja !== 0;
@@ -253,7 +232,7 @@ export default function CorteScreen() {
               {/* FONDO INICIAL DE RUTA */}
               <View style={styles.fondoInicialCard}>
                 <View style={styles.fondoInicialTop}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' }}>
                     <Banknote size={16} color={colors.primary[700]} />
                     <Text style={styles.fondoInicialTitle}>Efectivo Inicial de Ruta (Fondo para Cambio)</Text>
                   </View>
@@ -302,11 +281,11 @@ export default function CorteScreen() {
 
                 {/* 2. SPEI / Transferencia */}
                 <View style={styles.channelCard}>
-                  <View style={[styles.channelIconCircle, { backgroundColor: '#eff6ff' }]}>
-                    <Smartphone size={18} color="#2563eb" />
+                  <View style={[styles.channelIconCircle, { backgroundColor: colors.primary[50] }]}>
+                    <Smartphone size={18} color={colors.primary[600]} />
                   </View>
                   <Text style={styles.channelLabel}>Transferencias (SPEI)</Text>
-                  <Text style={[styles.channelAmount, { color: '#1d4ed8' }]}>
+                  <Text style={[styles.channelAmount, { color: colors.primary[700] }]}>
                     {formatCurrency(currentTrabajador.transferencias)}
                   </Text>
                 </View>
@@ -481,52 +460,61 @@ export default function CorteScreen() {
       </ScrollView>
 
       {/* MODAL DE TICKET TÉRMICO DE CORTE */}
-      {currentTrabajador && (
-        <TicketModal
-          visible={showTicketModal}
-          onClose={() => setShowTicketModal(false)}
-          title={`Ticket Corte - ${currentTrabajador.nombre}`}
-          ticketText58={ticketPrinter.generateCorteText({
-            fecha: new Date().toLocaleDateString('es-MX', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-            vendedorNombre: currentTrabajador.nombre,
-            rutaNombre: currentTrabajador.ruta,
-            ventasTotales: currentTrabajador.ventasTotales,
-            efectivo: currentTrabajador.efectivo,
-            transferencias: currentTrabajador.transferencias,
-            tarjetas: currentTrabajador.tarjetas,
-            credito: currentTrabajador.credito,
-            abonosCobranza: currentTrabajador.abonosCobranza,
-            gastos: currentTrabajador.gastos,
-            efectivoEsperado: currentTrabajador.efectivoEsperado,
-            efectivoContado: contadoNum,
-            diferenciaCaja: diferenciaCalculada,
-            piezasVendidas: currentTrabajador.piezasVendidas,
-            inventarioActualPiezas: currentTrabajador.inventarioActualPiezas,
-          }, 80)}
-        />
-      )}
+      {currentTrabajador && (() => {
+        const corteData = {
+          fecha: new Date().toLocaleDateString('es-MX', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          vendedorNombre: currentTrabajador.nombre,
+          rutaNombre: currentTrabajador.ruta,
+          ventasTotales: currentTrabajador.ventasTotales,
+          efectivo: currentTrabajador.efectivo,
+          transferencias: currentTrabajador.transferencias,
+          tarjetas: currentTrabajador.tarjetas,
+          credito: currentTrabajador.credito,
+          fondoInicial: currentTrabajador.fondoInicial ?? fondoInicialNum,
+          abonosCobranza: currentTrabajador.abonosCobranza,
+          gastos: currentTrabajador.gastos,
+          efectivoEsperado: currentTrabajador.efectivoEsperado,
+          efectivoContado: contadoNum,
+          diferenciaCaja: diferenciaCalculada,
+          piezasVendidas: currentTrabajador.piezasVendidas,
+          inventarioActualPiezas: currentTrabajador.inventarioActualPiezas,
+        };
+        return (
+          <TicketModal
+            visible={showTicketModal}
+            onClose={() => setShowTicketModal(false)}
+            title={`Ticket Corte - ${currentTrabajador.nombre}`}
+            ticketText58={ticketPrinter.generateCorteText(corteData, 58)}
+            ticketText80={ticketPrinter.generateCorteText(corteData, 80)}
+            ticketHtml58={ticketPrinter.generateCorteHtml(corteData, 58)}
+            ticketHtml80={ticketPrinter.generateCorteHtml(corteData, 80)}
+          />
+        );
+      })()}
     </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 110,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   heroCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.primary[600],
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
-    borderRadius: radius.xxl,
+    borderRadius: 14,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: colors.neutral[800],
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -572,9 +560,10 @@ const styles = StyleSheet.create({
   heroMetricsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.neutral[800],
     borderRadius: radius.xl,
     padding: spacing.md,
+    flexWrap: 'wrap',
   },
   heroMetricCol: {
     flex: 1,
@@ -624,6 +613,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
     gap: 8,
+    minHeight: 44,
+    minWidth: 44,
   },
   workerChipActive: {
     backgroundColor: colors.primary[600],
@@ -757,7 +748,7 @@ const styles = StyleSheet.create({
   },
   channelCard: {
     width: '48.5%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.neutral[50],
     borderRadius: radius.lg,
     padding: spacing.sm,
     borderWidth: 1,
@@ -782,8 +773,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   totalExpectedBox: {
-    backgroundColor: '#0f172a',
-    borderRadius: radius.xl,
+    backgroundColor: colors.primary[50],
+    borderRadius: 12,
     padding: spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -805,12 +796,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   totalExpectedAmount: {
-    fontSize: fontSize.lg,
+    fontSize: 28,
     fontWeight: '900',
     color: '#86efac',
   },
   arqueoSection: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.neutral[50],
     borderRadius: radius.xl,
     padding: spacing.md,
     borderWidth: 1,
@@ -829,12 +820,14 @@ const styles = StyleSheet.create({
     color: colors.neutral[800],
   },
   cuadrarExactoBtn: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: colors.primary[50],
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   cuadrarExactoText: {
     fontSize: 10,
@@ -877,6 +870,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: 9,
     paddingVertical: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   denomChipText: {
     fontSize: 11,
@@ -910,7 +905,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   merchandiseCard: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.neutral[50],
     borderRadius: radius.xl,
     padding: spacing.md,
     borderWidth: 1,
@@ -936,6 +931,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderWidth: 1,
     borderColor: colors.neutral[100],
+    flexWrap: 'wrap',
+    gap: 12,
   },
   merchCol: {
     flex: 1,
@@ -963,6 +960,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    minHeight: 44,
+    minWidth: 44,
   },
   primaryActionBtnText: {
     color: '#FFFFFF',
@@ -979,6 +978,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    minHeight: 44,
+    minWidth: 44,
   },
   secondaryActionBtnText: {
     color: colors.primary[700],
@@ -986,7 +987,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   fondoInicialCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.neutral[50],
     borderRadius: radius.lg,
     padding: spacing.md,
     marginTop: spacing.md,
@@ -994,12 +995,14 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   fondoInicialTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
   fondoInicialTitle: {
+    flex: 1,
     fontSize: fontSize.sm,
     fontWeight: '700',
     color: colors.neutral[800],
@@ -1022,6 +1025,8 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   fondoInicialInput: {
+    flex: 1,
+    minHeight: 44,
     fontSize: fontSize.base,
     fontWeight: '800',
     color: colors.neutral[900],
@@ -1045,6 +1050,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
+    minHeight: 44,
+    minWidth: 44,
   },
   fondoChipActive: {
     backgroundColor: colors.primary[600],

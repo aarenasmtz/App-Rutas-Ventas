@@ -65,7 +65,7 @@ public class ProductoDto
     public bool PrecioPorPeso { get; set; }
     public decimal PrecioBase { get; set; }
     public decimal? PrecioCompra { get; set; }
-    public int ExistenciaPiezas { get; set; }
+    public decimal ExistenciaPiezas { get; set; }
     public string Sku { get; set; } = string.Empty;
     public string CodigoBarras { get; set; } = string.Empty;
     public bool Favorito { get; set; }
@@ -98,14 +98,15 @@ public class RegistrarVentaRequestDto
     public decimal Total { get; set; }
     public List<LineaVentaRequestDto> Items { get; set; } = new();
     public List<PagoRequestDto> Pagos { get; set; } = new();
+    public string? TokenAutorizacionSobregiro { get; set; }
 }
 
 public class LineaVentaRequestDto
 {
     public string ProductoId { get; set; } = string.Empty;
     public string PresentacionTipo { get; set; } = string.Empty;
-    public int CantidadPresentaciones { get; set; }
-    public int PiezasTotalesCalculadas { get; set; }
+    public decimal CantidadPresentaciones { get; set; }
+    public decimal PiezasTotalesCalculadas { get; set; }
     public int FactorConversion { get; set; } = 1;
     public string? PresentacionNombre { get; set; }
     public decimal PrecioUnitario { get; set; }
@@ -140,6 +141,7 @@ public class ClienteDetalleDto
     public string Direccion { get; set; } = string.Empty;
     public string Telefono { get; set; } = string.Empty;
     public string Ruta { get; set; } = string.Empty;
+    public decimal FondoInicial { get; set; } = 0;
     public List<string> DiasVisita { get; set; } = new();
     public decimal Saldo { get; set; }
     public decimal LimiteCredito { get; set; }
@@ -180,7 +182,7 @@ public class InventarioUbicacionDto
 {
     public string UbicacionId { get; set; } = string.Empty;
     public string UbicacionNombre { get; set; } = string.Empty;
-    public int TotalPiezas { get; set; }
+    public decimal TotalPiezas { get; set; }
     public int TotalStockBajo { get; set; }
     public int TotalAgotados { get; set; }
     public List<ItemInventarioDto> Items { get; set; } = new();
@@ -194,7 +196,7 @@ public class ItemInventarioDto
     public string Sku { get; set; } = string.Empty;
     public string Unidad { get; set; } = "pieza";
     public bool ManejaMultiplesPresentaciones { get; set; }
-    public int ExistenciaPiezas { get; set; }
+    public decimal ExistenciaPiezas { get; set; }
     public decimal PrecioBase { get; set; }
     public string EstadoStock { get; set; } = string.Empty; // "Normal" | "Bajo" | "Agotado"
     public List<PresentacionConfigDto> Presentaciones { get; set; } = new();
@@ -210,7 +212,7 @@ public class TransferenciaInventarioDto
 public class ItemTransferenciaDto
 {
     public string ProductoId { get; set; } = string.Empty;
-    public int Piezas { get; set; }
+    public decimal Piezas { get; set; }
 }
 
 // ==========================================
@@ -221,6 +223,7 @@ public class CorteTrabajadorDto
     public string EmpleadoId { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
     public string Ruta { get; set; } = string.Empty;
+    public decimal FondoInicial { get; set; } = 0;
     public decimal VentasTotales { get; set; }
     public decimal Efectivo { get; set; }
     public decimal Transferencias { get; set; }
@@ -244,9 +247,9 @@ public class RevisionItemDto
     public string ProductoId { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
     public string? Marca { get; set; }
-    public int Sistema { get; set; }
-    public int Fisico { get; set; }
-    public int Diferencia { get; set; }
+    public decimal Sistema { get; set; }
+    public decimal Fisico { get; set; }
+    public decimal Diferencia { get; set; }
     public bool Revisado { get; set; }
     public string Comentario { get; set; } = string.Empty;
 }
@@ -331,6 +334,7 @@ public class DevolucionDto
 // ==========================================
 public class CerrarCorteCajaRequestDto
 {
+    public decimal FondoInicial { get; set; } = 0;
     public string EmpleadoId { get; set; } = string.Empty;
     public decimal EfectivoContado { get; set; }
     public string? Observaciones { get; set; }
@@ -370,7 +374,10 @@ public class TopProductoReporteDto
 {
     public string ProductoId { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
-    public int CantidadVendida { get; set; }
+    public decimal CantidadVendida { get; set; }
+    public decimal CantidadPresentaciones { get; set; }
+    public string Presentacion { get; set; } = string.Empty;
+    public string Unidad { get; set; } = string.Empty;
     public decimal ImporteTotal { get; set; }
 }
 
@@ -466,6 +473,7 @@ public class EmpleadoDetalleDto
     public string Usuario { get; set; } = string.Empty;
     public string Rol { get; set; } = string.Empty;
     public string Ruta { get; set; } = string.Empty;
+    public decimal FondoInicial { get; set; } = 0;
     public string Estado { get; set; } = "Activo";
     public decimal VentasHoy { get; set; }
     public decimal CobranzaHoy { get; set; }
@@ -507,7 +515,7 @@ public class GuardarProductoRequestDto
     public string Unidad { get; set; } = "kg";
     public decimal PrecioBase { get; set; }
     public decimal? PrecioCompra { get; set; }
-    public int ExistenciaPiezas { get; set; }
+    public decimal ExistenciaPiezas { get; set; }
     public string? Sku { get; set; }
     public string? CodigoBarras { get; set; }
     public bool Favorito { get; set; } = false;
@@ -626,7 +634,7 @@ public class FilaPreviewImportacionDto
     public string? ProductoCoincidenteNombre { get; set; }
     public decimal? ProductoCoincidentePrecioActual { get; set; }
     public decimal? ProductoCoincidenteCostoActual { get; set; }
-    public int? ProductoCoincidenteExistenciaActual { get; set; }
+    public decimal? ProductoCoincidenteExistenciaActual { get; set; }
     public List<CoincidenciaCandidataDto> CandidatosCoincidentes { get; set; } = new();
 }
 
@@ -637,7 +645,7 @@ public class CoincidenciaCandidataDto
     public string Nombre { get; set; } = string.Empty;
     public decimal PrecioBase { get; set; }
     public decimal? PrecioCompra { get; set; }
-    public int Existencia { get; set; }
+    public decimal Existencia { get; set; }
     public string Unidad { get; set; } = string.Empty;
     public string Categoria { get; set; } = string.Empty;
 }
@@ -675,3 +683,41 @@ public class ConfirmarImportacionResponseDto
     public List<string> Advertencias { get; set; } = new();
 }
 
+
+// ==========================================
+// 19. Sobregiro Remoto DTOs (Fase 4)
+// ==========================================
+public class SolicitarSobregiroRequestDto
+{
+    public string ClienteId { get; set; } = string.Empty;
+    public string EmpleadoId { get; set; } = string.Empty;
+    public decimal MontoSolicitado { get; set; }
+    public string? Motivo { get; set; }
+}
+
+public class ResolverSobregiroRequestDto
+{
+    public string TokenSolicitud { get; set; } = string.Empty;
+    public bool Autorizado { get; set; }
+    public string? AdminId { get; set; }
+    public string? MotivoResolucion { get; set; }
+}
+
+public class SolicitudSobregiroDto
+{
+    public int Id { get; set; }
+    public string TokenSolicitud { get; set; } = string.Empty;
+    public string ClienteId { get; set; } = string.Empty;
+    public string ClienteNombre { get; set; } = string.Empty;
+    public string ChoferId { get; set; } = string.Empty;
+    public string ChoferNombre { get; set; } = string.Empty;
+    public decimal SaldoActual { get; set; }
+    public decimal LimiteCredito { get; set; }
+    public decimal MontoSolicitado { get; set; }
+    public decimal Excedente { get; set; }
+    public string? Motivo { get; set; }
+    public string Estado { get; set; } = "Pendiente";
+    public string? TokenAutorizacion { get; set; }
+    public DateTime FechaSolicitud { get; set; }
+    public DateTime? FechaResolucion { get; set; }
+}

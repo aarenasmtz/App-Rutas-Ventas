@@ -1,0 +1,22 @@
+﻿"Reporte";"Semana"
+"Desde";"2026-11-02T00:00:00"
+"Hasta";"2026-11-08T20:29:12.085Z"
+
+"Indicador";"Importe o cantidad"
+"Ventas";"120"
+"Cobranza";"80"
+"Crédito";"40"
+"Gastos";"0"
+"Utilidad estimada";"0"
+"Ticket promedio";"40"
+"Pedidos";"3"
+
+"Forma de pago";"Importe"
+"efectivo";"80"
+"transferencia";"0"
+"tarjeta";"0"
+"credito";"40"
+
+"Producto";"Presentación / unidad";"Cantidad";"Importe"
+"Queso ""Especial""; edición
+con acentos y nombre largo para comprobar el documento completo";"Caja";"2";"960"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
+import { KeyboardAvoidingView, Platform,
   View,
   Text,
   StyleSheet,
@@ -171,7 +171,7 @@ export default function DevolucionesScreen() {
         }
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* KPIs */}
         <View style={styles.kpisRow}>
           <View style={[styles.kpiCard, { borderLeftColor: colors.error[500], borderLeftWidth: 4 }]}>
@@ -238,6 +238,10 @@ export default function DevolucionesScreen() {
                     </View>
                   </View>
 
+                  <View style={{ paddingTop: 10, marginTop: 10, borderTopWidth: 1, borderTopColor: colors.neutral[200], gap: 6 }}>
+                    <Text style={{ fontSize: 13, color: colors.neutral[700] }}>Destino físico: {dev.destino || 'Merma'}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary[700] }}>Resolución: {dev.metodoReembolso === 'SaldoAFavor' ? 'Saldo a favor' : dev.metodoReembolso === 'CambioFisico' ? 'Cambio físico' : dev.metodoReembolso || 'Sin especificar'}</Text>
+                  </View>
                   {dev.observaciones ? (
                     <Text style={styles.observacionesText}>Nota: {dev.observaciones}</Text>
                   ) : null}
@@ -255,7 +259,7 @@ export default function DevolucionesScreen() {
         animationType="fade"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, shadows.floating]}>
             <View style={styles.modalHeader}>
               <View>
@@ -267,10 +271,10 @@ export default function DevolucionesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Seleccionar Cliente */}
               <Text style={styles.inputLabel}>Cliente:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+              <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
                 {clientes.map((c) => (
                   <TouchableOpacity
                     key={c.id}
@@ -286,7 +290,7 @@ export default function DevolucionesScreen() {
 
               {/* Seleccionar Producto */}
               <Text style={[styles.inputLabel, { marginTop: spacing.sm }]}>Producto devuelto:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+              <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
                 {productos.map((p) => (
                   <TouchableOpacity
                     key={p.id}
@@ -395,7 +399,7 @@ export default function DevolucionesScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </AppShell>
   );
@@ -403,16 +407,22 @@ export default function DevolucionesScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   createBtnHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[700],
+    paddingHorizontal: 10,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.md,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+    flexShrink: 0,
   },
   createBtnHeaderText: {
     color: '#FFFFFF',
@@ -421,7 +431,7 @@ const styles = StyleSheet.create({
   },
   kpisRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 8,
     paddingHorizontal: spacing.md,
     marginTop: spacing.sm,
     marginBottom: spacing.md,
@@ -429,25 +439,26 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.sm + 2,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minWidth: 0,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: fontWeight.bold,
     color: colors.neutral[500],
-    textTransform: 'uppercase',
+    textTransform: 'none',
   },
   kpiValue: {
-    fontSize: fontSize.md,
+    fontSize: 20,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
     marginTop: 2,
   },
   kpiSub: {
-    fontSize: 9,
+    fontSize: 11,
     color: colors.neutral[400],
     marginTop: 1,
   },
@@ -492,8 +503,8 @@ const styles = StyleSheet.create({
   },
   devCard: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.neutral[200],
@@ -566,9 +577,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderRadius: radius.xxl,
     width: '100%',
-    maxWidth: 500,
-    maxHeight: '90%',
+    maxWidth: 680,
+    maxHeight: '88%',
     overflow: 'hidden',
+    alignSelf: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -596,6 +610,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalBody: {
     paddingHorizontal: spacing.lg,
@@ -618,6 +634,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   selectorChipActive: {
     backgroundColor: colors.primary[700],
@@ -634,13 +652,14 @@ const styles = StyleSheet.create({
   },
   textInput: {
     backgroundColor: colors.neutral[50],
-    borderRadius: radius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.neutral[200],
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
   },
   optionsRow: {
     flexDirection: 'row',
@@ -654,6 +673,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   optionBtnActive: {
     backgroundColor: colors.primary[600],
@@ -682,6 +703,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   cancelBtnText: {
     fontSize: fontSize.sm,
@@ -695,6 +718,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary[600],
+    minHeight: 44,
+    minWidth: 44,
   },
   saveBtnText: {
     fontSize: fontSize.sm,

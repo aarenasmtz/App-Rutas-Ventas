@@ -103,7 +103,7 @@ export default function CajaScreen() {
         onBack={() => router.back()}
       />
 
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadCajaData} />}
@@ -197,7 +197,9 @@ export default function CajaScreen() {
 const styles = StyleSheet.create({
   scroll: {
     padding: spacing.md,
-    paddingBottom: 100,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   heroCard: {
     backgroundColor: colors.primary[800],
@@ -252,6 +254,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderRadius: radius.lg,
     borderWidth: 1.5,
+    minHeight: 44,
+    minWidth: 44,
   },
   quickBtnText: {
     fontSize: fontSize.xs,

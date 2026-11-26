@@ -1,16 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Home, ShoppingBag, Users, Menu, Package } from 'lucide-react-native';
-import { colors, radius, shadows, fontSize, fontWeight } from '@/constants/theme';
+import { colors, radius, shadows, fontSize, fontWeight, layout } from '@/constants/theme';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConnectivityBanner } from '@/components/shared';
 import { View, StyleSheet, Text, Platform } from 'react-native';
 import { useApp } from '@/context/AppContext';
 
 export default function TabLayout() {
+  const router = useRouter();
   const { carrito } = useApp();
   const cartCount = carrito.length;
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.neutral[50] }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.neutral[0] }}>
+    <View style={{ flex: 1, width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', backgroundColor: colors.neutral[50] }}>
       <ConnectivityBanner />
       <Tabs
         screenOptions={{
@@ -21,8 +25,8 @@ export default function TabLayout() {
             backgroundColor: colors.neutral[0],
             borderTopColor: colors.neutral[200],
             borderTopWidth: 1,
-            height: Platform.OS === 'ios' ? 84 : 68,
-            paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+            height: 64 + Math.max(insets.bottom, 12),
+            paddingBottom: Math.max(insets.bottom, 12),
             paddingTop: 8,
           },
           tabBarLabelStyle: {
@@ -40,6 +44,7 @@ export default function TabLayout() {
         />
         <Tabs.Screen
           name="clientes"
+          listeners={() => ({tabPress: event => { event.preventDefault(); router.navigate({pathname:'/(tabs)/clientes',params:{origen:'tab',editar:''}}); }})}
           options={{
             title: 'Clientes',
             tabBarIcon: ({ size, color }) => <Users size={22} color={color} />,
@@ -93,6 +98,7 @@ export default function TabLayout() {
         />
       </Tabs>
     </View>
+    </SafeAreaView>
   );
 }
 

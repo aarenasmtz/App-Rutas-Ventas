@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import {
+import { KeyboardAvoidingView,
   View,
   Text,
   StyleSheet,
@@ -9,7 +9,7 @@ import {
   Modal,
   Platform,
   Alert,
-  useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -39,6 +39,10 @@ import { colors, spacing, radius, fontSize, fontWeight, shadows } from '@/consta
 import { DataService } from '@/services/mockDataService';
 import { useApp } from '@/context/AppContext';
 import { ConnectivityIndicator } from '@/components/shared';
+import { WorkflowSteps } from '@/components/WorkflowSteps';
+import { SaleProduct } from '@/components/SaleProduct';
+import { SaleProductEditor } from '@/components/SaleProductEditor';
+import { resumenCantidades } from '@/utils/ventaResumen';
 import { formatCurrency } from '@/utils/helpers';
 import { getPrecioPresentacion } from '@/utils/multipresentacion';
 import type { Producto, Cliente, ItemCarrito, PresentacionConfig } from '@/types';
@@ -85,23 +89,9 @@ export default function VentaScreen() {
     user,
   } = useApp();
 
-  const { width: windowWidth, fontScale } = useWindowDimensions();
-
-  // 3 columnas en móvil estándar cuando el ancho permita leer y tocar;
-  // 2 columnas en pantallas muy estrechas (<355px) o texto ampliado por accesibilidad (>1.25)
-  const numColumns = useMemo(() => {
-    if (windowWidth < 355 || fontScale > 1.25) return 2;
-    if (windowWidth >= 960) return 5;
-    if (windowWidth >= 640) return 4;
-    return 3;
-  }, [windowWidth, fontScale]);
-
-  const gapSize = 7; // Separación de 6–8 px
-  const horizontalPadding = 16; // 8px de margen en cada lado
-  const cardWidth = useMemo(() => {
-    const availableWidth = Math.min(windowWidth, 1200) - horizontalPadding;
-    return Math.floor((availableWidth - (numColumns - 1) * gapSize) / numColumns);
-  }, [windowWidth, numColumns]);
+  const [vista, setVista] = useState<'mosaicos' | 'lista'>('mosaicos');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const userId = user?.id || 'default';
 
@@ -129,14 +119,6 @@ export default function VentaScreen() {
 
   // Modales interactivos de producto
   const [selectedMultiProd, setSelectedMultiProd] = useState<Producto | null>(null);
-  const [qtyPromptItem, setQtyPromptItem] = useState<{
-    producto: Producto;
-    currentQty: number;
-    cartIndex: number;
-    presentacion?: PresentacionConfig;
-  } | null>(null);
-  const [manualQtyInput, setManualQtyInput] = useState('');
-
   // Modo Ordenar Personalizado (Spotify)
   const [isOrderingMode, setIsOrderingMode] = useState(false);
   const [draftOrderIds, setDraftOrderIds] = useState<string[]>([]);
@@ -148,7 +130,10 @@ export default function VentaScreen() {
 
   // Cargar datos
   const reloadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
+      setVista(DataService.getVistaCatalogo(userId));
       const [cls, prs, cats] = await Promise.all([
         DataService.getClientes(),
         DataService.getProductos(),
@@ -171,8 +156,9 @@ export default function VentaScreen() {
       const frecs = DataService.getFrecuenciaVentas(30);
       setFrecuenciaMap(frecs);
     } catch (err) {
+      setLoadError(true);
       console.warn('Error loading sale data:', err);
-    }
+    } finally { setLoading(false); }
   }, [userId]);
 
   useEffect(() => {
@@ -188,23 +174,8 @@ export default function VentaScreen() {
 
   // Lista de categorías
   const categorias = useMemo(() => {
-    const defaultCats = [
-      'Todas',
-      'Jamón',
-      'Salchicha',
-      'Chorizo',
-      'Quesos',
-      'Carnes frías',
-      'Abarrotes',
-      'Mantequillas',
-      'Mayonesas',
-    ];
-    if (categoriasList.length > 0) {
-      const liveNames = categoriasList.map((c) => c.nombre);
-      return ['Todas', ...Array.from(new Set([...defaultCats.slice(1), ...liveNames]))];
-    }
-    return defaultCats;
-  }, [categoriasList]);
+    return ['Todas', ...Array.from(new Set([...categoriasList.map(c => c.nombre), ...productosList.map(p => p.categoria)].filter(Boolean)))];
+  }, [categoriasList, productosList]);
 
   // Clientes filtrados para la selección
   const filteredClients = useMemo(() => {
@@ -241,7 +212,9 @@ export default function VentaScreen() {
     // Si ya hay productos en carrito, actualizar precios especiales según el nuevo cliente
     if (carrito.length > 0) {
       carrito.forEach((item, idx) => {
-        const nuevoPrecio = getProductPrice(item.producto, item.presentacion);
+        const nuevoPrecio = item.presentacion
+          ? getPrecioPresentacion(item.producto, item.presentacion, selected)
+          : selected.precioEspecial?.[item.producto.id] ?? item.producto.precioBase;
         if (nuevoPrecio !== item.precioFinal) {
           updateCarritoItem(idx, {
             ...item,
@@ -356,7 +329,7 @@ export default function VentaScreen() {
           normalizeText(p.nombre).includes(q) ||
           normalizeText(p.categoria || '').includes(q) ||
           normalizeText(p.marca || '').includes(q) ||
-          normalizeText(p.sku || '').includes(q)
+          normalizeText(p.sku || '').includes(q) || normalizeText(p.codigoBarras || '').includes(q)
         );
       });
     }
@@ -482,83 +455,31 @@ export default function VentaScreen() {
     addToCarrito(cartItem);
   };
 
-  // Decrementar producto desde la tarjeta
-  const handleDecrementProduct = (producto: Producto) => {
-    const { inCart, firstIndex, item } = getCartInfoForProduct(producto.id);
-    if (!inCart || firstIndex < 0 || !item) return;
-
-    if (item.cantidad <= 1) {
-      removeFromCarrito(firstIndex);
-    } else {
-      const newQty = item.cantidad - 1;
-      const factor = item.presentacion?.piezasEquivalentes || 1;
-      updateCarritoItem(firstIndex, {
-        ...item,
-        cantidad: newQty,
-        piezasTotales: newQty * factor,
-        subtotal: Math.round(newQty * item.precioFinal * 100) / 100,
-      });
-    }
-  };
-
-  // Confirmar cantidad manual escrita
-  const handleConfirmManualQty = () => {
-    if (!qtyPromptItem) return;
-    const val = parseFloat(manualQtyInput);
-    if (isNaN(val) || val <= 0) {
-      if (qtyPromptItem.cartIndex >= 0) {
-        removeFromCarrito(qtyPromptItem.cartIndex);
-      }
-      setQtyPromptItem(null);
+  const handleApplyQuantity = (pres: PresentacionConfig | undefined, quantity: number) => {
+    const producto = selectedMultiProd;
+    if (!producto) return;
+    if (producto.estadoConfiguracion === 'Pendiente') {
+      Alert.alert('Producto pendiente', 'Confirma la unidad y las presentaciones en Catálogo antes de vender.');
       return;
     }
-
-    const { producto, presentacion, cartIndex } = qtyPromptItem;
-    const factor = presentacion?.piezasEquivalentes || 1;
-    const unidadesBase = Math.round(val * factor);
-
-    if (producto.existencia !== undefined && unidadesBase > producto.existencia) {
-      Alert.alert(
-        'Inventario insuficiente',
-        `Disponible en camioneta: ${producto.existencia} ${producto.unidad || 'unidad'}(s).\n` +
-          `Solicitado: ${unidadesBase}.`
-      );
-      return;
+    const index = carrito.findIndex(i => i.producto.id === producto.id && i.presentacion?.tipo === pres?.tipo);
+    if (quantity === 0) { if (index >= 0) removeFromCarrito(index); setSelectedMultiProd(null); return; }
+    const factor = pres?.piezasEquivalentes || 1;
+    const otherUnits = carrito.reduce((sum, item, idx) => item.producto.id === producto.id && idx !== index ? sum + (item.piezasTotales ?? item.cantidad * (item.factorConversion || 1)) : sum, 0);
+    const units = Math.round(quantity * factor);
+    if (otherUnits + units > producto.existencia) {
+      Alert.alert('Inventario insuficiente', 'Disponible: ' + producto.existencia + ' ' + producto.unidad + '. Considera las otras presentaciones de la nota.'); return;
     }
-
-    const precio = getProductPrice(producto, presentacion);
-    const subtotal = Math.round(val * precio * 100) / 100;
-
-    if (cartIndex >= 0) {
-      updateCarritoItem(cartIndex, {
-        ...carrito[cartIndex],
-        cantidad: val,
-        piezasTotales: unidadesBase,
-        subtotal,
-      });
-    } else {
-      addToCarrito({
-        producto,
-        cantidad: val,
-        unidad: presentacion ? presentacion.tipo : producto.unidad || 'pieza',
-        presentacion,
-        presentacionNombre: presentacion?.nombre,
-        factorConversion: factor,
-        piezasTotales: unidadesBase,
-        precioLista: precio,
-        descuento: 0,
-        precioFinal: precio,
-        subtotal,
-      });
-    }
-
-    setQtyPromptItem(null);
+    const price = getProductPrice(producto, pres);
+    const nextItem: ItemCarrito = { producto, cantidad: quantity, unidad: pres?.tipo || producto.unidad, presentacion: pres, presentacionNombre: pres?.nombre, factorConversion: factor, piezasTotales: units, precioLista: price, precioFinal: price, descuento: 0, subtotal: Math.round(quantity * price * 100) / 100 };
+    if (index >= 0) updateCarritoItem(index, nextItem); else addToCarrito(nextItem);
+    setSelectedMultiProd(null);
   };
 
   // Totales de la barra inferior
   const cartTotal = carrito.reduce((s, i) => s + i.subtotal, 0);
   const cartCount = carrito.length;
-  const totalPiezas = carrito.reduce((s, i) => s + (i.piezasTotales || i.cantidad), 0);
+  const quantitiesLabel = resumenCantidades(carrito);
 
   // ====================================================================
   // VISTA 1: SELECCIÓN DE CLIENTE (Si no hay cliente activo)
@@ -566,6 +487,7 @@ export default function VentaScreen() {
   if (!cliente || isChangingClient) {
     return (
       <View style={styles.container}>
+        <WorkflowSteps current={0} />
         {/* Cabecera selección cliente */}
         <View style={styles.clientPickHeader}>
           <View style={styles.clientPickTopRow}>
@@ -633,7 +555,7 @@ export default function VentaScreen() {
           </View>
         )}
 
-        <ScrollView
+        <ScrollView keyboardShouldPersistTaps="handled"
           style={styles.clientListScroll}
           contentContainerStyle={{ paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
@@ -712,8 +634,8 @@ export default function VentaScreen() {
           animationType="slide"
           onRequestClose={() => setShowNuevoClienteModal(false)}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><View style={styles.modalBackdrop}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalCard}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Registrar Nuevo Cliente</Text>
                 <TouchableOpacity onPress={() => setShowNuevoClienteModal(false)}>
@@ -776,8 +698,8 @@ export default function VentaScreen() {
                   <Text style={styles.modalSubmitText}>Guardar y Elegir</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </View>
+            </ScrollView>
+          </View></KeyboardAvoidingView>
         </Modal>
       </View>
     );
@@ -788,6 +710,8 @@ export default function VentaScreen() {
   // ====================================================================
   return (
     <View style={styles.container}>
+      <View style={styles.saleTitleRow}><Text style={styles.saleTitle}>Nueva venta</Text><ConnectivityIndicator /></View>
+      <WorkflowSteps current={1} />
       {/* 1. ENCABEZADO SUPERIOR CON CLIENTE */}
       <View style={styles.catalogHeader}>
         <View style={styles.catalogTopRow}>
@@ -803,7 +727,6 @@ export default function VentaScreen() {
             <Text style={styles.clientSelectedChangeBtn}>Cambiar</Text>
           </TouchableOpacity>
 
-          <ConnectivityIndicator />
         </View>
 
         {/* Buscador de productos */}
@@ -824,7 +747,7 @@ export default function VentaScreen() {
         </View>
 
         {/* Categorías deslizables */}
-        <ScrollView
+        <ScrollView keyboardShouldPersistTaps="handled"
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.catsRow}
@@ -848,7 +771,7 @@ export default function VentaScreen() {
         </ScrollView>
 
         {/* Barra de Filtros: Todos · Favoritos · Frecuentes + Botón Ordenar */}
-        <View style={styles.filterTabsRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterTabsRow}>
           <View style={styles.filterTabsWrap}>
             <TouchableOpacity
               onPress={() => setFiltroTipo('todos')}
@@ -928,297 +851,35 @@ export default function VentaScreen() {
               <Text style={styles.ordenarBtnText}>Ordenar</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
 
-      {/* 2. MOSAICO DE PRODUCTOS (3 Columnas en Móvil / 2 en Estrechas) */}
-      <ScrollView
-        style={styles.gridScroll}
-        contentContainerStyle={[
-          styles.gridScrollContent,
-          { paddingBottom: cartCount > 0 ? 115 : 40 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.viewSelector}>
+        <View style={styles.segment}>
+          {(['mosaicos', 'lista'] as const).map(mode => <TouchableOpacity key={mode} onPress={() => { setVista(mode); DataService.saveVistaCatalogo(mode, userId); }} accessibilityRole="tab" aria-selected={vista === mode} accessibilityState={{ selected: vista === mode }} style={[styles.viewOption, vista === mode && styles.viewOptionActive]}><Text style={[styles.viewText, vista === mode && styles.viewTextActive]}>{mode === 'mosaicos' ? 'Mosaicos' : 'Lista'}</Text></TouchableOpacity>)}
+        </View>
+        <Text style={styles.resultCount}>{displayProducts.length} productos</Text>
+      </View>
+      <ScrollView style={styles.gridScroll} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.gridScrollContent, { paddingBottom: 16 }]} showsVerticalScrollIndicator={false}>
+        {loading && <ActivityIndicator style={{ marginVertical: 24 }} color={colors.primary[600]} accessibilityLabel="Cargando productos" />}
+        {loadError && <TouchableOpacity onPress={reloadData} style={{ padding: 16 }}><Text>No se pudo cargar el catálogo. Toca para reintentar.</Text></TouchableOpacity>}
         <View style={styles.gridContainer}>
-          {displayProducts.map((p) => {
-            const isFav = favoritoIds.has(p.id);
-            const { inCart, totalQty, firstIndex, item } = getCartInfoForProduct(p.id);
-            const hasMultiplePres = Boolean(
-              p.manejaMultiplesPresentaciones || (p.presentaciones && p.presentaciones.length > 1)
-            );
-            const presDefault = p.presentaciones?.[0];
-            const price = getProductPrice(p, presDefault);
-            const isPendingConfig = p.estadoConfiguracion === 'Pendiente';
-            const unitLabel = presDefault ? presDefault.nombre : p.unidad || 'pza';
-
-            return (
-              <TouchableOpacity
-                key={p.id}
-                activeOpacity={isPendingConfig ? 1 : 0.8}
-                disabled={isPendingConfig}
-                onPress={() => {
-                  if (hasMultiplePres) {
-                    setSelectedMultiProd(p);
-                  } else {
-                    handleAddSingleQuick(p);
-                  }
-                }}
-                style={[
-                  styles.productCard,
-                  { width: cardWidth },
-                  inCart && styles.productCardActive,
-                  isPendingConfig && styles.productCardDisabled,
-                  shadows.card,
-                ]}
-              >
-                {/* Fila superior: Presentación/Unidad + Estrella Favorito en esquina */}
-                <View style={styles.cardTopRow}>
-                  <View style={styles.unitBadge}>
-                    <Text style={styles.unitBadgeText} numberOfLines={1}>
-                      {unitLabel}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    onPress={(e) => {
-                      e?.stopPropagation?.();
-                      handleToggleFavorito(p.id);
-                    }}
-                    style={styles.starTouchArea}
-                    accessibilityLabel={isFav ? 'Quitar de favoritos' : 'Marcar como favorito'}
-                  >
-                    <Star
-                      size={15}
-                      color={isFav ? '#F59E0B' : colors.neutral[300]}
-                      fill={isFav ? '#F59E0B' : 'transparent'}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Nombre del producto: permite varias líneas sin cortar información esencial */}
-                <Text style={styles.productName} numberOfLines={3}>
-                  {p.nombre}
-                </Text>
-
-                {/* Precio y Disponibilidad */}
-                <View style={styles.priceRow}>
-                  <Text style={styles.productPrice}>{formatCurrency(price)}</Text>
-                  {isPendingConfig ? (
-                    <Text style={styles.pendingBadge}>⚠️ Pendiente</Text>
-                  ) : (
-                    <Text style={styles.stockText}>
-                      Disp: {p.existencia !== undefined ? p.existencia : 0}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Controles de cantidad: ÚNICAMENTE cuando el producto está agregado */}
-                {inCart && (
-                  <View style={styles.cardStepperRow}>
-                    <View style={styles.stepperContainer}>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        onPress={(e) => {
-                          e?.stopPropagation?.();
-                          handleDecrementProduct(p);
-                        }}
-                        style={styles.stepperBtn}
-                        accessibilityLabel="Disminuir cantidad"
-                      >
-                        <Minus size={13} color={colors.primary[700]} strokeWidth={3} />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                        onPress={(e) => {
-                          e?.stopPropagation?.();
-                          setQtyPromptItem({
-                            producto: p,
-                            currentQty: totalQty,
-                            cartIndex: firstIndex,
-                            presentacion: item?.presentacion,
-                          });
-                          setManualQtyInput(totalQty.toString());
-                        }}
-                        style={styles.stepperQtyTouch}
-                        accessibilityLabel="Editar cantidad directamente"
-                      >
-                        <Text style={styles.stepperQtyText}>{totalQty}</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        onPress={(e) => {
-                          e?.stopPropagation?.();
-                          handleAddSingleQuick(p);
-                        }}
-                        style={styles.stepperBtn}
-                        accessibilityLabel="Aumentar cantidad"
-                      >
-                        <Plus size={13} color={colors.primary[700]} strokeWidth={3} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
+          {displayProducts.map(p => {
+            const { inCart, totalQty } = getCartInfoForProduct(p.id);
+            return <View key={p.id} style={{ width: vista === 'lista' ? '100%' : '25%', padding: 3.5 }}><SaleProduct producto={p} price={getProductPrice(p, p.presentaciones?.[0])} quantity={totalQty} favorite={favoritoIds.has(p.id)} list={vista === 'lista'} width="100%"
+              onFavorite={() => handleToggleFavorito(p.id)} onDetails={() => setSelectedMultiProd(p)} onPress={() => {
+                if (inCart || p.manejaMultiplesPresentaciones || (p.presentaciones?.length || 0) > 1 || p.precioPorPeso) setSelectedMultiProd(p);
+                else handleAddSingleQuick(p);
+              }} /></View>;
           })}
         </View>
-
-        {displayProducts.length === 0 && (
-          <View style={styles.emptyGridWrap}>
-            <Text style={styles.emptyGridText}>No se encontraron productos en esta vista.</Text>
-          </View>
-        )}
+        {!loading && displayProducts.length === 0 && <View style={styles.emptyGridWrap}><Package size={32} color={colors.neutral[400]} /><Text style={styles.emptyGridText}>{productosList.length ? 'Sin productos para estos filtros.' : 'Tu catálogo está vacío.'}</Text><Text style={styles.modalSub}>{productosList.length ? 'Prueba otra búsqueda o categoría.' : 'Registra o importa productos desde Más.'}</Text></View>}
       </ScrollView>
-
-      {/* 3. BARRA FLOTANTE INFERIOR DE VENTA */}
-      {cartCount > 0 && (
-        <View style={[styles.bottomSaleBar, shadows.floating]}>
-          <View style={styles.bottomSaleInfo}>
-            <View style={styles.bottomCartBadge}>
-              <ShoppingCart size={15} color={colors.neutral[0]} />
-              <Text style={styles.bottomCartBadgeText}>{cartCount}</Text>
-            </View>
-            <View>
-              <Text style={styles.bottomCartTotalLabel}>Total a cobrar</Text>
-              <Text style={styles.bottomCartTotalAmount}>{formatCurrency(cartTotal)}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => router.push('/(tabs)/venta/carrito')}
-            style={styles.revisarBtn}
-          >
-            <Text style={styles.revisarBtnText}>Revisar ({totalPiezas})</Text>
-            <ChevronRight size={18} color={colors.neutral[0]} strokeWidth={2.6} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* MODAL 1: SELECTOR DE PRESENTACIONES (Queso Castel, etc.) */}
-      <Modal
-        visible={!!selectedMultiProd}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setSelectedMultiProd(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle} numberOfLines={1}>
-                  {selectedMultiProd?.nombre}
-                </Text>
-                <Text style={styles.modalSub}>Selecciona la presentación a vender</Text>
-              </View>
-              <TouchableOpacity onPress={() => setSelectedMultiProd(null)}>
-                <X size={20} color={colors.neutral[500]} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              {selectedMultiProd?.presentaciones?.map((pres) => {
-                const precio = getProductPrice(selectedMultiProd, pres);
-                const factor = pres.piezasEquivalentes || 1;
-                return (
-                  <TouchableOpacity
-                    key={pres.tipo + pres.nombre}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      if (!selectedMultiProd) return;
-                      // Validar inventario
-                      if (
-                        selectedMultiProd.existencia !== undefined &&
-                        factor > selectedMultiProd.existencia
-                      ) {
-                        Alert.alert(
-                          'Stock insuficiente',
-                          `Solo hay ${selectedMultiProd.existencia} unidades base en camioneta.`
-                        );
-                        return;
-                      }
-
-                      addToCarrito({
-                        producto: selectedMultiProd,
-                        cantidad: 1,
-                        unidad: pres.tipo,
-                        presentacion: pres,
-                        presentacionNombre: pres.nombre,
-                        factorConversion: factor,
-                        piezasTotales: factor,
-                        precioLista: precio,
-                        descuento: 0,
-                        precioFinal: precio,
-                        subtotal: precio,
-                      });
-                      setSelectedMultiProd(null);
-                    }}
-                    style={styles.presOptionRow}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.presOptionName}>{pres.nombre}</Text>
-                      <Text style={styles.presOptionSub}>
-                        Equivale a {factor} unidad{factor === 1 ? '' : 'es'}
-                      </Text>
-                    </View>
-                    <Text style={styles.presOptionPrice}>{formatCurrency(precio)}</Text>
-                    <View style={styles.presAddBadge}>
-                      <Plus size={14} color={colors.primary[700]} strokeWidth={2.8} />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL 2: INGRESO MANUAL DE CANTIDAD RÁPIDA */}
-      <Modal
-        visible={!!qtyPromptItem}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setQtyPromptItem(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxWidth: 320 }]}>
-            <Text style={styles.modalTitle}>Capturar cantidad</Text>
-            <Text style={styles.modalSub}>{qtyPromptItem?.producto.nombre}</Text>
-
-            <TextInput
-              style={styles.manualQtyInput}
-              keyboardType="numeric"
-              value={manualQtyInput}
-              onChangeText={setManualQtyInput}
-              autoFocus={true}
-              selectTextOnFocus={true}
-            />
-
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                onPress={() => setQtyPromptItem(null)}
-                style={styles.modalCancelBtn}
-              >
-                <Text style={styles.modalCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleConfirmManualQty}
-                style={styles.modalSubmitBtn}
-              >
-                <Text style={styles.modalSubmitText}>Aplicar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <View style={[styles.bottomSaleBar, { position: 'relative' }]}>
+        <View style={{ flex: 1, marginRight: 10 }}><Text style={styles.bottomCartTotalLabel} numberOfLines={2}>{quantitiesLabel}</Text><Text style={styles.bottomCartTotalAmount}>{formatCurrency(cartTotal)}</Text></View>
+        <TouchableOpacity disabled={!cartCount} accessibilityLabel="Revisar venta" onPress={() => router.push('/(tabs)/venta/carrito')} style={[styles.revisarBtn, !cartCount && { opacity: 0.45 }]}><Text style={styles.revisarBtnText}>Revisar venta</Text><ChevronRight size={18} color={colors.neutral[0]} /></TouchableOpacity>
+      </View>
+      <SaleProductEditor producto={selectedMultiProd} items={carrito} getPrice={getProductPrice} onApply={handleApplyQuantity} onClose={() => setSelectedMultiProd(null)} />
 
       {/* MODAL 3: ORDEN PERSONALIZADO ESTILO SPOTIFY */}
       <Modal
@@ -1251,7 +912,7 @@ export default function VentaScreen() {
           </View>
 
           {/* Lista de productos para reordenar */}
-          <ScrollView
+          <ScrollView keyboardShouldPersistTaps="handled"
             style={styles.orderListScroll}
             contentContainerStyle={{ paddingBottom: 60 }}
             showsVerticalScrollIndicator={false}
@@ -1336,14 +997,60 @@ export default function VentaScreen() {
 }
 
 const styles = StyleSheet.create({
+  saleTitleRow: {
+    minHeight: 56,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.neutral[50],
+  },
+  saleTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.neutral[900],
+  },
+  viewSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: colors.neutral[100],
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  viewOption: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  viewOptionActive: {
+    backgroundColor: colors.primary[600],
+  },
+  viewText: {
+    fontSize: 13,
+    color: colors.neutral[600],
+    fontWeight: '600',
+  },
+  viewTextActive: {
+    color: colors.neutral[0],
+  },
+  resultCount: {
+    fontSize: 12,
+    color: colors.neutral[500],
+  },
   container: {
     flex: 1,
     backgroundColor: colors.neutral[50],
   },
-
-  /* ---------------------------------------------------- */
-  /* VISTA SELECCIÓN DE CLIENTE                          */
-  /* ---------------------------------------------------- */
   clientPickHeader: {
     backgroundColor: colors.neutral[0],
     paddingHorizontal: 16,
@@ -1360,6 +1067,8 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     paddingRight: 10,
+    minHeight: 44,
+    minWidth: 44,
   },
   clientPickTitle: {
     fontSize: 20,
@@ -1382,6 +1091,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   nuevoClienteHeaderText: {
     fontSize: 12,
@@ -1394,13 +1105,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderRadius: radius.md,
     paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 9 : 6,
+    paddingVertical: 0,
     gap: 8,
+    minHeight: 44,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.neutral[900],
+    minHeight: 44,
+    borderRadius: 10,
   },
   pendingSaleBanner: {
     flexDirection: 'row',
@@ -1424,6 +1138,8 @@ const styles = StyleSheet.create({
   pendingSaleDiscardBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
+    minHeight: 44,
+    minWidth: 44,
   },
   pendingSaleDiscardText: {
     fontSize: 11,
@@ -1529,21 +1245,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.md,
+    minHeight: 44,
+    minWidth: 44,
   },
   emptyClientsAddBtnText: {
     color: colors.neutral[0],
     fontWeight: '700',
     fontSize: 12.5,
   },
-
-  /* ---------------------------------------------------- */
-  /* VISTA CATÁLOGO Y MOSAICO                            */
-  /* ---------------------------------------------------- */
   catalogHeader: {
-    backgroundColor: colors.neutral[0],
-    paddingHorizontal: 14,
-    paddingTop: Platform.OS === 'ios' ? 12 : 10,
-    paddingBottom: 8,
+    backgroundColor: colors.neutral[50],
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[200],
   },
@@ -1551,30 +1265,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   clientSelectedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary[50],
+    backgroundColor: colors.neutral[0],
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: radius.full,
+    borderRadius: 12,
     gap: 6,
-    maxWidth: '75%',
+    maxWidth: '100%',
     borderWidth: 1,
-    borderColor: colors.primary[200],
+    borderColor: colors.neutral[200],
+    minHeight: 44,
+    flex: 1,
   },
   clientSelectedName: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.primary[800],
   },
   clientSelectedChangeBtn: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary[600],
     textDecorationLine: 'underline',
+    minWidth: 44,
+    minHeight: 0,
   },
   catsRow: {
     paddingVertical: 6,
@@ -1587,13 +1305,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   catChipActive: {
     backgroundColor: colors.primary[600],
     borderColor: colors.primary[700],
   },
   catChipText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.neutral[700],
   },
@@ -1605,7 +1326,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 6,
+    paddingTop: 0,
+    gap: 8,
   },
   filterTabsWrap: {
     flexDirection: 'row',
@@ -1621,13 +1343,16 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radius.full,
     gap: 3,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   filterTabActive: {
     backgroundColor: colors.neutral[0],
     ...shadows.card,
   },
   filterTabText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.neutral[600],
   },
@@ -1647,9 +1372,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   sortModeBtnText: {
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.neutral[600],
   },
@@ -1663,14 +1391,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.primary[200],
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   ordenarBtnText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary[700],
   },
-
-  /* Grid Mosaico (3 columnas en móvil / 2 en estrechas) */
   gridScroll: {
     flex: 1,
   },
@@ -1682,120 +1411,7 @@ const styles = StyleSheet.create({
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7, // 6–8 px de separación
-  },
-  productCard: {
-    backgroundColor: colors.neutral[0],
-    borderRadius: 9,
-    padding: 7,
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-    justifyContent: 'space-between',
-  },
-  productCardActive: {
-    borderColor: colors.primary[600],
-    borderWidth: 1.5,
-    backgroundColor: '#F0F7FF',
-  },
-  productCardDisabled: {
-    opacity: 0.6,
-    backgroundColor: colors.neutral[50],
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  unitBadge: {
-    backgroundColor: colors.neutral[100],
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    maxWidth: '70%',
-  },
-  unitBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: colors.neutral[600],
-    textTransform: 'uppercase',
-  },
-  starTouchArea: {
-    padding: 2,
-  },
-  productName: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: colors.neutral[900],
-    lineHeight: 14.5,
-    minHeight: 29,
-    marginBottom: 4,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  productPrice: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary[700],
-  },
-  stockText: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    color: colors.neutral[500],
-  },
-  pendingBadge: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: colors.warning[700],
-  },
-  cardStepperRow: {
-    marginTop: 6,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: colors.primary[100],
-  },
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.neutral[0],
-    borderRadius: 6,
-    borderWidth: 1.2,
-    borderColor: colors.primary[600],
-    overflow: 'hidden',
-    height: 28,
-  },
-  stepperBtn: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary[50],
-  },
-  stepperQtyTouch: {
-    flex: 1.2,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperQtyText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: colors.primary[800],
-  },
-  disabledActionWrap: {
-    backgroundColor: colors.neutral[200],
-    borderRadius: 6,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  disabledActionText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.neutral[500],
+    marginHorizontal: -3.5, // El padding de cada celda conserva 7 px sin depender del ancho medido.
   },
   emptyGridWrap: {
     alignItems: 'center',
@@ -1806,8 +1422,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.neutral[500],
   },
-
-  /* Barra Flotante de Venta */
   bottomSaleBar: {
     position: 'absolute',
     bottom: 0,
@@ -1818,29 +1432,10 @@ const styles = StyleSheet.create({
     borderTopColor: colors.neutral[200],
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  bottomSaleInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  bottomCartBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: radius.full,
-    gap: 4,
-  },
-  bottomCartBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.neutral[0],
   },
   bottomCartTotalLabel: {
     fontSize: 10,
@@ -1849,7 +1444,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   bottomCartTotalAmount: {
-    fontSize: 16,
+    fontSize: 23,
     fontWeight: '900',
     color: colors.neutral[900],
   },
@@ -1857,18 +1452,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary[600],
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     gap: 6,
+    minWidth: 44,
+    minHeight: 48,
   },
   revisarBtnText: {
     fontSize: 14,
     fontWeight: '800',
     color: colors.neutral[0],
   },
-
-  /* Modales Genéricos */
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1880,6 +1475,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 18,
     width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+    maxHeight: '88%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1897,50 +1495,6 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     marginTop: 2,
   },
-  presOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[100],
-  },
-  presOptionName: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: colors.neutral[900],
-  },
-  presOptionSub: {
-    fontSize: 11,
-    color: colors.neutral[500],
-    marginTop: 1,
-  },
-  presOptionPrice: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.primary[700],
-    marginRight: 10,
-  },
-  presAddBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary[50],
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  manualQtyInput: {
-    borderWidth: 1.5,
-    borderColor: colors.primary[600],
-    borderRadius: 10,
-    fontSize: 22,
-    fontWeight: '900',
-    textAlign: 'center',
-    paddingVertical: 10,
-    marginVertical: 14,
-    color: colors.neutral[900],
-  },
   modalActionsRow: {
     flexDirection: 'row',
     gap: 10,
@@ -1952,6 +1506,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalCancelText: {
     fontSize: 13,
@@ -1964,14 +1520,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.primary[600],
     alignItems: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalSubmitText: {
     fontSize: 13,
     fontWeight: '800',
     color: colors.neutral[0],
   },
-
-  /* Formulario modal nuevo cliente */
   formField: {
     marginBottom: 10,
   },
@@ -1991,11 +1547,12 @@ const styles = StyleSheet.create({
     color: colors.neutral[900],
     backgroundColor: colors.neutral[50],
   },
-
-  /* Pantalla Completa Ordenar (Spotify) */
   orderScreenContainer: {
     flex: 1,
     backgroundColor: colors.neutral[0],
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
   orderScreenHeader: {
     flexDirection: 'row',
@@ -2006,6 +1563,8 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[200],
+    flexWrap: 'wrap',
+    gap: 8,
   },
   orderScreenTitle: {
     fontSize: 18,
@@ -2026,6 +1585,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   orderCancelText: {
     fontSize: 12,
@@ -2037,6 +1598,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     backgroundColor: colors.primary[600],
+    minHeight: 44,
+    minWidth: 44,
   },
   orderSaveText: {
     fontSize: 12,
@@ -2053,6 +1616,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[100],
+    gap: 4,
   },
   orderIndexBadge: {
     width: 26,
@@ -2075,7 +1639,7 @@ const styles = StyleSheet.create({
   },
   orderButtonsRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 2,
     marginLeft: 8,
   },
   orderActionBtn: {
@@ -2085,6 +1649,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 44,
+    minHeight: 44,
   },
   orderActionDisabled: {
     opacity: 0.3,

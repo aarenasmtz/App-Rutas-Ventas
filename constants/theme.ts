@@ -2,16 +2,16 @@ import { Platform } from 'react-native';
 
 export const colors = {
   primary: {
-    50: '#eef4ff',
-    100: '#d9e6ff',
-    200: '#bcd3ff',
-    300: '#8eb6ff',
-    400: '#598fff',
-    500: '#2e6bff',
-    600: '#1a52f5',
-    700: '#163fe0',
-    800: '#1834b5',
-    900: '#1a338f',
+    50: '#F3F5E8',
+    100: '#E9EDCF',
+    200: '#D6DEAF',
+    300: '#BCC890',
+    400: '#97A76C',
+    500: '#71834D',
+    600: '#556133',
+    700: '#46522B',
+    800: '#354020',
+    900: '#293219',
   },
   secondary: {
     50: '#ecfdf5',
@@ -60,19 +60,22 @@ export const colors = {
   },
   neutral: {
     0: '#ffffff',
-    50: '#f8fafc',
-    100: '#f1f5f9',
-    200: '#e2e8f0',
-    300: '#cbd5e1',
-    400: '#94a3b8',
-    500: '#64748b',
-    600: '#475569',
-    700: '#334155',
-    800: '#1e293b',
-    900: '#0f172a',
-    950: '#020617',
+    50: '#FFFFFF',
+    100: '#F5F7F0',
+    200: '#DADBCF',
+    300: '#C5C8B8',
+    400: '#969D89',
+    500: '#727966',
+    600: '#59614F',
+    700: '#414B36',
+    800: '#303A27',
+    900: '#22291B',
+    950: '#151B10',
   },
 };
+
+// Shared geometry: the same content and navigation frame on every route.
+export const layout = { maxWidth: 960, pagePadding: 16, touchTarget: 44 };
 
 export const stateColors = {
   verde: colors.success[600],

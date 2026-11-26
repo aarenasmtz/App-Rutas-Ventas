@@ -129,15 +129,8 @@ export default function ConfirmacionScreen() {
     vendedorNombre: user?.nombre || 'Miguel',
     rutaNombre: cliente.ruta || 'Ruta Lunes',
     items: carrito.map((item) => {
-      const isWeight = Boolean(
-        item.producto.precioPorPeso ||
-        item.producto.unidad === 'kg' ||
-        item.unidad === 'kg' ||
-        ['jamón', 'jamon', 'salchicha', 'chorizo', 'quesos', 'queso', 'carnes frías', 'carnes frias'].includes(
-          (item.producto.categoria || '').toLowerCase()
-        )
-      );
-      const unitLabel = isWeight ? 'kg' : (item.presentacion?.tipo || item.producto.unidad || 'pza');
+      const isWeight = item.producto.unidad === 'kg' && (!item.presentacion || item.presentacion.piezasEquivalentes === 1);
+      const unitLabel = item.presentacion?.nombre || item.presentacionNombre || item.producto.unidad;
       return {
         nombre: item.producto.nombre,
         presentacion: unitLabel,
@@ -226,7 +219,7 @@ export default function ConfirmacionScreen() {
 
   return (
     <AppShell>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Ícono de Éxito y Título */}
         <View style={styles.successHeader}>
           <View style={styles.successIconCircle}>
@@ -351,7 +344,9 @@ export default function ConfirmacionScreen() {
           visible={showTicketModal}
           onClose={() => setShowTicketModal(false)}
           title="Comprobante de Venta"
-          ticketText58={ticketText58}
+          ticketHtml58={ticketPrinter.generateVentaHtml(ticketData,58)}
+        ticketHtml80={ticketPrinter.generateVentaHtml(ticketData,80)}
+        ticketText58={ticketText58}
           ticketText80={ticketText80}
           onShareWhatsApp={handleShareImageWhatsApp}
           onPrintPdf={handlePrintPdf}
@@ -481,8 +476,6 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     marginBottom: 2,
   },
-
-  /* Acciones Principales */
   primaryActionsContainer: {
     gap: 10,
   },

@@ -42,6 +42,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "businessIdentity": {
+        "nombre": "DISTRIBUIDORA DON MIGUEL",
+        "rfc": "MIGD750412AB1",
+        "telefono": "477-123-4567",
+        "direccion": "León, Guanajuato"
+      }
     }
   }
 }

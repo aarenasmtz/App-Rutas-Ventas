@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
+import { KeyboardAvoidingView, Platform,  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   Package,
@@ -34,6 +34,7 @@ import {
   MoneyDisplay,
   RoleSwitcher,
 } from '@/components/DesignSystem';
+import { InventoryProduct } from '@/components/InventoryProduct';
 import type { Producto, Categoria } from '@/types';
 
 type FiltroStock = 'Todos' | 'Stock bajo' | 'Agotados';
@@ -49,12 +50,14 @@ export default function InventarioScreen() {
   const [categoriaActiva, setCategoriaActiva] = useState<string>('Todas');
   const [productosList, setProductosList] = useState<Producto[]>([]);
   const [selectedProducto, setSelectedProducto] = useState<Producto | null>(null);
+  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<'Bodega' | 'Trabajador 1' | 'Trabajador 2' | 'Trabajador 3'>('Bodega');
 
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
       try {
-        const live = await DataService.getProductos();
+        const targetUbicacion = isAdmin ? ubicacionSeleccionada : (user?.rutaNombre || 'Trabajador 1');
+        const live = await DataService.getInventario(targetUbicacion);
         if (isMounted) {
           setProductosList(live ?? []);
         }
@@ -64,10 +67,7 @@ export default function InventarioScreen() {
     };
     load();
     return () => { isMounted = false; };
-  }, []);
-
-  // Estados Admin
-  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<'Bodega' | 'Trabajador 1' | 'Trabajador 2' | 'Trabajador 3'>('Bodega');
+  }, [ubicacionSeleccionada, isAdmin, user?.rutaNombre]);
 
   const filtered = useMemo(() => {
     return productosList.filter((p) => {
@@ -86,7 +86,8 @@ export default function InventarioScreen() {
     });
   }, [productosList, search, categoriaActiva, filtroStock]);
 
-  const totalPiezas = productosList.reduce((s, p) => s + p.existencia, 0);
+  const totalReferencias = productosList.length;
+  const categorias = [...new Set(productosList.map(p => p.categoria).filter(Boolean))];
   const bajos = productosList.filter((p) => p.existencia > 0 && p.existencia <= 10).length;
   const agotados = productosList.filter((p) => p.existencia <= 0).length;
 
@@ -95,20 +96,16 @@ export default function InventarioScreen() {
       <PageHeader
         title={isAdmin ? 'Control de Inventario' : 'Mi Inventario'}
         subtitle={isAdmin ? 'Gestión de bodega y unidades' : 'Existencias actuales en camioneta'}
-        right={
-          <RoleSwitcher
-            currentRole={user?.rol || 'Administrador'}
-            onSwitch={switchRole}
-          />
-        }
+
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <View style={{paddingHorizontal:16,paddingVertical:8,alignItems:'flex-end',borderBottomWidth:1,borderColor:colors.neutral[200]}}><RoleSwitcher currentRole={user?.rol || 'Administrador'} onSwitch={switchRole} /></View>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* Selector de ubicaciones para Administrador */}
         {isAdmin && (
           <View style={styles.adminSection}>
             <Text style={styles.sectionHeading}>Almacén o Unidad seleccionada:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locationsRow}>
+            <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.locationsRow}>
               {(['Bodega', 'Trabajador 1', 'Trabajador 2', 'Trabajador 3'] as const).map((loc) => {
                 const isSelected = ubicacionSeleccionada === loc;
                 return (
@@ -136,7 +133,7 @@ export default function InventarioScreen() {
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() => router.push('/(tabs)/mas/surtido-nota' as any)}
-                style={[styles.adminBtnPrimary, { backgroundColor: colors.secondary[600] }]}
+                style={[styles.adminBtnPrimary, { backgroundColor: colors.primary[600] }]}
               >
                 <FileSpreadsheet size={16} color={colors.neutral[0]} />
                 <Text style={styles.adminBtnPrimaryText}>Surtir Inventario (PDF)</Text>
@@ -166,8 +163,8 @@ export default function InventarioScreen() {
         {/* Resumen de Existencias */}
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, { borderLeftColor: colors.primary[500], borderLeftWidth: 4 }]}>
-            <Text style={styles.metricVal}>{totalPiezas}</Text>
-            <Text style={styles.metricLabel}>Total Piezas</Text>
+            <Text style={styles.metricVal}>{totalReferencias}</Text>
+            <Text style={styles.metricLabel}>Productos</Text>
           </View>
 
           <View style={[styles.metricCard, { borderLeftColor: colors.warning[500], borderLeftWidth: 4 }]}>
@@ -206,7 +203,7 @@ export default function InventarioScreen() {
         </View>
 
         {/* Chips de Categorías */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catsRow}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catsRow}>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setCategoriaActiva('Todas')}
@@ -214,16 +211,16 @@ export default function InventarioScreen() {
           >
             <Text style={[styles.catChipText, categoriaActiva === 'Todas' && styles.catChipTextActive]}>Todas</Text>
           </TouchableOpacity>
-          {mockCategorias.map((c) => (
+          {categorias.map((nombre) => (
             <TouchableOpacity
-              key={c.id}
+              key={nombre}
               activeOpacity={0.8}
-              onPress={() => setCategoriaActiva(c.nombre)}
-              style={[styles.catChip, categoriaActiva === c.nombre && styles.catChipActive]}
+              onPress={() => setCategoriaActiva(nombre)}
+              style={[styles.catChip, categoriaActiva === nombre && styles.catChipActive]}
             >
-              <Text style={styles.catChipEmoji}>{c.icono}</Text>
-              <Text style={[styles.catChipText, categoriaActiva === c.nombre && styles.catChipTextActive]}>
-                {c.nombre}
+
+              <Text style={[styles.catChipText, categoriaActiva === nombre && styles.catChipTextActive]}>
+                {nombre}
               </Text>
             </TouchableOpacity>
           ))}
@@ -238,71 +235,7 @@ export default function InventarioScreen() {
               <Text style={styles.emptySubtitle}>Intenta con otro término de búsqueda o filtro</Text>
             </View>
           ) : (
-            filtered.map((p) => {
-              const isMultipres = Boolean(
-                p.manejaMultiplesPresentaciones ||
-                (p.presentaciones && p.presentaciones.length > 1)
-              );
-              const desgloseTexto = isMultipres
-                ? desglosarInventario(p.existencia, p.presentaciones, p.unidad)
-                : null;
-
-              return (
-                <TouchableOpacity
-                  key={p.id}
-                  activeOpacity={0.82}
-                  onPress={() => setSelectedProducto(p)}
-                  style={[styles.inventoryCard, shadows.card]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.cardTopRow}>
-                      <View style={styles.invLeft}>
-                        <View style={styles.invDetails}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                            {p.marca ? <Text style={styles.invBrand}>{p.marca}</Text> : null}
-                            <Text style={styles.invCatBadge}>{p.categoria}</Text>
-                            {isMultipres && (
-                              <View style={styles.multipresTag}>
-                                <Boxes size={11} color={colors.primary[700]} />
-                                <Text style={styles.multipresTagText}>Multipresentación</Text>
-                              </View>
-                            )}
-                          </View>
-                          <Text style={styles.invName}>{p.nombre}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.invRight}>
-                        <StockBadge stockPiezas={p.existencia} />
-                        <Text style={styles.invPriceText}>
-                          {formatCurrency(p.precioBase)} / {p.unidad || 'pza'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Desglose jerárquico de inventario unificado (Req 6) */}
-                    {isMultipres && desgloseTexto && (
-                      <View style={styles.breakdownBox}>
-                        <View style={styles.breakdownHeader}>
-                          <Package size={13} color={colors.primary[700]} />
-                          <Text style={styles.breakdownTitle}>Desglose en presentaciones:</Text>
-                        </View>
-                        <Text style={styles.breakdownContent}>{desgloseTexto}</Text>
-                        <Text style={styles.breakdownSub}>
-                          Total unificado: {p.existencia} {p.unidad || 'paquete'}{p.existencia === 1 ? '' : 's'}
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Indicador de acción para ver detalle */}
-                    <View style={styles.cardTouchHint}>
-                      <Text style={styles.cardTouchHintText}>Toca para ver detalle de piezas y presentaciones</Text>
-                      <ChevronRight size={14} color={colors.primary[600]} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
+            filtered.map(p => <InventoryProduct key={p.id} producto={p} onDetails={()=>setSelectedProducto(p)} />)
           )}
         </View>
       </ScrollView>
@@ -315,7 +248,7 @@ export default function InventarioScreen() {
           animationType="fade"
           onRequestClose={() => setSelectedProducto(null)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
             <View style={[styles.modalCard, shadows.floating]}>
               {/* Header Modal */}
               <View style={styles.modalHeader}>
@@ -340,7 +273,7 @@ export default function InventarioScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={styles.modalScroll}>
                 {/* Banner de Existencia General */}
                 <View style={styles.modalStockBanner}>
                   <View style={styles.modalStockLeft}>
@@ -353,7 +286,7 @@ export default function InventarioScreen() {
                     </Text>
                   </View>
                   <View style={styles.modalStockRight}>
-                    <StockBadge stockPiezas={selectedProducto.existencia} />
+                    <StockBadge stockPiezas={selectedProducto.existencia} unidad={selectedProducto.unidad} />
                     <Text style={styles.modalUnitPrice}>
                       {formatCurrency(selectedProducto.precioBase)}
                     </Text>
@@ -365,7 +298,7 @@ export default function InventarioScreen() {
                 <View style={styles.modalSection}>
                   <View style={styles.modalSectionHeader}>
                     <Boxes size={18} color={colors.primary[700]} />
-                    <Text style={styles.modalSectionTitle}>Desglose Físico en Piezas</Text>
+                    <Text style={styles.modalSectionTitle}>Desglose de existencias</Text>
                   </View>
                   <Text style={styles.modalSectionDesc}>
                     Conteo exacto agrupado según el factor de cada empaque:
@@ -401,19 +334,19 @@ export default function InventarioScreen() {
                             </View>
                             <View style={{ flex: 1 }}>
                               <Text style={styles.partItemTitle}>
-                                {part.cantidad} {part.nombre}{part.cantidad === 1 ? '' : (part.nombre.endsWith('r') || part.nombre.endsWith('l') ? 'es' : 's')}
+                                {part.cantidad.toLocaleString('es-MX')} {part.nombre}{part.nombre === 'kg' || part.cantidad === 1 ? '' : (part.nombre.endsWith('r') || part.nombre.endsWith('l') ? 'es' : 's')}
                               </Text>
                               <Text style={styles.partItemSubtitle}>
                                 {part.factor > 1
                                   ? `Factor: 1 ${part.nombre} = ${part.factor} ${selectedProducto.unidad || 'pzas'}`
-                                  : `Piezas sueltas individuales`}
+                                  : `Unidad base: ${selectedProducto.unidad || 'pieza'}`}
                               </Text>
                             </View>
                             <View style={styles.partItemSubtotal}>
                               <Text style={styles.partItemPieces}>
-                                {part.cantidad * part.factor}
+                                {(part.cantidad * part.factor).toLocaleString('es-MX')}
                               </Text>
-                              <Text style={styles.partItemPiecesLabel}>piezas</Text>
+                              <Text style={styles.partItemPiecesLabel}>{selectedProducto.unidad || 'pieza'}</Text>
                             </View>
                           </View>
                         ))}
@@ -421,7 +354,7 @@ export default function InventarioScreen() {
                         <View style={styles.partsTotalBar}>
                           <Text style={styles.partsTotalLabel}>Suma total verificada:</Text>
                           <Text style={styles.partsTotalValue}>
-                            {selectedProducto.existencia} {selectedProducto.unidad || 'piezas'}
+                            {selectedProducto.existencia.toLocaleString('es-MX')} {selectedProducto.unidad || 'pieza'}
                           </Text>
                         </View>
                       </View>
@@ -456,7 +389,7 @@ export default function InventarioScreen() {
                             <View style={{ alignItems: 'flex-end' }}>
                               <Text style={styles.presTablePrice}>{formatCurrency(pres.precio)}</Text>
                               <Text style={styles.presTableUnitPrice}>
-                                ({formatCurrency(unitEquiv)}/pza)
+                                ({formatCurrency(unitEquiv)}/{selectedProducto.unidad || 'pieza'})
                               </Text>
                             </View>
                           </View>
@@ -516,7 +449,7 @@ export default function InventarioScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
     </AppShell>
@@ -557,13 +490,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     borderWidth: 1.5,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   locationChipActive: {
     backgroundColor: colors.primary[600],
     borderColor: colors.primary[700],
   },
   locationChipText: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.semibold,
     color: colors.neutral[700],
   },
@@ -573,11 +508,13 @@ const styles = StyleSheet.create({
   },
   adminActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.md,
   },
   adminBtnPrimary: {
-    flex: 1,
+    minHeight: 48,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -588,11 +525,13 @@ const styles = StyleSheet.create({
   },
   adminBtnPrimaryText: {
     color: colors.neutral[0],
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
   },
   adminBtnSecondary: {
-    flex: 1,
+    minHeight: 60,
+    flexGrow: 1,
+    flexBasis: '46%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -604,8 +543,9 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[200],
   },
   adminBtnSecondaryText: {
+    flex: 1,
     color: colors.primary[700],
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
   },
   metricsRow: {
@@ -648,6 +588,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
+    minHeight: 44,
+    minWidth: 44,
   },
   filterChipActive: {
     backgroundColor: colors.neutral[900],
@@ -675,6 +617,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    minHeight: 44,
+    minWidth: 44,
   },
   catChipActive: {
     backgroundColor: colors.primary[600],
@@ -767,7 +711,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   invPriceText: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.primary[700],
     marginTop: 3,
@@ -852,7 +796,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   emptySubtitle: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     color: colors.neutral[400],
   },
   cardTouchHint: {
@@ -880,9 +824,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderRadius: radius.xxl,
     width: '100%',
-    maxWidth: 520,
-    maxHeight: '90%',
+    maxWidth: 680,
+    maxHeight: '88%',
     overflow: 'hidden',
+    alignSelf: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -930,6 +877,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalScroll: {
     paddingHorizontal: spacing.lg,
@@ -989,7 +938,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modalSectionTitle: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
@@ -1030,7 +979,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   partItemTitle: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
@@ -1070,7 +1019,7 @@ const styles = StyleSheet.create({
     color: colors.primary[800],
   },
   partsTotalValue: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
     color: colors.primary[800],
   },
@@ -1106,7 +1055,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   presTablePrice: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
@@ -1136,7 +1085,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   pricingVal: {
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
     color: colors.neutral[900],
   },
@@ -1152,10 +1101,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
   },
   modalCloseActionBtnText: {
     color: colors.neutral[0],
-    fontSize: fontSize.sm,
+    fontSize: 14,
     fontWeight: fontWeight.bold,
   },
 });
